@@ -751,14 +751,14 @@ function Build-AndroidApk {
                 }
             }
             
-            # Execute gradle build
-            $process = Start-Process -FilePath 'cmd.exe' -ArgumentList '/c', 'gradlew.bat', 'buildCustomApkDebug' -Wait -PassThru -NoNewWindow
-            $buildResult = $process.ExitCode
+            # Execute gradle build directly so control reliably returns to this script
+            & $gradlewPath buildCustomApkDebug
+            $buildResult = $LASTEXITCODE
         }
         elseif (Get-Command 'gradle' -ErrorAction SilentlyContinue) {
             Write-ColorOutput 'Using gradle to execute buildCustomApkDebug task...' 'Green'
-            $process = Start-Process -FilePath 'gradle' -ArgumentList 'buildCustomApkDebug' -Wait -PassThru -NoNewWindow
-            $buildResult = $process.ExitCode
+            & gradle buildCustomApkDebug
+            $buildResult = $LASTEXITCODE
         }
         else {
             Write-ColorOutput 'Neither gradle nor gradlew.bat found, cannot build APK' 'Red'
@@ -787,7 +787,8 @@ function Copy-ApkAndUpdateConfig {
     $apkSearchPath = Join-Path $ProjectRoot 'android\app\build\outputs\apk'
     
     # First look for custom APK files
-    $customApkFiles = Get-ChildItem -Path $apkSearchPath -Recurse -Filter '*custom*.apk' -ErrorAction SilentlyContinue
+    $customApkFiles = Get-ChildItem -Path $apkSearchPath -Recurse -Filter '*custom*.apk' -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending
     $apkPath = $null
     
     if ($customApkFiles) {
@@ -796,7 +797,8 @@ function Copy-ApkAndUpdateConfig {
     }
     else {
         # If no custom APK found, look for other APK files
-        $apkFiles = Get-ChildItem -Path $apkSearchPath -Recurse -Filter '*.apk' -ErrorAction SilentlyContinue
+        $apkFiles = Get-ChildItem -Path $apkSearchPath -Recurse -Filter '*.apk' -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending
         if ($apkFiles) {
             $apkPath = $apkFiles[0].FullName
             Write-ColorOutput "Found APK file: $apkPath" 'Green'
@@ -1152,6 +1154,8 @@ function Main {
     
     if (Test-Path $buildGeneratedDir) {
         Write-ColorOutput "Detected build/generated directory already exists: $buildGeneratedDir" 'Yellow'
+        Get-ChildItem -Path $buildGeneratedDir -Force | Remove-Item -Recurse -Force
+        Write-ColorOutput 'Cleared existing build/generated contents to avoid stale plugin artifacts' 'Blue'
     } else {
         New-Item -ItemType Directory -Path $buildGeneratedDir -Force | Out-Null
         Write-ColorOutput "Created build/generated directory: $buildGeneratedDir" 'Green'
@@ -1271,9 +1275,10 @@ function Main {
     }
     
     # Rename to .snplg file
-    $snplgFileName = "$($packageInfo.Name).snplg"
+    $outputPackageName = Split-Path -Path $projectRoot -Leaf
+    $snplgFileName = "$outputPackageName.snplg"
     $finalSnplgPath = Join-Path $buildOutputsDir $snplgFileName
-    $null = Rename-ToSnplgFile -ZipFilePath $tempZipPath -ProjectName $packageInfo.Name -OutputDir $buildOutputsDir
+    $null = Rename-ToSnplgFile -ZipFilePath $tempZipPath -ProjectName $outputPackageName -OutputDir $buildOutputsDir
     if (Test-Path $finalSnplgPath) {
         Write-ColorOutput "Plugin package successfully generated: $finalSnplgPath" 'Green'
         

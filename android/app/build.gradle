@@ -101,7 +101,7 @@ def processCustomApk(String buildType) {
     
     tasks.register("buildCustomApk${variant}") {
         group = 'custom'
-        description = "编译 ${variant} APK 并删除指定的 so 库文件"
+        description = "ç¼–è¯‘ ${variant} APK å¹¶åˆ é™¤æŒ‡å®šçš„ so åº“æ–‡ä»¶"
         dependsOn "assemble${variant}"
         
         doLast {
@@ -186,9 +186,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.notedraft"
+    namespace "com.textboxhelper"
     defaultConfig {
-        applicationId "com.notedraft"
+        applicationId "com.textboxhelper"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -226,3 +226,4 @@ dependencies {
         implementation jscFlavor
     }
 }
+

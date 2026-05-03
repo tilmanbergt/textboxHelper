@@ -1,97 +1,87 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Textbox Helper
 
-# Getting Started
+`Textbox Helper` is a Supernote NOTE plugin focused on structured text editing inside notes.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+It currently supports two related workflows:
 
-## Step 1: Start Metro
+- textbox tools for splitting, joining, and cleaning NOTE textboxes
+- edit markers for handwritten delete and replace operations with preview and apply flows
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+The plugin is built as a React Native Supernote plugin with a small Android native text-measurement bridge.
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+## Main Features
+
+- `Textbox Tools`
+  - split one textbox into sentence-based textboxes
+  - join selected textboxes in reading order
+  - clean repeated spaces
+  - remove line breaks
+- `Apply Edit Markers`
+  - recognize handwritten delete markers
+  - recognize replace markers as a delete line plus two crossing modifier lines
+  - support both freehand strokes and Supernote straight-line geometry
+  - preview all changes before apply
+- `Apply All Edit Markers`
+  - run the same marker recognition on the full page from the NOTE toolbar
+
+## Project Structure
+
+- [index.js](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\index.js)
+  Registers Supernote buttons and starts plugin routing.
+- [App.tsx](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\App.tsx)
+  Main review UI for textbox actions and edit-marker actions.
+- [src/pluginRouting.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\pluginRouting.ts)
+  Central button IDs and bridge from Supernote button presses into React Native.
+- [src/textboxActions.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\textboxActions.ts)
+  Textbox split/join/clean/unwrap logic plus preview and execution flow.
+- [src/editMarkerActions.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\editMarkerActions.ts)
+  Handwritten marker recognition, replace-source resolution, preview generation, and apply logic.
+- [src/shared/supernoteTextboxGeometry.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\shared\supernoteTextboxGeometry.ts)
+  Shared page-space rectangle and reading-order helpers.
+- [src/shared/supernoteTextboxLayout.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\shared\supernoteTextboxLayout.ts)
+  Shared textbox measurement and height calculation logic.
+- [src/shared/supernoteTextboxHitTesting.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\shared\supernoteTextboxHitTesting.ts)
+  Shared mapping from measured text layout to page-space hit testing.
+- [android/app/src/main/java/com/textboxhelper/TextboxMetricsModule.kt](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\android\app\src\main\java\com\textboxhelper\TextboxMetricsModule.kt)
+  Android native module used for accurate textbox text measurement.
+
+More architectural detail lives in [docs/ARCHITECTURE.md](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\docs\ARCHITECTURE.md).
+
+## Development
+
+Install dependencies:
 
 ```sh
-# Using npm
+npm install
+```
+
+Common commands:
+
+```sh
 npm start
-
-# OR using Yarn
-yarn start
-```
-
-## Step 2: Build and run your app
-
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
-
-### Android
-
-```sh
-# Using npm
 npm run android
-
-# OR using Yarn
-yarn android
+npm run typecheck
+npm test
 ```
 
-### iOS
+## Contributing
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+Contribution guidance lives in [CONTRIBUTING.md](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\CONTRIBUTING.md).
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+Short version:
 
-```sh
-bundle install
-```
+- keep Supernote-specific behavior explicit
+- prefer small, reviewable PRs
+- keep logs targeted and easy to remove later
+- run `npm run typecheck` before opening a PR
 
-Then, and every time you update your native dependencies, run:
+## Publishing To GitHub
 
-```sh
-bundle exec pod install
-```
+A practical release checklist is in [docs/GITHUB_RELEASE_CHECKLIST.md](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\docs\GITHUB_RELEASE_CHECKLIST.md).
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+Before publishing publicly, make sure to:
 
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+- choose and add a license
+- verify the README and screenshots are accurate
+- remove or ignore local log files and large debug artifacts if they should not be part of the public repo
+- confirm the plugin name, icon, and release instructions are ready for external users

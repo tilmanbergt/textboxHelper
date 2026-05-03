@@ -677,6 +677,7 @@ main() {
 
     local gen_dir
     gen_dir="$(ensure_build_generated_dir "$project_root")"
+    find "$gen_dir" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
     build_react_native_bundle "$project_root" "$PACKAGE_NAME" "$gen_dir"
 
@@ -723,11 +724,14 @@ main() {
         write_color_output "Build conditions not met; skipping native build and reactPackages update" "Yellow"
     fi
 
+    local output_package_name
+    output_package_name="$(basename "$project_root")"
+
     local outputs_dir
     outputs_dir="$(ensure_build_outputs_directory "$project_root")"
     local zip_path="$outputs_dir/${PACKAGE_NAME}.zip"
     if new_zip_package "$gen_dir" "$zip_path"; then
-        rename_to_snplg_file "$zip_path" "$PACKAGE_NAME" >/dev/null
+        rename_to_snplg_file "$zip_path" "$output_package_name" >/dev/null
     fi
 
     write_color_output "Build process completed" "Blue"
