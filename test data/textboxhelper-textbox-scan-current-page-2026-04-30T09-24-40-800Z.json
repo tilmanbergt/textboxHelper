@@ -1,0 +1,185 @@
+{
+  "createdAt": "2026-04-30T09:24:40.799Z",
+  "notePath": "/storage/emulated/0/Note/1 Projects/Ontological Breakthrough/Ontological Breakthrough Reflection.note",
+  "mode": "current-page",
+  "pages": [
+    28
+  ],
+  "scannedPages": 1,
+  "textboxCount": 2,
+  "summary": {
+    "distinctFontPaths": [
+      "/storage/emulated/0/MyStyle/fonts/CourierPrime-Regular.ttf"
+    ],
+    "fontSizes": [
+      36
+    ],
+    "widthStats": {
+      "count": 2,
+      "min": 612,
+      "max": 666,
+      "mean": 639,
+      "median": 639,
+      "p75": 652.5,
+      "p90": 660.5999999999999
+    },
+    "heightStats": {
+      "count": 2,
+      "min": 123,
+      "max": 323,
+      "mean": 223,
+      "median": 223,
+      "p75": 273,
+      "p90": 303
+    },
+    "textLengthStats": {
+      "count": 2,
+      "min": 50,
+      "max": 199,
+      "mean": 124.5,
+      "median": 124.5,
+      "p75": 161.75,
+      "p90": 184.1
+    },
+    "wordCountStats": {
+      "count": 2,
+      "min": 7,
+      "max": 30,
+      "mean": 18.5,
+      "median": 18.5,
+      "p75": 24.25,
+      "p90": 27.7
+    },
+    "nativeHeightStats": {
+      "count": 2,
+      "min": 123,
+      "max": 323,
+      "mean": 223,
+      "median": 223,
+      "p75": 273,
+      "p90": 303
+    },
+    "heightDeltaStats": {
+      "count": 2,
+      "min": 0,
+      "max": 0,
+      "mean": 0,
+      "median": 0,
+      "p75": 0,
+      "p90": 0
+    },
+    "heightRatioStats": {
+      "count": 2,
+      "min": 1,
+      "max": 1,
+      "mean": 1,
+      "median": 1,
+      "p75": 1,
+      "p90": 1
+    },
+    "byFontSize": [
+      {
+        "fontSize": 36,
+        "count": 2,
+        "heightStats": {
+          "count": 2,
+          "min": 123,
+          "max": 323,
+          "mean": 223,
+          "median": 223,
+          "p75": 273,
+          "p90": 303
+        },
+        "nativeHeightStats": {
+          "count": 2,
+          "min": 123,
+          "max": 323,
+          "mean": 223,
+          "median": 223,
+          "p75": 273,
+          "p90": 303
+        },
+        "deltaStats": {
+          "count": 2,
+          "min": 0,
+          "max": 0,
+          "mean": 0,
+          "median": 0,
+          "p75": 0,
+          "p90": 0
+        },
+        "ratioStats": {
+          "count": 2,
+          "min": 1,
+          "max": 1,
+          "mean": 1,
+          "median": 1,
+          "p75": 1,
+          "p90": 1
+        }
+      }
+    ]
+  },
+  "items": [
+    {
+      "page": 28,
+      "uuid": "20a64ca4-b835-49f2-9206-d0681b95c9e1",
+      "numInPage": 404,
+      "layerNum": 0,
+      "rect": {
+        "left": 772,
+        "top": 794,
+        "right": 1384,
+        "bottom": 917
+      },
+      "width": 612,
+      "height": 123,
+      "fontSize": 36,
+      "fontPath": "/storage/emulated/0/MyStyle/fonts/CourierPrime-Regular.ttf",
+      "textFrameWidthType": 0,
+      "textFrameStyle": 0,
+      "textAlign": 0,
+      "textLength": 50,
+      "newlineCount": 0,
+      "wordCount": 7,
+      "textPreview": "Wunsch nach mutigem Sprechen jenseits von Wahrheit",
+      "nativeMeasurement": {
+        "layoutHeight": 123,
+        "lineCount": 3,
+        "maxLineWidth": 484
+      },
+      "heightDeltaFromNative": 0,
+      "heightRatioToNative": 1
+    },
+    {
+      "page": 28,
+      "uuid": "3401ec0f-cee7-4bc1-add0-51c8a7096b39",
+      "numInPage": 887,
+      "layerNum": 0,
+      "rect": {
+        "left": 711,
+        "top": 175,
+        "right": 1377,
+        "bottom": 498
+      },
+      "width": 666,
+      "height": 323,
+      "fontSize": 36,
+      "fontPath": "/storage/emulated/0/MyStyle/fonts/CourierPrime-Regular.ttf",
+      "textFrameWidthType": 0,
+      "textFrameStyle": 0,
+      "textAlign": 0,
+      "textLength": 199,
+      "newlineCount": 1,
+      "wordCount": 30,
+      "textPreview": "Tastenden Gedanken: ich spüre Zweifel an meinem Mut. Insbesondere an\nmeinem Mut an die Kraft meines Sprechens zu glauben, jenseits der Wahrheit dessen was ich s",
+      "nativeMeasurement": {
+        "layoutHeight": 323,
+        "lineCount": 8,
+        "maxLineWidth": 682
+      },
+      "heightDeltaFromNative": 0,
+      "heightRatioToNative": 1
+    }
+  ]
+}

@@ -1,0 +1,185 @@
+{
+  "createdAt": "2026-04-30T08:50:40.082Z",
+  "notePath": "/storage/emulated/0/Note/1 Projects/Ontological Breakthrough/Ontological Breakthrough Reflection.note",
+  "mode": "current-page",
+  "pages": [
+    38
+  ],
+  "scannedPages": 1,
+  "textboxCount": 2,
+  "summary": {
+    "distinctFontPaths": [
+      "/storage/emulated/0/MyStyle/fonts/CourierPrime-Regular.ttf"
+    ],
+    "fontSizes": [
+      36
+    ],
+    "widthStats": {
+      "count": 2,
+      "min": 628,
+      "max": 681,
+      "mean": 654.5,
+      "median": 654.5,
+      "p75": 667.75,
+      "p90": 675.6999999999999
+    },
+    "heightStats": {
+      "count": 2,
+      "min": 163,
+      "max": 283,
+      "mean": 223,
+      "median": 223,
+      "p75": 253,
+      "p90": 271
+    },
+    "textLengthStats": {
+      "count": 2,
+      "min": 82,
+      "max": 168,
+      "mean": 125,
+      "median": 125,
+      "p75": 146.5,
+      "p90": 159.4
+    },
+    "wordCountStats": {
+      "count": 2,
+      "min": 8,
+      "max": 21,
+      "mean": 14.5,
+      "median": 14.5,
+      "p75": 17.75,
+      "p90": 19.700000000000003
+    },
+    "nativeHeightStats": {
+      "count": 2,
+      "min": 163,
+      "max": 283,
+      "mean": 223,
+      "median": 223,
+      "p75": 253,
+      "p90": 271
+    },
+    "heightDeltaStats": {
+      "count": 2,
+      "min": 0,
+      "max": 0,
+      "mean": 0,
+      "median": 0,
+      "p75": 0,
+      "p90": 0
+    },
+    "heightRatioStats": {
+      "count": 2,
+      "min": 1,
+      "max": 1,
+      "mean": 1,
+      "median": 1,
+      "p75": 1,
+      "p90": 1
+    },
+    "byFontSize": [
+      {
+        "fontSize": 36,
+        "count": 2,
+        "heightStats": {
+          "count": 2,
+          "min": 163,
+          "max": 283,
+          "mean": 223,
+          "median": 223,
+          "p75": 253,
+          "p90": 271
+        },
+        "nativeHeightStats": {
+          "count": 2,
+          "min": 163,
+          "max": 283,
+          "mean": 223,
+          "median": 223,
+          "p75": 253,
+          "p90": 271
+        },
+        "deltaStats": {
+          "count": 2,
+          "min": 0,
+          "max": 0,
+          "mean": 0,
+          "median": 0,
+          "p75": 0,
+          "p90": 0
+        },
+        "ratioStats": {
+          "count": 2,
+          "min": 1,
+          "max": 1,
+          "mean": 1,
+          "median": 1,
+          "p75": 1,
+          "p90": 1
+        }
+      }
+    ]
+  },
+  "items": [
+    {
+      "page": 38,
+      "uuid": "92166efc-9c43-47b4-84d6-e910b1d1a753",
+      "numInPage": 382,
+      "layerNum": 0,
+      "rect": {
+        "left": 745,
+        "top": 771,
+        "right": 1373,
+        "bottom": 934
+      },
+      "width": 628,
+      "height": 163,
+      "fontSize": 36,
+      "fontPath": "/storage/emulated/0/MyStyle/fonts/CourierPrime-Regular.ttf",
+      "textFrameWidthType": 0,
+      "textFrameStyle": 0,
+      "textAlign": 0,
+      "textLength": 82,
+      "newlineCount": 0,
+      "wordCount": 8,
+      "textPreview": "Befindlichkeit als Unterscheidung. Bewußtheit und Empfangen schafft Transformation",
+      "nativeMeasurement": {
+        "layoutHeight": 163,
+        "lineCount": 4,
+        "maxLineWidth": 594
+      },
+      "heightDeltaFromNative": 0,
+      "heightRatioToNative": 1
+    },
+    {
+      "page": 38,
+      "uuid": "a3b423be-60b5-4a6e-a230-dad56f859978",
+      "numInPage": 723,
+      "layerNum": 0,
+      "rect": {
+        "left": 718,
+        "top": 187,
+        "right": 1399,
+        "bottom": 470
+      },
+      "width": 681,
+      "height": 283,
+      "fontSize": 36,
+      "fontPath": "/storage/emulated/0/MyStyle/fonts/CourierPrime-Regular.ttf",
+      "textFrameWidthType": 0,
+      "textFrameStyle": 0,
+      "textAlign": 0,
+      "textLength": 168,
+      "newlineCount": 0,
+      "wordCount": 21,
+      "textPreview": "Befindlichkeiten und Stimmungen als Unterscheidungen, die uns nutzen. Zugleich, erstens dieser bewußt werden und zweitens sie als Geschenk empfangen ist Transfo",
+      "nativeMeasurement": {
+        "layoutHeight": 283,
+        "lineCount": 7,
+        "maxLineWidth": 638
+      },
+      "heightDeltaFromNative": 0,
+      "heightRatioToNative": 1
+    }
+  ]
+}
