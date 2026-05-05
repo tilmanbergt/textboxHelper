@@ -111,7 +111,7 @@ type ViewMode =
 
 
 
-function App(): React.JSX.Element {
+function App(): React.JSX.Element | null {
     const [importSettings, setImportSettings] = useState<TextboxImportSettings>(
       DEFAULT_TEXTBOX_IMPORT_SETTINGS,
     );
