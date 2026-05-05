@@ -45,23 +45,23 @@ The plugin is built as a React Native Supernote plugin with a small Android nati
 6. 
 ## Project Structure
 
-- [index.js](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\index.js)
+- [index.js](index.js)
   Registers Supernote buttons and starts plugin routing.
-- [App.tsx](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\App.tsx)
+- [App.tsx](App.tsx)
   Main review UI for textbox actions and edit-marker actions.
-- [src/pluginRouting.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\pluginRouting.ts)
+- [src/pluginRouting.ts](src\pluginRouting.ts)
   Central button IDs and bridge from Supernote button presses into React Native.
-- [src/textboxActions.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\textboxActions.ts)
+- [src/textboxActions.ts](src\textboxActions.ts)
   Textbox split/join/clean/unwrap logic plus preview and execution flow.
-- [src/editMarkerActions.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\editMarkerActions.ts)
+- [src/editMarkerActions.ts](src\editMarkerActions.ts)
   Handwritten marker recognition, replace-source resolution, preview generation, and apply logic.
-- [src/shared/supernoteTextboxGeometry.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\shared\supernoteTextboxGeometry.ts)
+- [src/shared/supernoteTextboxGeometry.ts](src/shared/supernoteTextboxGeometry.ts)
   Shared page-space rectangle and reading-order helpers.
-- [src/shared/supernoteTextboxLayout.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\shared\supernoteTextboxLayout.ts)
+- [src/shared/supernoteTextboxLayout.ts](src\shared\supernoteTextboxLayout.ts)
   Shared textbox measurement and height calculation logic.
-- [src/shared/supernoteTextboxHitTesting.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\shared\supernoteTextboxHitTesting.ts)
+- [src/shared/supernoteTextboxHitTesting.ts](src\shared\supernoteTextboxHitTesting.ts)
   Shared mapping from measured text layout to page-space hit testing.
-- [android/app/src/main/java/com/textboxhelper/TextboxMetricsModule.kt](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\android\app\src\main\java\com\textboxhelper\TextboxMetricsModule.kt)
+- [android/app/src/main/java/com/textboxhelper/TextboxMetricsModule.kt](android\app\src\main\java\com\textboxhelper\TextboxMetricsModule.kt)
   Android native module used for accurate textbox text measurement.
 
 More architectural detail lives in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -85,7 +85,7 @@ yarn test
 
 ## Contributing
 
-Contribution guidance lives in [CONTRIBUTING.md](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\CONTRIBUTING.md).
+Contribution guidance lives in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Short version:
 
@@ -96,7 +96,7 @@ Short version:
 
 ## Publishing To GitHub
 
-A practical release checklist is in [docs/GITHUB_RELEASE_CHECKLIST.md](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\docs\GITHUB_RELEASE_CHECKLIST.md).
+A practical release checklist is in [docs/GITHUB_RELEASE_CHECKLIST.md](docs\GITHUB_RELEASE_CHECKLIST.md).
 
 Before publishing publicly, make sure to:
 
