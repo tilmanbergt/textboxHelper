@@ -1,67 +1,90 @@
-## Status
-
-Textbox Helper is experimental and in beta. It directly modifies NOTE page elements. Please test it on copied notes before using it on important notebooks.
-
 # Textbox Helper
 
-`Textbox Helper` is a Supernote NOTE plugin focused on structured text editing inside notes.
+Textbox Helper is an experimental Supernote NOTE plugin for structured text editing inside notes.
 
-It currently supports related workflows:
+It targets the Android-based Supernote plugin runtime only. It does not support iOS.
 
-- textbox tools for splitting, joining, and cleaning NOTE textboxes
-- edit markers for handwritten delete and replace operations with preview and apply flowsImport text file
-- Export DOCX 
-- Apply all edit markers from NOTE toolbar
-- Import text file
-The plugin is built as a React Native Supernote plugin with a small Android native text-measurement bridge.
+## Status
+
+Textbox Helper is experimental and in beta.
+
+The plugin directly modifies NOTE page elements. Please test it on copied notes before using it on important notebooks.
 
 ## Main Features
 
-- `Textbox Tools`
-  - split one textbox into sentence-based textboxes
-  - join selected textboxes in reading order
-  - clean repeated spaces
-  - remove line breaks
-- `Apply Edit Markers`
-  - recognize handwritten delete markers
-  - recognize replace markers as a delete line plus two crossing modifier lines
-  - support both freehand strokes and Supernote straight-line geometry
-  - preview all changes before apply
-- `Apply All Edit Markers`
-  - run the same marker recognition on the full page from the NOTE toolbar
-- `Import Text File`
-    - import plain text into NOTE textboxes
-    - split imported text into paragraph-based textboxes
-- `Export DOCX`
-    - scan textbox content from the current note
-    - export recognized text structure into a DOCX file
+### Textbox Tools
+
+- Split one textbox into sentence-based textboxes
+- Join selected textboxes in reading order
+- Clean repeated spaces
+- Remove manual line breaks
+
+### Edit Markers
+
+- Recognize handwritten delete markers
+- Recognize replace markers as a delete line plus two crossing modifier lines
+- Support both freehand strokes and Supernote straight-line geometry
+- Preview all changes before applying them
+
+### Apply All Edit Markers
+
+- Run marker recognition on the full current page from the NOTE toolbar
+- Apply recognized marker operations after preview
+
+### Import Text File
+
+- Import plain text into NOTE textboxes
+- Split imported text into paragraph-based textboxes
+
+### Export DOCX
+
+- Scan textbox content from the current note
+- Export recognized textbox content into a DOCX file
+
 ## Installation
 
 1. Download the latest `.snplg` file from GitHub Releases.
-2. Copy it to the `MyStyle/` folder on your Supernote device.
+2. Copy the `.snplg` file to the `MyStyle/` folder on your Supernote device.
 3. On the device, open Settings → Apps → Plugins.
 4. Install `Textbox Helper`.
-5. Open a NOTE file and use the toolbar buttons.
-6. 
+5. Open a NOTE file and use the plugin toolbar buttons.
+
 ## Project Structure
 
-- [index.js](index.js)
+- [index.js](index.js)  
   Registers Supernote buttons and starts plugin routing.
-- [App.tsx](App.tsx)
-  Main review UI for textbox actions and edit-marker actions.
-- [src/pluginRouting.ts](src\pluginRouting.ts)
+
+- [App.tsx](App.tsx)  
+  Main review UI for textbox actions, edit-marker actions, import, and export.
+
+- [src/pluginRouting.ts](src/pluginRouting.ts)  
   Central button IDs and bridge from Supernote button presses into React Native.
-- [src/textboxActions.ts](src\textboxActions.ts)
-  Textbox split/join/clean/unwrap logic plus preview and execution flow.
-- [src/editMarkerActions.ts](src\editMarkerActions.ts)
+
+- [src/textboxActions.ts](src/textboxActions.ts)  
+  Textbox split, join, clean, and unwrap logic, plus preview and execution flow.
+
+- [src/editMarkerActions.ts](src/editMarkerActions.ts)  
   Handwritten marker recognition, replace-source resolution, preview generation, and apply logic.
-- [src/shared/supernoteTextboxGeometry.ts](src/shared/supernoteTextboxGeometry.ts)
+
+- [src/textboxImportActions.ts](src/textboxImportActions.ts)  
+  Text-file import preview and execution.
+
+- [src/export](src/export)  
+  DOCX export UI, note context reading, textbox scanning, and DOCX generation.
+
+- [src/ui](src/ui)  
+  Reusable UI components for plugin screens and dialogs.
+
+- [src/shared/supernoteTextboxGeometry.ts](src/shared/supernoteTextboxGeometry.ts)  
   Shared page-space rectangle and reading-order helpers.
-- [src/shared/supernoteTextboxLayout.ts](src\shared\supernoteTextboxLayout.ts)
+
+- [src/shared/supernoteTextboxLayout.ts](src/shared/supernoteTextboxLayout.ts)  
   Shared textbox measurement and height calculation logic.
-- [src/shared/supernoteTextboxHitTesting.ts](src\shared\supernoteTextboxHitTesting.ts)
+
+- [src/shared/supernoteTextboxHitTesting.ts](src/shared/supernoteTextboxHitTesting.ts)  
   Shared mapping from measured text layout to page-space hit testing.
-- [android/app/src/main/java/com/textboxhelper/TextboxMetricsModule.kt](android\app\src\main\java\com\textboxhelper\TextboxMetricsModule.kt)
+
+- [android/app/src/main/java/com/textboxhelper/TextboxMetricsModule.kt](android/app/src/main/java/com/textboxhelper/TextboxMetricsModule.kt)  
   Android native module used for accurate textbox text measurement.
 
 More architectural detail lives in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -72,28 +95,3 @@ Install dependencies:
 
 ```sh
 yarn install
-```
-
-Common commands:
-
-```sh
-yarn install
-yarn start
-yarn typecheck
-yarn test
-```
-
-## Contributing
-
-Contribution guidance lives in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Short version:
-
-- keep Supernote-specific behavior explicit
-- prefer small, reviewable PRs
-- keep logs targeted and easy to remove later
-- run `npm run typecheck` before opening a PR
-
-## Publishing To GitHub
-
-A practical release checklist is in [docs/GITHUB_RELEASE_CHECKLIST.md](docs\GITHUB_RELEASE_CHECKLIST.md).
