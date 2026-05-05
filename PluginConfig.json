@@ -2,10 +2,10 @@
     "pluginID":  "wkx45auazdre2crs",
     "pluginKey":  "textboxHelper",
     "iconPath":  "",
-    "desc":  "",
+    "desc":  "Tools for importing, editing, and exporting Supernote textboxes.",
     "name":  "textboxHelper",
     "versionCode":  "1",
-    "versionName":  "0.0.1",
+    "versionName":  "0.1.0",
     "jsMainPath":  "index"
 }
 
