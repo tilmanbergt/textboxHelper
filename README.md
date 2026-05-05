@@ -1,12 +1,18 @@
+## Status
+
+Textbox Helper is experimental and in beta. It directly modifies NOTE page elements. Please test it on copied notes before using it on important notebooks.
+
 # Textbox Helper
 
 `Textbox Helper` is a Supernote NOTE plugin focused on structured text editing inside notes.
 
-It currently supports two related workflows:
+It currently supports related workflows:
 
 - textbox tools for splitting, joining, and cleaning NOTE textboxes
-- edit markers for handwritten delete and replace operations with preview and apply flows
-
+- edit markers for handwritten delete and replace operations with preview and apply flowsImport text file
+- Export DOCX 
+- Apply all edit markers from NOTE toolbar
+- Import text file
 The plugin is built as a React Native Supernote plugin with a small Android native text-measurement bridge.
 
 ## Main Features
@@ -23,7 +29,20 @@ The plugin is built as a React Native Supernote plugin with a small Android nati
   - preview all changes before apply
 - `Apply All Edit Markers`
   - run the same marker recognition on the full page from the NOTE toolbar
+- `Import Text File`
+    - import plain text into NOTE textboxes
+    - split imported text into paragraph-based textboxes
+- `Export DOCX`
+    - scan textbox content from the current note
+    - export recognized text structure into a DOCX file
+## Installation
 
+1. Download the latest `.snplg` file from GitHub Releases.
+2. Copy it to the `MyStyle/` folder on your Supernote device.
+3. On the device, open Settings → Apps → Plugins.
+4. Install `Textbox Helper`.
+5. Open a NOTE file and use the toolbar buttons.
+6. 
 ## Project Structure
 
 - [index.js](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\index.js)
@@ -45,23 +64,23 @@ The plugin is built as a React Native Supernote plugin with a small Android nati
 - [android/app/src/main/java/com/textboxhelper/TextboxMetricsModule.kt](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\android\app\src\main\java\com\textboxhelper\TextboxMetricsModule.kt)
   Android native module used for accurate textbox text measurement.
 
-More architectural detail lives in [docs/ARCHITECTURE.md](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\docs\ARCHITECTURE.md).
+More architectural detail lives in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Development
 
 Install dependencies:
 
 ```sh
-npm install
+yarn install
 ```
 
 Common commands:
 
 ```sh
-npm start
-npm run android
-npm run typecheck
-npm test
+yarn install
+yarn start
+yarn typecheck
+yarn test
 ```
 
 ## Contributing
