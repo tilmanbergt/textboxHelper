@@ -4,12 +4,12 @@ This project is intentionally organized around the Supernote plugin workflow rat
 
 ## High-Level Flow
 
-1. Supernote button press enters through [index.js](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\index.js).
-2. [src/pluginRouting.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\pluginRouting.ts) captures the button event and forwards it into React Native.
-3. [App.tsx](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\App.tsx) decides which review mode to open.
+1. Supernote button press enters through [index.js](index.js).
+2. [src/pluginRouting.ts](src\pluginRouting.ts) captures the button event and forwards it into React Native.
+3. [App.tsx](App.tsx) decides which review mode to open.
 4. Feature modules build previews and apply plans:
-   - [src/textboxActions.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\textboxActions.ts)
-   - [src/editMarkerActions.ts](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\editMarkerActions.ts)
+   - [src/textboxActions.ts](src\textboxActions.ts)
+   - [src/editMarkerActions.ts](src\editMarkerActions.ts)
 
 ## Main Modules
 
@@ -59,7 +59,7 @@ This file is the main orchestration layer for marker features.
 
 ## Shared Supernote Textbox Core
 
-The shared files under [src/shared](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\src\shared) are designed to be reusable across sibling Supernote plugins.
+The shared files under [src/shared](src\shared) are designed to be reusable across sibling Supernote plugins.
 
 ### `supernoteTextboxGeometry.ts`
 
@@ -94,7 +94,7 @@ This is where coordinate-to-text mapping should live.
 
 ## Android Native Measurement Bridge
 
-[TextboxMetricsModule.kt](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\android\app\src\main\java\com\textboxhelper\TextboxMetricsModule.kt) exposes Android `StaticLayout` measurements to JavaScript.
+[TextboxMetricsModule.kt](android\app\src\main\java\com\textboxhelper\TextboxMetricsModule.kt) exposes Android `StaticLayout` measurements to JavaScript.
 
 It is used because textbox height, wrapping, and hit testing are much more reliable when measured with native Android text layout than with a plugin-side approximation alone.
 

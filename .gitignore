@@ -73,8 +73,13 @@ yarn-error.log
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
-/current.txt
-/errorlogcomplete.txt
-/strike.txt
-/textbox_lab_log.txt
-/strike2.txt
+# Plugin release artifacts
+*.snplg
+build/outputs/
+
+# Environment / local config
+.env
+.env.*
+# Local debug artifacts
+*.log
+/textbox-action-backups/
