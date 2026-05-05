@@ -3,7 +3,7 @@
     "pluginKey":  "textboxHelper",
     "iconPath":  "",
     "desc":  "Tools for importing, editing, and exporting Supernote textboxes.",
-    "name":  "textboxHelper",
+    "name":  "Textbox Helper",
     "versionCode":  "1",
     "versionName":  "0.1.0",
     "jsMainPath":  "index"
