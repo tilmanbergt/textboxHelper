@@ -100,6 +100,8 @@ const textboxMetricsModule = NativeModules.TextboxMetrics as
   | undefined;
 
 const MIN_TEXTBOX_HEIGHT = 48;
+// const SUPERNOTE_ONE_LINE_FONT_SIZE_OFFSET = 5;
+// const SUPERNOTE_ONE_LINE_HEIGHT_FACTOR = 2.3;
 const BOX_HORIZONTAL_PADDING_FACTOR = 0.62;
 const BOX_VERTICAL_PADDING_FACTOR = 0.72;
 const LINE_HEIGHT_FACTOR = 1.35;
@@ -179,6 +181,8 @@ function getExtraLineStep(fontSize: number): number {
   return Math.max(fontSize + 3, Math.round(fontSize * 1.1));
 }
 
+
+
 export async function measureTextLayout(
   text: string,
   width: number,
@@ -238,6 +242,7 @@ export async function estimateTextboxHeight(
   fontSize: number,
   fontPath?: string,
   calibration: TextboxMeasurementCalibration = DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION,
+  addExplicitEmptyLineHeight: boolean = true,
 ): Promise<number> {
   const nativeMeasurement = await measureTextLayout(
     text,
@@ -248,11 +253,32 @@ export async function estimateTextboxHeight(
   );
   const nativeHeight =
     nativeMeasurement?.layoutHeight ?? estimateTextboxHeightFallback(text, width, fontSize);
+ // const measuredLineCount =
+  //  nativeMeasurement?.lineCount ?? estimateLineCount(text, width, fontSize);
   const extraEmptyLines = countExplicitEmptyLines(text);
   const extraHeight =
-    extraEmptyLines > 0 ? extraEmptyLines * getExtraLineStep(fontSize) : 0;
-
-  return Math.max(MIN_TEXTBOX_HEIGHT, nativeHeight + extraHeight);
+    addExplicitEmptyLineHeight && extraEmptyLines > 0
+      ? extraEmptyLines * getExtraLineStep(fontSize)
+      : 0;
+  //const oneLineMinimum =
+   //   ? getOneLineSupernoteMinimumHeight(fontSize)
+   //   : MIN_TEXTBOX_HEIGHT;
+   //const heightWithMinimum = Math.max(oneLineMinimum, nativeHeight + extraHeight);
+   const heightWithoutMinimum = nativeHeight + extraHeight;
+      console.log(
+        '[TextboxHeightDebug] oneLineMinimumComparison',
+        JSON.stringify({
+          textPreview: text.slice(0, 120),
+          width,
+          fontSize,
+          nativeHeight,
+          extraEmptyLines,
+          extraHeight,
+          heightWithoutMinimum,
+        }),
+      );
+return heightWithoutMinimum;
+  // return heightWithMinimum;
 }
 
 /**

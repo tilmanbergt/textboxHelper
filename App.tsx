@@ -16,19 +16,12 @@
  */
 
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {
-  DeviceEventEmitter,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextStyle,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import {DeviceEventEmitter} from 'react-native';
 import {PluginManager} from 'sn-plugin-lib';
 import {
-  BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS,
+    BUTTON_ID_EXPORT_DOCX,
+    BUTTON_ID_IMPORT_TEXT_FILE,
+     BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS,
   BUTTON_ID_TEXTBOX_TOOLS,
   BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS,
   BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES,
@@ -38,6 +31,12 @@ import {
   PLUGIN_BUTTON_EVENT,
   checkPendingButton,
 } from './src/pluginRouting';
+
+import ExportScreen from './src/export/ExportScreen';
+import {
+  refreshExportNoteContext,
+  type ExportNoteContext,
+} from './src/export/exportNoteContext';
 import {
   applyEditMarkerPreview,
   getEditMarkerCalibration,
@@ -45,8 +44,6 @@ import {
   resetEditMarkerCalibration,
   setEditMarkerCalibration,
   type EditMarkerPreviewScope,
-  type EditMarkerHighlightRange,
-  type EditMarkerPreviewBlock,
   type EditMarkerPreview,
 } from './src/editMarkerActions';
 import {
@@ -58,142 +55,72 @@ import {
   type TextboxActionProgressUpdate,
 } from './src/textboxActions';
 
-const UI_FONT_SIZES = {
-  title: 24,
-  body: 16,
-  meta: 13,
-} as const;
+import {styles} from './src/ui/pluginUiStyles';
 
-const UI_COLORS = {
-  black: '#000000',
-  white: '#ffffff',
-  gray: '#7a7a7a',
-  lightGray: '#d0d0d0',
-  softGray: '#f4f4f4',
-} as const;
+import {
+  DirectActionDialog,
+  createIdleDirectDialog,
+  type DirectDialogState,
+} from './src/ui/DirectActionDialog';
 
-const ACTION_ORDER: TextboxActionKind[] = [
-  'split',
-  'join',
-  'clean',
-  'unwrap',
-];
+import {
+  DEFAULT_TEXTBOX_IMPORT_SETTINGS,
+  getTextboxImportPreview,
+  performTextboxImport,
+  type TextboxImportPreview,
+  type TextboxImportSettings,
+} from './src/textboxImportActions';
 
-const ACTION_LABELS: Record<TextboxActionKind, string> = {
-  split: 'Split Sentences',
-  join: 'Join Text Boxes',
-  clean: 'Clean Spaces',
-  unwrap: 'Remove Line Breaks',
-};
+import {ImportTextFileView} from './src/ui/ImportTextFileView';
+
+
+import {
+    ACTION_ORDER,
+  ACTION_LABELS,
+  TextboxToolsView,
+  formatPreviewBlocks,
+} from './src/ui/TextboxToolsView';
+
+import {
+  EditMarkerReviewView,
+  renderHighlightedPreviewBlocks,
+} from './src/ui/EditMarkerReviewView';
 
 const ACTION_PROGRESS_LABELS: Record<TextboxActionKind, string> = {
+  log: 'Logging textboxes...',
   split: 'Splitting textboxes...',
   join: 'Joining textboxes...',
   clean: 'Cleaning spaces...',
   unwrap: 'Removing line breaks...',
 };
 
-type ViewMode = 'tools' | 'markers' | 'direct';
-type MarkerSection = 'recognition' | 'calibration' | 'help';
+type ViewMode =
+  | 'routing'
+  | 'tools'
+  | 'markers'
+  | 'direct'
+  | 'import'
+  | 'exportDocx';
+  type MarkerSection = 'recognition' | 'calibration' | 'help';
 
-type DirectDialogState = {
-  action: TextboxActionKind | null;
-  title: string;
-  message: string;
-  isBusy: boolean;
-  canCancel: boolean;
-  showOk: boolean;
-  backupPath: string;
-};
 
-function formatPreviewBlocks(
-  blocks: string[],
-  emptyMessage: string,
-): string {
-  if (blocks.length === 0) {
-    return emptyMessage;
-  }
 
-  return blocks.map(block => block || '(empty)').join('\n----\n');
-}
 
-function createIdleDirectDialog(): DirectDialogState {
-  return {
-    action: null,
-    title: 'Textbox Action',
-    message: '',
-    isBusy: false,
-    canCancel: false,
-    showOk: true,
-    backupPath: '',
-  };
-}
 
-function renderHighlightedTextSegments(
-  text: string,
-  ranges: EditMarkerHighlightRange[],
-  highlightStyle: TextStyle,
-): React.ReactNode[] {
-  if (ranges.length === 0) {
-    return [<Text key="plain">{text || '(empty)'}</Text>];
-  }
 
-  const segments: React.ReactNode[] = [];
-  let cursor = 0;
 
-  ranges.forEach((range, index) => {
-    const safeStart = Math.max(cursor, Math.min(range.start, text.length));
-    const safeEnd = Math.max(safeStart, Math.min(range.end, text.length));
 
-    if (safeStart > cursor) {
-      segments.push(
-        <Text key={`plain-${index}-${cursor}`}>{text.slice(cursor, safeStart)}</Text>,
-      );
-    }
-
-    if (safeEnd > safeStart) {
-      segments.push(
-        <Text key={`highlight-${index}-${safeStart}`} style={highlightStyle}>
-          {text.slice(safeStart, safeEnd)}
-        </Text>,
-      );
-    }
-
-    cursor = safeEnd;
-  });
-
-  if (cursor < text.length) {
-    segments.push(<Text key={`plain-tail-${cursor}`}>{text.slice(cursor)}</Text>);
-  }
-
-  if (segments.length === 0) {
-    return [<Text key="empty">(empty)</Text>];
-  }
-
-  return segments;
-}
-
-function renderHighlightedPreviewBlocks(
-  blocks: EditMarkerPreviewBlock[],
-  emptyMessage: string,
-  highlightStyle: TextStyle,
-): React.ReactNode {
-  if (blocks.length === 0) {
-    return <Text style={styles.previewText}>{emptyMessage}</Text>;
-  }
-
-  return blocks.map((block, index) => (
-    <View key={block.id || `block-${index}`} style={styles.previewBlock}>
-      <Text style={styles.previewText}>
-        {renderHighlightedTextSegments(block.text, block.highlightRanges, highlightStyle)}
-      </Text>
-      {index < blocks.length - 1 ? <Text style={styles.previewSeparator}>----</Text> : null}
-    </View>
-  ));
-}
 
 function App(): React.JSX.Element {
-  const [viewMode, setViewMode] = useState<ViewMode>('tools');
+    const [importSettings, setImportSettings] = useState<TextboxImportSettings>(
+      DEFAULT_TEXTBOX_IMPORT_SETTINGS,
+    );
+    const [isImportBusy, setIsImportBusy] = useState(false);
+    const [importPreview, setImportPreview] =
+      useState<TextboxImportPreview | null>(null);
+      const [exportNoteContext, setExportNoteContext] =
+        useState<ExportNoteContext | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('routing');
   const [currentAction, setCurrentAction] = useState<TextboxActionKind | null>(null);
   const [preview, setPreview] = useState<TextboxActionPreview | null>(null);
   const [markerPreview, setMarkerPreview] = useState<EditMarkerPreview | null>(null);
@@ -236,7 +163,15 @@ function App(): React.JSX.Element {
       }),
     );
   }, []);
+const refreshNoteContext = useCallback(async () => {
+  const nextContext = await refreshExportNoteContext();
+  setExportNoteContext(nextContext);
 
+  return {
+    filePath: nextContext.filePath,
+    page: nextContext.page,
+  };
+}, []);
   const updateStatus = useCallback((message: string) => {
     logUiStatus(viewMode, message);
     setStatus(message);
@@ -260,7 +195,7 @@ function App(): React.JSX.Element {
         setCurrentAction(null);
       }
 
-      if (nextPreview.selectedCount === 0) {
+      if (action !== 'log' && nextPreview.selectedCount === 0) {
         updateStatus('Select one or more main-layer textboxes.');
         return;
       }
@@ -311,11 +246,15 @@ function App(): React.JSX.Element {
       }
 
       updateStatus('');
-    } catch (error) {
-      updateStatus(`Could not read the current marker selection: ${String(error)}`);
-    } finally {
-      setIsMarkerPreviewLoading(false);
-    }
+   } catch (error) {
+     updateStatus(
+       nextScope === 'page'
+         ? `Could not read the current page markers: ${String(error)}`
+         : `Could not read the current marker selection: ${String(error)}`,
+     );
+   } finally {
+     setIsMarkerPreviewLoading(false);
+   }
   }, [markerPreviewScope, updateStatus]);
 
   const reloadMarkerPreviewWithCalibration = useCallback(
@@ -411,7 +350,22 @@ function App(): React.JSX.Element {
         loadPreview(null);
         return;
       }
+   if (buttonId === BUTTON_ID_IMPORT_TEXT_FILE) {
+          setViewMode('import');
+            updateStatus('');
+          return;
+        }
+if (buttonId === BUTTON_ID_EXPORT_DOCX) {
+  setViewMode('exportDocx');
+  setExportNoteContext(null);
+  updateStatus('');
 
+  void refreshNoteContext().catch(error => {
+    updateStatus(`Could not read current note context: ${String(error)}`);
+  });
+
+  return;
+}
       if (buttonId === BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS) {
         setViewMode('markers');
         loadMarkerPreview('lasso');
@@ -462,6 +416,45 @@ function App(): React.JSX.Element {
     };
   }, [clearPendingClose, loadMarkerPreview, loadPreview, startDirectAction]);
 
+const previewImportTextFile = useCallback(async () => {
+  setIsImportBusy(true);
+  setImportPreview(null);
+  updateStatus('Reading import file...');
+
+  try {
+    const nextPreview = await getTextboxImportPreview(importSettings);
+    setImportPreview(nextPreview);
+    updateStatus(
+      `Read ${nextPreview.wordCount} words, ${nextPreview.characterCount} characters, ${nextPreview.paragraphCount} paragraphs.`,
+    );
+  } catch (error) {
+    updateStatus(`Could not preview import file: ${String(error)}`);
+  } finally {
+    setIsImportBusy(false);
+  }
+}, [importSettings, updateStatus]);
+
+const executeImportTextFile = useCallback(async () => {
+  setIsImportBusy(true);
+  updateStatus('Starting text import...');
+
+  try {
+    const result = await performTextboxImport(importSettings, {
+      onProgress: update => {
+        updateStatus(update.message);
+      },
+    });
+
+    setImportPreview(null);
+    updateStatus(result.message);
+  } catch (error) {
+    updateStatus(`Import failed: ${String(error)}`);
+  } finally {
+    setIsImportBusy(false);
+  }
+}, [importSettings, updateStatus]);
+
+
   const executeCurrentAction = useCallback(async () => {
     if (!currentAction) {
       return;
@@ -474,14 +467,27 @@ function App(): React.JSX.Element {
     try {
       const result = await performTextboxAction(currentAction);
       setBackupPath(result.backupPath);
-      await loadPreview(null);
+      if (currentAction === 'log') {
+        setPreview(current => current
+          ? {
+              ...current,
+              beforeBlocks: [],
+              afterBlocks: result.previewBlocks || [],
+              selectionMessage: result.message,
+            }
+          : current,
+        );
+      } else {
+        setPreview(null);
+        setCurrentAction(null);
+      }
       updateStatus(result.message);
     } catch (error) {
       updateStatus(`Textbox action failed: ${String(error)}`);
     } finally {
       setIsBusy(false);
     }
-  }, [currentAction, loadPreview, updateStatus]);
+  }, [currentAction, updateStatus]);
 
   const executeEditMarkers = useCallback(async () => {
     if (!markerPreview?.canApply) {
@@ -596,713 +602,117 @@ function App(): React.JSX.Element {
     closePluginView();
   }, [closePluginView, directDialog, updateDirectDialog]);
 
-  const renderDirectDialog = () => (
-    <View style={styles.dialogScreen}>
-      <StatusBar barStyle="dark-content" backgroundColor={UI_COLORS.white} />
-      <View style={styles.dialogCard}>
-        <Text style={styles.dialogEyebrow}>Textbox Action</Text>
-        <Text style={styles.dialogTitle}>{directDialog.title}</Text>
-        <Text style={styles.dialogMessage}>{directDialog.message}</Text>
-        {directDialog.backupPath ? (
-          <Text style={styles.dialogMeta}>{directDialog.backupPath}</Text>
-        ) : null}
-        <View style={styles.dialogButtonRow}>
-          <TouchableOpacity
-            activeOpacity={0.75}
-            style={styles.secondaryButton}
-            onPress={handleDirectCancel}>
-            <Text style={styles.secondaryButtonText}>
-              {directDialog.isBusy ? 'Cancel' : 'Close'}
-            </Text>
-          </TouchableOpacity>
-          {directDialog.showOk ? (
-            <TouchableOpacity
-              activeOpacity={0.75}
-              style={styles.primaryButton}
-              onPress={closePluginView}>
-              <Text style={styles.primaryButtonText}>OK</Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      </View>
-    </View>
+
+
+
+
+
+
+if (viewMode === 'direct') {
+  return (
+    <DirectActionDialog
+      dialog={directDialog}
+      onCancelOrClose={handleDirectCancel}
+      onOk={closePluginView}
+    />
   );
-
-  const renderToolsView = () => (
-    <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor={UI_COLORS.white} />
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerCopy}>
-            <Text style={styles.eyebrow}>Textbox Tools</Text>
-            <Text style={styles.title}>
-              {preview?.selectionMessage || 'Loading selection...'}
-            </Text>
-            <Text style={styles.summaryText}>
-              {availableActionLabels.length > 0
-                ? `Available now: ${availableActionLabels.join(', ')}`
-                : 'No actions are available for the current selection.'}
-            </Text>
-          </View>
-          <TouchableOpacity
-            activeOpacity={0.75}
-            style={styles.closeButton}
-            onPress={closePluginView}>
-            <Text style={styles.closeButtonText}>Close</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.actionsGrid}>
-          {ACTION_ORDER.map(action => {
-            const isSelected = currentAction === action;
-            const isAvailable = !!preview?.availableActions[action];
-
-            return (
-              <TouchableOpacity
-                key={action}
-                activeOpacity={0.75}
-                style={[
-                  styles.actionButton,
-                  isSelected && styles.actionButtonSelected,
-                  (!isAvailable || isPreviewLoading || isBusy) && styles.actionButtonDisabled,
-                ]}
-                onPress={() => loadPreview(action)}
-                disabled={!isAvailable || isPreviewLoading || isBusy}>
-                <Text
-                  style={[
-                    styles.actionButtonText,
-                    isSelected && styles.actionButtonTextSelected,
-                  ]}>
-                  {ACTION_LABELS[action]}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        <View style={styles.previewRow}>
-          <View style={styles.previewCard}>
-            <Text style={styles.previewTitle}>Before</Text>
-            <Text style={styles.previewText}>{beforePreviewText}</Text>
-          </View>
-          <View style={styles.previewCard}>
-            <Text style={styles.previewTitle}>
-              {currentAction ? `After: ${ACTION_LABELS[currentAction]}` : 'After'}
-            </Text>
-            <Text style={styles.previewText}>{afterPreviewText}</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          activeOpacity={0.75}
-          style={[styles.executeButton, !canExecute && styles.executeButtonDisabled]}
-          onPress={executeCurrentAction}
-          disabled={!canExecute}>
-          <Text style={styles.executeButtonText}>
-            {isBusy ? 'Executing...' : 'Execute'}
-          </Text>
-        </TouchableOpacity>
-
-        {status ? <Text style={styles.statusText}>{status}</Text> : null}
-        {backupPath ? <Text style={styles.backupText}>{backupPath}</Text> : null}
-      </ScrollView>
-    </View>
-  );
-
-  const renderMarkerOperations = () => {
-    if (!markerPreview || markerPreview.operations.length === 0) {
-      return (
-        <Text style={styles.emptyStateText}>
-          No recognized operations yet.
-        </Text>
-      );
-    }
-
-    return markerPreview.operations.map(operation => (
-      <View key={operation.id} style={styles.listRow}>
-        <Text style={styles.listTitle}>{operation.summary}</Text>
-        <Text style={styles.listDetail}>{operation.detail}</Text>
-      </View>
-    ));
-  };
-
-  const renderIgnoredMarkers = () => {
-    if (!markerPreview || markerPreview.ignoredMarkers.length === 0) {
-      return (
-        <Text style={styles.emptyStateText}>
-          No selected markers were ignored.
-        </Text>
-      );
-    }
-
-    return markerPreview.ignoredMarkers.map(marker => (
-      <View
-        key={`${marker.markerUuid}:${marker.markerNumInPage}`}
-        style={styles.listRow}>
-        <Text style={styles.listTitle}>{marker.summary}</Text>
-        <Text style={styles.listDetail}>{marker.reason}</Text>
-      </View>
-    ));
-  };
-
-  const renderMarkerSection = (
-    section: MarkerSection,
-    title: string,
-    content: React.ReactNode,
-  ) => {
-    const isOpen = activeMarkerSection === section;
-
-    return (
-      <View style={styles.sectionCard}>
-        <TouchableOpacity
-          activeOpacity={0.75}
-          style={styles.sectionHeaderButton}
-          onPress={() => {
-            setActiveMarkerSection(current =>
-              current === section ? current : section,
-            );
-          }}>
-          <Text style={styles.sectionTitle}>{title}</Text>
-          <Text style={styles.sectionToggleText}>{isOpen ? 'Hide' : 'Show'}</Text>
-        </TouchableOpacity>
-        {isOpen ? content : null}
-      </View>
-    );
-  };
-
-  const renderMarkersView = () => (
-    <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor={UI_COLORS.white} />
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerCopy}>
-            <Text style={styles.title}>Edit Marker Review</Text>
-            <Text style={styles.summaryText}>
-              {markerPreview
-                ? markerPreviewScope === 'page'
-                  ? markerPreview.selectedMarkerCount === 1
-                    ? '1 marker found on this page'
-                    : `${markerPreview.selectedMarkerCount} markers found on this page`
-                  : markerPreview.selectedMarkerCount === 1
-                    ? '1 marker selected'
-                    : `${markerPreview.selectedMarkerCount} markers selected`
-                : 'Loading markers...'}
-            </Text>
-            <Text style={styles.summaryText}>
-              {markerPreview?.summaryMessage || 'Analyzing selected markers...'}
-            </Text>
-            <Text style={styles.summaryText}>
-              {markerPreviewScope === 'page' ? 'Global' : 'Current selection'}
-            </Text>
-          </View>
-          <TouchableOpacity
-            activeOpacity={0.75}
-            style={styles.closeButton}
-            onPress={closePluginView}>
-            <Text style={styles.closeButtonText}>Close</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.previewRow}>
-          <View style={styles.previewCard}>
-            <Text style={styles.previewTitle}>Current</Text>
-            {markerBeforePreviewContent}
-          </View>
-          <View style={styles.previewCard}>
-            <Text style={styles.previewTitle}>Changed</Text>
-            {markerAfterPreviewContent}
-          </View>
-        </View>
-
-        <TouchableOpacity
-          activeOpacity={0.75}
-          style={[styles.executeButton, !canApplyMarkers && styles.executeButtonDisabled]}
-          onPress={executeEditMarkers}
-          disabled={!canApplyMarkers}>
-          <Text style={styles.executeButtonText}>
-            {isMarkerBusy ? 'Applying...' : 'Apply Edit Markers'}
-          </Text>
-        </TouchableOpacity>
-
-        {renderMarkerSection(
-          'recognition',
-          'Recognition Details',
-          <View style={styles.sectionBody}>
-            <Text style={styles.subsectionTitle}>Recognized</Text>
-            {renderMarkerOperations()}
-            <Text style={styles.subsectionTitle}>Ignored</Text>
-            {renderIgnoredMarkers()}
-          </View>,
-        )}
-
-        {renderMarkerSection(
-          'calibration',
-          'Calibration',
-          <View style={styles.calibrationCompactCard}>
-            <View style={styles.calibrationCompactRow}>
-              <View style={styles.calibrationInlineGroup}>
-                <Text style={styles.calibrationInlineLabel}>X</Text>
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  style={styles.calibrationButton}
-                  onPress={() => {
-                    if (!isMarkerPreviewLoading && !isMarkerBusy) {
-                      void reloadMarkerPreviewWithCalibration({
-                        offsetX: markerOffsetX - 5,
-                      });
-                    }
-                  }}
-                  disabled={isMarkerPreviewLoading || isMarkerBusy}>
-                  <Text style={styles.calibrationButtonText}>-5</Text>
-                </TouchableOpacity>
-                <Text style={styles.calibrationCompactValue}>{markerOffsetX}px</Text>
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  style={styles.calibrationButton}
-                  onPress={() => {
-                    if (!isMarkerPreviewLoading && !isMarkerBusy) {
-                      void reloadMarkerPreviewWithCalibration({
-                        offsetX: markerOffsetX + 5,
-                      });
-                    }
-                  }}
-                  disabled={isMarkerPreviewLoading || isMarkerBusy}>
-                  <Text style={styles.calibrationButtonText}>+5</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.calibrationInlineGroup}>
-                <Text style={styles.calibrationInlineLabel}>Width</Text>
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  style={styles.calibrationButton}
-                  onPress={() => {
-                    if (!isMarkerPreviewLoading && !isMarkerBusy) {
-                      void reloadMarkerPreviewWithCalibration({
-                        widthAdjustment: markerWidthAdjustment - 1,
-                      });
-                    }
-                  }}
-                  disabled={isMarkerPreviewLoading || isMarkerBusy}>
-                  <Text style={styles.calibrationButtonText}>-1</Text>
-                </TouchableOpacity>
-                <Text style={styles.calibrationCompactValue}>{markerWidthAdjustment}px</Text>
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  style={styles.calibrationButton}
-                  onPress={() => {
-                    if (!isMarkerPreviewLoading && !isMarkerBusy) {
-                      void reloadMarkerPreviewWithCalibration({
-                        widthAdjustment: markerWidthAdjustment + 1,
-                      });
-                    }
-                  }}
-                  disabled={isMarkerPreviewLoading || isMarkerBusy}>
-                  <Text style={styles.calibrationButtonText}>+1</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.calibrationInlineGroup}>
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  style={styles.calibrationButton}
-                  onPress={() => {
-                    if (!isMarkerPreviewLoading && !isMarkerBusy) {
-                      const nextCalibration = resetEditMarkerCalibration();
-                      setMarkerOffsetX(nextCalibration.offsetX);
-                      setMarkerWidthAdjustment(nextCalibration.widthAdjustment);
-                      void loadMarkerPreview();
-                    }
-                  }}
-                  disabled={isMarkerPreviewLoading || isMarkerBusy}>
-                  <Text style={styles.calibrationButtonText}>Reset</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.75}
-                  style={styles.calibrationButton}
-                  onPress={() => {
-                    if (!isMarkerPreviewLoading && !isMarkerBusy) {
-                      void loadMarkerPreview();
-                    }
-                  }}
-                  disabled={isMarkerPreviewLoading || isMarkerBusy}>
-                  <Text style={styles.calibrationButtonText}>Refresh</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>,
-        )}
-
-        {renderMarkerSection(
-          'help',
-          'Help',
-          <View style={styles.sectionBody}>
-            <Text style={styles.helpText}>
-              Delete: draw a horizontal line through the words you want to remove.
-            </Text>
-            <Text style={styles.helpText}>
-              Replace: draw the delete line, then add two short crossing vertical lines to mark it as a replacement.
-            </Text>
-            <Text style={styles.helpText}>
-              Replacement text: type a line below the paragraph starting with `#`, for example `# corrected phrase`.
-            </Text>
-            <Text style={styles.helpText}>
-              Multiple replacements are matched in reading order. Only recognized markers are removed on apply.
-            </Text>
-          </View>,
-        )}
-
-        {status ? <Text style={styles.statusText}>{status}</Text> : null}
-        {backupPath ? <Text style={styles.backupText}>{backupPath}</Text> : null}
-      </ScrollView>
-    </View>
-  );
-
-  if (viewMode === 'direct') {
-    return renderDirectDialog();
-  }
-
-  if (viewMode === 'markers') {
-    return renderMarkersView();
-  }
-
-  return renderToolsView();
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: UI_COLORS.white,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingVertical: 18,
-    gap: 16,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 16,
-  },
-  headerCopy: {
-    flex: 1,
-    gap: 4,
-  },
-  eyebrow: {
-    fontSize: UI_FONT_SIZES.meta,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: UI_COLORS.gray,
-  },
-  title: {
-    fontSize: UI_FONT_SIZES.title,
-    fontWeight: '700',
-    color: UI_COLORS.black,
-  },
-  summaryText: {
-    fontSize: UI_FONT_SIZES.body,
-    lineHeight: 21,
-    color: UI_COLORS.gray,
-  },
-  closeButton: {
-    borderWidth: 1,
-    borderColor: UI_COLORS.black,
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: UI_COLORS.white,
-  },
-  closeButtonText: {
-    fontSize: UI_FONT_SIZES.body,
-    fontWeight: '600',
-    color: UI_COLORS.black,
-  },
-  actionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  actionButton: {
-    width: '48%',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: UI_COLORS.black,
-    backgroundColor: UI_COLORS.white,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  actionButtonSelected: {
-    backgroundColor: UI_COLORS.black,
-  },
-  actionButtonDisabled: {
-    opacity: 0.35,
-  },
-  actionButtonText: {
-    color: UI_COLORS.black,
-    fontSize: UI_FONT_SIZES.body,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  actionButtonTextSelected: {
-    color: UI_COLORS.white,
-  },
-  previewRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  previewCard: {
-    flex: 1,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: UI_COLORS.lightGray,
-    backgroundColor: UI_COLORS.softGray,
-    padding: 16,
-    gap: 10,
-    minHeight: 280,
-  },
-  previewTitle: {
-    fontSize: UI_FONT_SIZES.body,
-    fontWeight: '700',
-    color: UI_COLORS.black,
-  },
-  previewText: {
-    fontSize: UI_FONT_SIZES.body,
-    lineHeight: 21,
-    color: UI_COLORS.black,
-  },
-  deletedPreviewText: {
-    textDecorationLine: 'underline',
-    textDecorationColor: UI_COLORS.black,
-    fontWeight: '700',
-  },
-  insertedPreviewText: {
-    textDecorationLine: 'underline',
-    textDecorationColor: UI_COLORS.black,
-    fontWeight: '700',
-  },
-  previewBlock: {
-    gap: 10,
-  },
-  previewSeparator: {
-    fontSize: UI_FONT_SIZES.body,
-    lineHeight: 21,
-    color: UI_COLORS.gray,
-  },
-  calibrationRow: {
-    gap: 10,
-  },
-  calibrationLabel: {
-    fontSize: UI_FONT_SIZES.meta,
-    lineHeight: 18,
-    color: UI_COLORS.gray,
-    fontWeight: '600',
-  },
-  calibrationControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  calibrationButton: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: UI_COLORS.black,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: UI_COLORS.white,
-  },
-  calibrationButtonText: {
-    fontSize: UI_FONT_SIZES.meta,
-    fontWeight: '700',
-    color: UI_COLORS.black,
-  },
-  calibrationValue: {
-    fontSize: UI_FONT_SIZES.body,
-    fontWeight: '700',
-    color: UI_COLORS.black,
-    minWidth: 64,
-  },
-  calibrationCompactCard: {
-    gap: 8,
-  },
-  calibrationCompactRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 10,
-  },
-  calibrationInlineGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  calibrationInlineLabel: {
-    fontSize: UI_FONT_SIZES.meta,
-    lineHeight: 18,
-    color: UI_COLORS.gray,
-    fontWeight: '600',
-  },
-  calibrationCompactValue: {
-    fontSize: UI_FONT_SIZES.meta,
-    fontWeight: '700',
-    color: UI_COLORS.black,
-    minWidth: 54,
-  },
-  sectionCard: {
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: UI_COLORS.lightGray,
-    backgroundColor: UI_COLORS.softGray,
-    padding: 16,
-    gap: 12,
-  },
-  sectionTitle: {
-    fontSize: UI_FONT_SIZES.body,
-    fontWeight: '700',
-    color: UI_COLORS.black,
-  },
-  sectionHeaderButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  sectionToggleText: {
-    fontSize: UI_FONT_SIZES.meta,
-    color: UI_COLORS.gray,
-    fontWeight: '600',
-  },
-  sectionBody: {
-    gap: 12,
-  },
-  subsectionTitle: {
-    fontSize: UI_FONT_SIZES.meta,
-    lineHeight: 18,
-    color: UI_COLORS.gray,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  listRow: {
-    gap: 4,
-  },
-  listTitle: {
-    fontSize: UI_FONT_SIZES.body,
-    lineHeight: 21,
-    color: UI_COLORS.black,
-    fontWeight: '600',
-  },
-  listDetail: {
-    fontSize: UI_FONT_SIZES.meta,
-    lineHeight: 18,
-    color: UI_COLORS.gray,
-  },
-  emptyStateText: {
-    fontSize: UI_FONT_SIZES.body,
-    lineHeight: 21,
-    color: UI_COLORS.gray,
-  },
-  helpText: {
-    fontSize: UI_FONT_SIZES.body,
-    lineHeight: 21,
-    color: UI_COLORS.black,
-  },
-  executeButton: {
-    borderRadius: 16,
-    backgroundColor: UI_COLORS.black,
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  executeButtonDisabled: {
-    opacity: 0.35,
-  },
-  executeButtonText: {
-    color: UI_COLORS.white,
-    fontSize: UI_FONT_SIZES.body,
-    fontWeight: '700',
-  },
-  statusText: {
-    fontSize: UI_FONT_SIZES.body,
-    lineHeight: 21,
-    color: UI_COLORS.black,
-  },
-  backupText: {
-    fontSize: UI_FONT_SIZES.meta,
-    lineHeight: 18,
-    color: UI_COLORS.gray,
-  },
-  dialogScreen: {
-    flex: 1,
-    backgroundColor: UI_COLORS.white,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
-  dialogCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: UI_COLORS.lightGray,
-    backgroundColor: UI_COLORS.softGray,
-    paddingHorizontal: 20,
-    paddingVertical: 22,
-    gap: 10,
-  },
-  dialogEyebrow: {
-    fontSize: UI_FONT_SIZES.meta,
-    fontWeight: '700',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    color: UI_COLORS.gray,
-  },
-  dialogTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: UI_COLORS.black,
-  },
-  dialogMessage: {
-    fontSize: UI_FONT_SIZES.body,
-    lineHeight: 22,
-    color: UI_COLORS.black,
-  },
-  dialogMeta: {
-    fontSize: UI_FONT_SIZES.meta,
-    lineHeight: 18,
-    color: UI_COLORS.gray,
-  },
-  dialogButtonRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 6,
-  },
-  secondaryButton: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: UI_COLORS.black,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: UI_COLORS.white,
-  },
-  secondaryButtonText: {
-    fontSize: UI_FONT_SIZES.body,
-    fontWeight: '600',
-    color: UI_COLORS.black,
-  },
-  primaryButton: {
-    borderRadius: 999,
-    backgroundColor: UI_COLORS.black,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  primaryButtonText: {
-    fontSize: UI_FONT_SIZES.body,
-    fontWeight: '700',
-    color: UI_COLORS.white,
-  },
-});
+if (viewMode === 'markers') {
+  return (
+    <EditMarkerReviewView
+      markerPreview={markerPreview}
+      markerPreviewScope={markerPreviewScope}
+      activeMarkerSection={activeMarkerSection}
+      markerBeforePreviewContent={markerBeforePreviewContent}
+      markerAfterPreviewContent={markerAfterPreviewContent}
+      markerOffsetX={markerOffsetX}
+      markerWidthAdjustment={markerWidthAdjustment}
+      isMarkerBusy={isMarkerBusy}
+      isMarkerPreviewLoading={isMarkerPreviewLoading}
+      canApplyMarkers={canApplyMarkers}
+      status={status}
+      backupPath={backupPath}
+      onClose={closePluginView}
+      onApply={executeEditMarkers}
+      onSetActiveMarkerSection={setActiveMarkerSection}
+      onChangeCalibration={nextCalibration => {
+        if (!isMarkerPreviewLoading && !isMarkerBusy) {
+          void reloadMarkerPreviewWithCalibration(nextCalibration);
+        }
+      }}
+      onResetCalibration={() => {
+        if (!isMarkerPreviewLoading && !isMarkerBusy) {
+          const nextCalibration = resetEditMarkerCalibration();
+          setMarkerOffsetX(nextCalibration.offsetX);
+          setMarkerWidthAdjustment(nextCalibration.widthAdjustment);
+          void loadMarkerPreview();
+        }
+      }}
+      onRefreshCalibration={() => {
+        if (!isMarkerPreviewLoading && !isMarkerBusy) {
+          void loadMarkerPreview();
+        }
+      }}
+    />
+  );
+}
+
+if (viewMode === 'import') {
+  return (
+    <ImportTextFileView
+      settings={importSettings}
+      preview={importPreview}
+      isBusy={isImportBusy}
+      status={status}
+      onChangeSettings={nextSettings => {
+        setImportSettings(nextSettings);
+        setImportPreview(null);
+        updateStatus('');
+      }}
+      onPreview={previewImportTextFile}
+      onImport={executeImportTextFile}
+      onClose={closePluginView}
+    />
+  );
+}
+
+if (viewMode === 'exportDocx') {
+  return (
+    <ExportScreen
+      pageInfo={
+        exportNoteContext?.pageInfo ??
+        'Reading current note context...'
+      }
+      currentPage={exportNoteContext?.page ?? null}
+      onClose={closePluginView}
+      refreshNoteContext={refreshNoteContext}
+    />
+  );
+}
+
+if (viewMode === 'routing') {
+  return null;
+}
+  return (
+    <TextboxToolsView
+      preview={preview}
+      currentAction={currentAction}
+      isBusy={isBusy}
+      isPreviewLoading={isPreviewLoading}
+      status={status}
+      backupPath={backupPath}
+      canExecute={canExecute}
+      beforePreviewText={beforePreviewText}
+      afterPreviewText={afterPreviewText}
+      availableActionLabels={availableActionLabels}
+      onSelectAction={loadPreview}
+      onExecute={executeCurrentAction}
+      onClose={closePluginView}
+    />
+  );
+}
+
+
 
 export default App;

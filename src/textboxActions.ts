@@ -35,7 +35,7 @@ import {
  * that textbox tools and edit markers stay consistent.
  */
 
-export type TextboxActionKind = 'split' | 'join' | 'clean' | 'unwrap';
+export type TextboxActionKind = 'split' | 'join' | 'clean' | 'unwrap' | 'log';
 
 export type TextboxActionAvailability = Record<TextboxActionKind, boolean>;
 
@@ -59,6 +59,7 @@ export type TextboxActionResult = {
   clipboardSummary: string;
   insertedCount: number;
   selectedCount: number;
+  previewBlocks?: string[];
 };
 
 export type TextboxActionProgressUpdate = {
@@ -86,6 +87,31 @@ type PreparedTextInsert = {
 type TextboxActionExecutionOptions = {
   isCancelled?: () => boolean;
   onProgress?: (update: TextboxActionProgressUpdate) => void;
+};
+
+type TextboxLogItem = {
+  page: number;
+  uuid: string;
+  numInPage: number;
+  layerNum: number;
+  text: string;
+  textPreview: string;
+  rect: Rect;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  fontSize: number;
+  fontPath: string | null;
+  textAlign: number;
+  textBold: number;
+  textItalics: number;
+  textFrameWidthType: number;
+  textFrameStyle: number;
+  textEditable: number;
+  textLength: number;
+  wordCount: number;
+  newlineCount: number;
 };
 
 type LabInsertPlan = {
@@ -1223,6 +1249,7 @@ function createEmptyAvailability(): TextboxActionAvailability {
     join: false,
     clean: false,
     unwrap: false,
+    log: true,
   };
 }
 
@@ -1236,6 +1263,7 @@ function computeActionOutputs(textElements: TextElement[]): {
   joinBlocks: string[];
   cleanBlocks: string[];
   unwrapBlocks: string[];
+  logBlocks: string[];
   availableActions: TextboxActionAvailability;
 } {
   const sortedTextElements = sortTextElements(textElements);
@@ -1246,6 +1274,7 @@ function computeActionOutputs(textElements: TextElement[]): {
   let joinBlocks: string[] = [];
   let cleanBlocks: string[] = [];
   let unwrapBlocks: string[] = [];
+  const logBlocks = ['Execute to log every textbox on this page.'];
 
   if (sortedTextElements.length === 1) {
     const sourceText = getTextboxText(sortedTextElements[0]);
@@ -1275,6 +1304,7 @@ function computeActionOutputs(textElements: TextElement[]): {
     joinBlocks,
     cleanBlocks,
     unwrapBlocks,
+    logBlocks,
     availableActions,
   };
 }
@@ -1322,6 +1352,8 @@ function buildActionPreview(
     afterBlocks = outputs.cleanBlocks.length > 0 ? outputs.cleanBlocks : outputs.beforeBlocks;
   } else if (action === 'unwrap' && outputs.availableActions.unwrap) {
     afterBlocks = outputs.unwrapBlocks.length > 0 ? outputs.unwrapBlocks : outputs.beforeBlocks;
+  } else if (action === 'log' && outputs.availableActions.log) {
+    afterBlocks = outputs.logBlocks;
   }
 
   return {
@@ -1331,6 +1363,36 @@ function buildActionPreview(
     availableActions: outputs.availableActions,
     selectionMessage,
     hasOnlyTextboxes: true,
+  };
+}
+
+async function getCurrentPageElementsContext(): Promise<{
+  notePath: string;
+  page: number;
+  pageElements: Element[];
+}> {
+  const fileResponse = await PluginCommAPI.getCurrentFilePath();
+  const pageResponse = await PluginCommAPI.getCurrentPageNum();
+
+  const notePath = assertApiSuccess(
+    fileResponse as {success?: boolean; result?: string; error?: {message?: string}},
+    'Could not determine the current note path.',
+  );
+  const page = assertApiSuccess(
+    pageResponse as {success?: boolean; result?: number; error?: {message?: string}},
+    'Could not determine the current page.',
+  );
+
+  const pageElementsResponse = await PluginFileAPI.getElements(page, notePath);
+  const pageElements = assertApiSuccess(
+    pageElementsResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
+    'Could not read page elements.',
+  );
+
+  return {
+    notePath,
+    page,
+    pageElements,
   };
 }
 
@@ -1369,10 +1431,19 @@ async function buildSplitInserts(element: TextElement): Promise<PreparedTextInse
   return inserts;
 }
 
-async function insertTextBoxes(inserts: PreparedTextInsert[]): Promise<void> {
-  for (const insert of inserts) {
+async function insertTextBoxes(
+  inserts: PreparedTextInsert[],
+  options?: TextboxActionExecutionOptions,
+): Promise<void> {
+  for (let index = 0; index < inserts.length; index += 1) {
+    const insert = inserts[index];
     const response = await PluginNoteAPI.insertText(insert);
     assertApiSuccess(response as {success?: boolean; error?: {message?: string}}, 'insertText failed');
+    reportTextboxActionProgress(
+      options,
+      `Created ${index + 1} out of ${inserts.length} textboxes.`,
+      false,
+    );
   }
 }
 
@@ -1440,8 +1511,34 @@ export async function getTextboxActionPreview(
   action: TextboxActionKind | null,
 ): Promise<TextboxActionPreview> {
   let lassoElements: Element[] = [];
+  let pageElements: Element[] = [];
 
   try {
+    if (action === 'log') {
+      const context = await getCurrentPageElementsContext();
+      pageElements = context.pageElements;
+      const textboxes = buildTextboxLogItems(context.page, pageElements);
+
+      return {
+        selectedCount: textboxes.length,
+        beforeBlocks: [],
+        afterBlocks: [
+          textboxes.length > 0
+            ? `Execute to log ${textboxes.length} textboxes on this page.`
+            : 'No normal main-layer textboxes found on this page.',
+        ],
+        availableActions: {
+          ...createEmptyAvailability(),
+          log: true,
+        },
+        selectionMessage:
+          textboxes.length === 1
+            ? '1 textbox on current page'
+            : `${textboxes.length} textboxes on current page`,
+        hasOnlyTextboxes: true,
+      };
+    }
+
     const lassoResponse = await PluginCommAPI.getLassoElements();
     lassoElements = assertApiSuccess(
       lassoResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
@@ -1451,6 +1548,7 @@ export async function getTextboxActionPreview(
     return buildActionPreview(lassoElements, action);
   } finally {
     await recycleElements(lassoElements);
+    await recycleElements(pageElements);
   }
 }
 
@@ -1472,6 +1570,11 @@ export async function performTextboxAction(
   let pageElements: Element[] = [];
 
   try {
+    if (action === 'log') {
+      reportTextboxActionProgress(options, 'Logging all textboxes on this page...', false);
+      return await logAllCurrentPageTextboxes();
+    }
+
     reportTextboxActionProgress(options, 'Checking selection...', true);
     const context = await getPageContext();
     lassoElements = context.lassoElements;
@@ -1590,10 +1693,18 @@ export async function performTextboxAction(
     }
 
     reportTextboxActionProgress(options, 'Preparing textboxes...', true);
-    const inserts =
-      action === 'split'
-        ? await buildSplitInserts(textElements[0])
-        : [await buildJoinInsert(textElements)];
+
+    let inserts: PreparedTextInsert[];
+
+    if (action === 'split') {
+      inserts = await buildSplitInserts(textElements[0]);
+    } else if (action === 'join') {
+      inserts = [await buildJoinInsert(textElements)];
+    } else {
+      throw new Error(`Unsupported textbox action: ${action}`);
+    }
+
+
     const newRects = inserts.map(insert => cloneRect(insert.textRect));
 
     ensureLayoutFitsPage(newRects, context.pageWidth, context.pageHeight);
@@ -1607,7 +1718,7 @@ export async function performTextboxAction(
       'Could not delete the selected textboxes.',
     );
 
-    await insertTextBoxes(inserts);
+    await insertTextBoxes(inserts, action === 'split' ? options : undefined);
 
     const hideResponse = await PluginCommAPI.setLassoBoxState(2);
     if (!hideResponse?.success) {
@@ -1800,6 +1911,119 @@ function getPageTextboxesForLog(pageElements: Element[]): Array<{
     textLength: (element.textBox.textContentFull || '').length,
     textPreview: (element.textBox.textContentFull || '').slice(0, 160),
   }));
+}
+
+function buildTextboxLogItems(page: number, pageElements: Element[]): TextboxLogItem[] {
+  return sortTextElements(pageElements.filter(isNormalTextElement)).map(element => {
+    const text = element.textBox.textContentFull || '';
+    const rect = cloneRect(element.textBox.textRect);
+    const width = rectWidth(rect);
+    const height = rectHeight(rect);
+
+    return {
+      page,
+      uuid: element.uuid,
+      numInPage: element.numInPage,
+      layerNum: element.layerNum,
+      text,
+      textPreview: text.slice(0, 160),
+      rect,
+      x: rect.left,
+      y: rect.top,
+      width,
+      height,
+      fontSize: element.textBox.fontSize || DEFAULT_FONT_SIZE,
+      fontPath: element.textBox.fontPath || null,
+      textAlign: element.textBox.textAlign ?? 0,
+      textBold: element.textBox.textBold ?? 0,
+      textItalics: element.textBox.textItalics ?? 0,
+      textFrameWidthType: element.textBox.textFrameWidthType ?? 0,
+      textFrameStyle: element.textBox.textFrameStyle ?? 0,
+      textEditable: element.textBox.textEditable ?? 0,
+      textLength: text.length,
+      wordCount: countWords(text),
+      newlineCount: (text.match(/\n/g) || []).length,
+    };
+  });
+}
+
+function formatTextboxLogPreviewItem(item: TextboxLogItem): string {
+  const shortText = item.text.replace(/\s+/g, ' ').trim().slice(0, 70) || '(empty)';
+  return [
+    `#${item.numInPage} "${shortText}"`,
+    `x=${item.x}, y=${item.y}, w=${item.width}, h=${item.height}`,
+    `fontSize=${item.fontSize}, font=${item.fontPath || '(default)'}`,
+  ].join('\n');
+}
+
+function formatTextboxLogClipboard(items: TextboxLogItem[], notePath: string, page: number): string {
+  const lines = [
+    'textboxHelper textbox coordinate log',
+    `Created: ${new Date().toISOString()}`,
+    `Note: ${notePath}`,
+    `Page: ${page}`,
+    `Textboxes: ${items.length}`,
+    '',
+  ];
+
+  items.forEach(item => {
+    lines.push(`#${item.numInPage} ${item.uuid}`);
+    lines.push(`Text: ${item.text}`);
+    lines.push(
+      `Rect: left=${item.rect.left}, top=${item.rect.top}, right=${item.rect.right}, bottom=${item.rect.bottom}, width=${item.width}, height=${item.height}`,
+    );
+    lines.push(
+      `Font: size=${item.fontSize}, path=${item.fontPath || '(default)'}, align=${item.textAlign}, bold=${item.textBold}, italics=${item.textItalics}`,
+    );
+    lines.push(
+      `Frame: widthType=${item.textFrameWidthType}, style=${item.textFrameStyle}, editable=${item.textEditable}`,
+    );
+    lines.push(`Text metrics: length=${item.textLength}, words=${item.wordCount}, newlines=${item.newlineCount}`);
+    lines.push('');
+  });
+
+  return lines.join('\n').slice(0, CLIPBOARD_PREVIEW_LIMIT);
+}
+
+async function logAllCurrentPageTextboxes(): Promise<TextboxActionResult> {
+  let pageElements: Element[] = [];
+
+  try {
+    const context = await getCurrentPageElementsContext();
+    pageElements = context.pageElements;
+    const items = buildTextboxLogItems(context.page, pageElements);
+
+    console.log(
+      '[TextboxActions] allTextboxesDump',
+      JSON.stringify({
+        notePath: context.notePath,
+        page: context.page,
+        textboxCount: items.length,
+        textboxes: items,
+      }),
+    );
+
+    const clipboardSummary = formatTextboxLogClipboard(
+      items,
+      context.notePath,
+      context.page,
+    );
+    Clipboard.setString(clipboardSummary);
+
+    return {
+      message: `Logged ${items.length} textboxes on page ${context.page}.`,
+      backupPath: '',
+      clipboardSummary,
+      insertedCount: 0,
+      selectedCount: items.length,
+      previewBlocks:
+        items.length > 0
+          ? items.map(formatTextboxLogPreviewItem)
+          : ['No normal main-layer textboxes found on this page.'],
+    };
+  } finally {
+    await recycleElements(pageElements);
+  }
 }
 
 function getQuantile(sortedValues: number[], quantile: number): number | null {

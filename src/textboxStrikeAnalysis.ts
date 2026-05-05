@@ -1461,6 +1461,7 @@ async function analyzePenUpEvent(rawEvent: unknown): Promise<StrikeAnalysisRepor
       `Page ${page} Â· textbox ${textbox.numInPage}`,
     );
 
+    // eslint-disable-next-line no-unreachable
     return buildReport(
       'Strike Analysis',
       `Would delete ${uniqueCandidates.length} word(s) on line ${lineIndexes[0] + 1}.\n${formatWordsForMessage(uniqueCandidates)}`,

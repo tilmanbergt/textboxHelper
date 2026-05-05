@@ -25,7 +25,6 @@ import {
   measureDetailedTextLayout,
   type NativeDetailedLine,
   type NativeDetailedMeasurement,
-  type NativeDetailedWord,
   type TextboxMeasurementCalibration,
 } from './shared/supernoteTextboxLayout';
 import {
@@ -251,7 +250,7 @@ const TEXT_TYPE_NORMAL = 500;
 const MAIN_LAYER = 0;
 const DEFAULT_FONT_SIZE = 32;
 const CLIPBOARD_PREVIEW_LIMIT = 3000;
-const MAX_DELETE_WORDS_PER_MARKER = 6;
+const MAX_DELETE_WORDS_PER_MARKER = 100;
 const MIN_MARKER_WIDTH = 30;
 const MAX_MARKER_HEIGHT_RATIO = 0.55;
 const FALLBACK_MARKER_HEIGHT = 4;
@@ -259,6 +258,7 @@ const REPLACE_MODIFIER_MIN_HEIGHT = 18;
 const REPLACE_MODIFIER_PAIR_MAX_GAP = 56;
 const REPLACE_MODIFIER_MAX_CENTER_DISTANCE = 48;
 const REPLACE_SOURCE_HORIZONTAL_OVERLAP_RATIO = 0.35;
+const REPLACE_SOURCE_VERTICAL_OVERLAP_RATIO = 0.25;
 export type EditMarkerCalibration = TextboxMeasurementCalibration;
 
 const DEFAULT_EDIT_MARKER_CALIBRATION: EditMarkerCalibration = {
@@ -322,6 +322,15 @@ function assertApiSuccess<T>(
 
 function rectOverlapHeight(left: Rect, right: Rect): number {
   return Math.max(0, Math.min(left.bottom, right.bottom) - Math.max(left.top, right.top));
+}
+
+function verticalOverlapRatio(left: Rect, right: Rect): number {
+  const denominator = Math.min(rectHeight(left), rectHeight(right));
+  if (denominator <= 0) {
+    return 0;
+  }
+
+  return rectOverlapHeight(left, right) / denominator;
 }
 
 function roundNumber(value: number): number {
@@ -468,6 +477,7 @@ function formatOperationSnippet(
   return `Delete "${shortened}"`;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function buildOperationDetail(
   targetTextbox: TextElement,
   lineIndex: number,
@@ -615,6 +625,7 @@ function normalizeTextAfterEdit(text: string): string {
     .trim();
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function applyWordDeletionsToText(text: string, words: WordCandidate[]): string {
   const uniqueWords = [...words]
     .sort((left, right) => right.start - left.start)
@@ -975,17 +986,21 @@ async function getPreviewContext(
     'Could not determine the current page.',
   );
 
-  const lassoResponse = await PluginCommAPI.getLassoElements();
-  const lassoElements = assertApiSuccess(
-    lassoResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
-    'Could not read the current lasso selection.',
-  );
-
   const pageElementsResponse = await PluginFileAPI.getElements(page, notePath);
   const pageElements = assertApiSuccess(
     pageElementsResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
     'Could not read the current page elements.',
   );
+
+  let lassoElements: Element[] = [];
+
+  if (previewScope === 'lasso') {
+    const lassoResponse = await PluginCommAPI.getLassoElements();
+    lassoElements = assertApiSuccess(
+      lassoResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
+      'Could not read the current lasso selection.',
+    );
+  }
 
   return {
     notePath,
@@ -1320,12 +1335,23 @@ function findReplacementLinesForTextbox(
     }
 
     const textboxRect = textbox.textBox.textRect;
-    return (
+    const targetRect = targetTextbox.textBox.textRect;
+    const belowTarget =
       textboxRect.top >= targetTextbox.textBox.textRect.bottom &&
       textboxRect.top < upperBoundTop &&
-      horizontalOverlapRatio(textboxRect, targetTextbox.textBox.textRect) >=
-        REPLACE_SOURCE_HORIZONTAL_OVERLAP_RATIO
-    );
+      horizontalOverlapRatio(textboxRect, targetRect) >=
+        REPLACE_SOURCE_HORIZONTAL_OVERLAP_RATIO;
+    const rightOfTarget =
+      textboxRect.left >= targetRect.right &&
+      textboxRect.top < upperBoundTop &&
+      verticalOverlapRatio(textboxRect, targetRect) >=
+        REPLACE_SOURCE_VERTICAL_OVERLAP_RATIO;
+    const bottomRightOfTarget =
+      textboxRect.top >= targetRect.bottom &&
+      textboxRect.top < upperBoundTop &&
+      textboxRect.left >= targetRect.right;
+
+    return belowTarget || rightOfTarget || bottomRightOfTarget;
   });
 
   const replacementLines = eligibleTextboxes
@@ -1463,50 +1489,6 @@ function createBackupPayload(plan: EditMarkerApplyPlan): BackupPayload {
   };
 }
 
-function buildReplacementPageElements(
-  pageElements: Element[],
-  textMutations: TextMutationPlan[],
-  recognizedMarkerNums: number[],
-  replacementSourceTextboxNums: number[],
-): Element[] {
-  const textUpdatesByNum = new Map(textMutations.map(update => [update.numInPage, update]));
-  const markerNums = new Set(recognizedMarkerNums);
-  const replacementSourceNums = new Set(replacementSourceTextboxNums);
-
-  return pageElements
-    .filter(element => !markerNums.has(element.numInPage))
-    .filter(element => !replacementSourceNums.has(element.numInPage))
-    .filter(element => {
-      const update = textUpdatesByNum.get(element.numInPage);
-      return !update || update.nextText.length > 0;
-    })
-    .map(element => {
-      const update = textUpdatesByNum.get(element.numInPage);
-      if (!update || !element.textBox) {
-        return {
-          ...element,
-          textBox: element.textBox
-            ? {
-                ...element.textBox,
-                textRect: element.textBox.textRect
-                  ? cloneRect(element.textBox.textRect)
-                  : element.textBox.textRect,
-              }
-            : element.textBox,
-        } as Element;
-      }
-
-      return {
-        ...element,
-        textBox: {
-          ...element.textBox,
-          textContentFull: update.nextText,
-          textRect: cloneRect(update.nextTextRect),
-        },
-      } as Element;
-    });
-}
-
 async function saveCurrentNoteForConsistency(reason: string): Promise<void> {
   const response = await PluginNoteAPI.saveCurrentNote();
   assertApiSuccess(
@@ -1515,19 +1497,54 @@ async function saveCurrentNoteForConsistency(reason: string): Promise<void> {
   );
 }
 
-async function replacePageElements(
+function cloneTextElementForMutation(
+  element: TextElement,
+  mutation: TextMutationPlan,
+): Element {
+  return {
+    ...element,
+    textBox: {
+      ...element.textBox,
+      textContentFull: mutation.nextText,
+      textRect: cloneRect(mutation.nextTextRect),
+    },
+  } as Element;
+}
+
+async function modifyPageElements(
   notePath: string,
   page: number,
   elements: Element[],
 ): Promise<void> {
-  const response = await PluginFileAPI.replaceElements(
+  if (elements.length === 0) {
+    return;
+  }
+
+  const response = await PluginFileAPI.modifyElements(
     notePath,
     page,
     elements as unknown as Object[],
   );
   assertApiSuccess(
     response as {success?: boolean; error?: {message?: string}},
-    `Could not replace page ${page} elements.`,
+    `Could not modify page ${page} elements.`,
+  );
+}
+
+async function deletePageElements(
+  notePath: string,
+  page: number,
+  numsInPage: number[],
+): Promise<void> {
+  const uniqueNums = [...new Set(numsInPage)].filter(num => Number.isInteger(num) && num >= 0);
+  if (uniqueNums.length === 0) {
+    return;
+  }
+
+  const response = await PluginFileAPI.deleteElements(notePath, page, uniqueNums);
+  assertApiSuccess(
+    response as {success?: boolean; error?: {message?: string}},
+    `Could not delete page ${page} elements ${uniqueNums.join(', ')}.`,
   );
 }
 
@@ -1982,13 +1999,31 @@ export async function applyEditMarkerPreview(
     await saveCurrentNoteForConsistency('applying edit markers');
 
     reportProgress(options, 'Applying recognized markers...', false);
-    const replacementElements = buildReplacementPageElements(
-      pageElements,
-      plan.textMutations,
-      plan.recognizedMarkerNums,
-      plan.replacementSourceTextboxNums,
+    const currentTextboxesByNum = new Map(
+      pageElements.filter(isNormalTextElement).map(element => [element.numInPage, element]),
     );
-    await replacePageElements(plan.notePath, plan.page, replacementElements);
+    const modifiedTextboxes = plan.textMutations
+      .filter(mutation => mutation.nextText.length > 0)
+      .map(mutation => {
+        const currentTextbox = currentTextboxesByNum.get(mutation.numInPage);
+        if (!currentTextbox) {
+          throw new Error(
+            `Textbox ${mutation.numInPage} is no longer available. Refresh the preview and try again.`,
+          );
+        }
+
+        return cloneTextElementForMutation(currentTextbox, mutation);
+      });
+    const emptyTargetTextboxNums = plan.textMutations
+      .filter(mutation => mutation.nextText.length === 0)
+      .map(mutation => mutation.numInPage);
+
+    await modifyPageElements(plan.notePath, plan.page, modifiedTextboxes);
+    await deletePageElements(plan.notePath, plan.page, [
+      ...plan.recognizedMarkerNums,
+      ...plan.replacementSourceTextboxNums,
+      ...emptyTargetTextboxNums,
+    ]);
 
     const hideResponse = await PluginCommAPI.setLassoBoxState(2);
     if (!hideResponse?.success) {
