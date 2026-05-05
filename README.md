@@ -97,10 +97,3 @@ Short version:
 ## Publishing To GitHub
 
 A practical release checklist is in [docs/GITHUB_RELEASE_CHECKLIST.md](docs\GITHUB_RELEASE_CHECKLIST.md).
-
-Before publishing publicly, make sure to:
-
-- choose and add a license
-- verify the README and screenshots are accurate
-- remove or ignore local log files and large debug artifacts if they should not be part of the public repo
-- confirm the plugin name, icon, and release instructions are ready for external users
