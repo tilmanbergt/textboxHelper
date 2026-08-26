@@ -3,7 +3,7 @@ import RNFS from 'react-native-fs';
 import {FileUtils} from 'sn-plugin-lib';
 import {getIncludedScanItems, type ScanSummary} from './scanTextBoxes';
 
-export const MAX_EXPORT_ITEM_COUNT = 120;
+export const MAX_EXPORT_ITEM_COUNT = 999;
 
 function buildTimestamp(): string {
   return new Date().toISOString().replace(/[:.]/g, '-');

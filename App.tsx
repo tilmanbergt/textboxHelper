@@ -28,6 +28,7 @@ import {
   BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES,
   BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
   BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
+  BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
   PLUGIN_BUTTON_EVENT,
   checkPendingButton,
 } from './src/pluginRouting';
@@ -92,6 +93,7 @@ const ACTION_PROGRESS_LABELS: Record<TextboxActionKind, string> = {
   join: 'Joining textboxes...',
   clean: 'Cleaning spaces...',
   unwrap: 'Removing line breaks...',
+  splitParagraphs: 'Splitting paragraphs...',
 };
 
 type ViewMode =
@@ -380,6 +382,11 @@ if (buttonId === BUTTON_ID_EXPORT_DOCX) {
 
       if (buttonId === BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX) {
         startDirectAction('split');
+        return;
+      }
+
+      if (buttonId === BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX) {
+        startDirectAction('splitParagraphs');
         return;
       }
 

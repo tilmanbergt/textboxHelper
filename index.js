@@ -25,6 +25,7 @@ BUTTON_ID_IMPORT_TEXT_FILE,
   BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES,
   BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
   BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
+  BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
   initPluginRouting,
 } from './src/pluginRouting';
 
@@ -106,6 +107,20 @@ PluginManager.registerButton(2, ['NOTE'], {
   showType: 1,
   editDataTypes: [3],
 });
+
+PluginManager.registerButton(2, ['NOTE'], {
+  id: BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
+  name: JSON.stringify({
+    en: 'Split Paragraphs',
+    zh_CN: 'Split Paragraphs',
+    zh_TW: 'Split Paragraphs',
+    ja: 'Split Paragraphs',
+  }),
+  icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
+  showType: 1,
+  editDataTypes: [3],
+});
+
 
 PluginManager.registerButton(2, ['NOTE'], {
   id: BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES,

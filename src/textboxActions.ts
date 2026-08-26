@@ -35,7 +35,7 @@ import {
  * that textbox tools and edit markers stay consistent.
  */
 
-export type TextboxActionKind = 'split' | 'join' | 'clean' | 'unwrap' | 'log';
+export type TextboxActionKind = 'split' | 'splitParagraphs' | 'join' | 'clean' | 'unwrap' | 'log';
 
 export type TextboxActionAvailability = Record<TextboxActionKind, boolean>;
 
@@ -448,6 +448,8 @@ function mergeTinyFragmentsForward(fragments: string[]): string[] {
   return merged;
 }
 
+
+
 function splitIntoSentenceCandidates(text: string): string[] {
   const normalized = text.replace(/\r\n?/g, '\n').trim();
   if (!normalized) {
@@ -478,6 +480,56 @@ function splitIntoSentenceCandidates(text: string): string[] {
   }
 
   return mergeTinyFragmentsForward(candidates);
+}
+
+function countSentences(text: string): number {
+  return splitIntoSentenceCandidates(text).length;
+}
+function splitIntoParagraphCandidates(text: string): string[] {
+  const normalized = text.replace(/\r\n?/g, '\n').trim();
+
+  if (!normalized) {
+    return [];
+  }
+
+  const paragraphs: string[] = [];
+
+  // First: hard split on blank lines
+  const blocks = normalized.split(/\n{2,}/);
+
+  for (const block of blocks) {
+    const trimmedBlock = block.trim();
+
+    if (!trimmedBlock) {
+      continue;
+    }
+
+    // Then inspect single line breaks inside the block
+    const lines = trimmedBlock.split('\n');
+
+    let currentParagraph = lines[0]?.trim() || '';
+
+    for (let i = 1; i < lines.length; i += 1) {
+      const nextLine = lines[i].trim();
+
+
+      if (countSentences(currentParagraph) > 1) {
+  
+        paragraphs.push(currentParagraph);
+        currentParagraph = nextLine;
+      } else {
+        currentParagraph = normalizeInlineWhitespace(
+          `${currentParagraph} ${nextLine}`,
+        );
+      }
+    }
+
+    if (currentParagraph) {
+      paragraphs.push(currentParagraph);
+    }
+  }
+
+  return paragraphs;
 }
 
 async function estimateTextBoxHeightForInsert(
@@ -1249,6 +1301,7 @@ function createEmptyAvailability(): TextboxActionAvailability {
     join: false,
     clean: false,
     unwrap: false,
+    splitParagraphs: false,
     log: true,
   };
 }
@@ -1430,7 +1483,47 @@ async function buildSplitInserts(element: TextElement): Promise<PreparedTextInse
 
   return inserts;
 }
+async function buildParagraphSplitInserts(
+  element: TextElement,
+): Promise<PreparedTextInsert[]> {
+   const sourceTextBox = element.textBox;
+  const sourceRect = cloneRect(sourceTextBox.textRect);
 
+  const parts = splitIntoParagraphCandidates(
+    element.textBox.textContentFull || '',
+  );
+
+  if (parts.length < 2) {
+    throw new Error(
+      'Could not find at least two paragraph segments to split.',
+    );
+  }
+
+const inserts: PreparedTextInsert[] = [];
+  let top = sourceRect.top;
+  const width = rectWidth(sourceRect);
+  const fontSize = sourceTextBox.fontSize || DEFAULT_FONT_SIZE;
+
+  for (const part of parts) {
+    const height = await estimateTextBoxHeightForInsert(
+      part,
+      width,
+      fontSize,
+      sourceTextBox.fontPath || undefined,
+    );
+    const rect: Rect = {
+      left: sourceRect.left,
+      top,
+      right: sourceRect.right,
+      bottom: top + height,
+    };
+
+    inserts.push(buildTextInsert(sourceTextBox, part, rect));
+    top = rect.bottom + TEXTBOX_GAP;
+  }
+
+  return inserts;
+}
 async function insertTextBoxes(
   inserts: PreparedTextInsert[],
   options?: TextboxActionExecutionOptions,
@@ -1592,6 +1685,9 @@ export async function performTextboxAction(
     if (action === 'split' && textElements.length !== 1) {
       throw new Error('Split works with exactly one selected textbox.');
     }
+    if (action === 'splitParagraphs' && textElements.length !== 1) {
+      throw new Error('Split works with exactly one selected textbox.');
+    }
 
     if (action === 'join' && textElements.length < 2) {
       throw new Error('Join works with at least two selected textboxes.');
@@ -1698,7 +1794,11 @@ export async function performTextboxAction(
 
     if (action === 'split') {
       inserts = await buildSplitInserts(textElements[0]);
-    } else if (action === 'join') {
+    } 
+    else if (action === 'splitParagraphs') {
+      inserts = await buildParagraphSplitInserts(textElements[0]);
+    }
+    else if (action === 'join') {
       inserts = [await buildJoinInsert(textElements)];
     } else {
       throw new Error(`Unsupported textbox action: ${action}`);

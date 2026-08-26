@@ -34,34 +34,34 @@ export type EditableExportClassificationConfig = {
 
 export const DEFAULT_EXPORT_CLASSIFICATION_CONFIG: ExportClassificationConfig = {
   heading: {
-    minFontSize: 40,
-    maxFontSize: 40,
-    bold: 'yes',
-    italic: 'no',
-    border: 'any',
-  },
-  paragraph: {
-    minFontSize: 32,
-    maxFontSize: 32,
-    bold: 'no',
-    italic: 'no',
-    border: 'no',
-  },
-  comment: {
-    minFontSize: 32,
-    maxFontSize: 32,
-    bold: 'any',
-    italic: 'yes',
-    border: 'no',
-  },
-  meta: {
-    minFontSize: 24,
-    maxFontSize: 24,
+    minFontSize: 41,
+    maxFontSize: 200,
     bold: 'any',
     italic: 'any',
     border: 'any',
   },
-  treatTitleTextBoxesAsHeadings: false,
+  paragraph: {
+    minFontSize: 30,
+    maxFontSize: 40,
+    bold: 'any',
+    italic: 'no',
+    border: 'any',
+  },
+  comment: {
+    minFontSize: 30,
+    maxFontSize: 40,
+    bold: 'any',
+    italic: 'yes',
+    border: 'any',
+  },
+  meta: {
+    minFontSize: 15,
+    maxFontSize: 29,
+    bold: 'any',
+    italic: 'any',
+    border: 'any',
+  },
+  treatTitleTextBoxesAsHeadings: true,
 };
 
 function editableRuleFromRule(rule: RoleRuleConfig): EditableRoleRuleConfig {

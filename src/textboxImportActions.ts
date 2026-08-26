@@ -6,6 +6,15 @@ import {
   rectWidth,
 } from './shared/supernoteTextboxGeometry';
 import {paginateTextIntoTextboxPages} from './shared/supernoteTextPagination';
+import {
+  paginateTextboxBlocksIntoPages,
+  type TextboxBlockPage,
+} from './shared/supernoteTextboxBlockPagination';
+import {
+  parseTextboxImportBlocks,
+  summarizeTextboxImportBlocks,
+  type TextboxImportBlockSummary,
+} from './shared/textboxImportParsing';
 import {insertTextboxPages} from './shared/supernoteNoteTextInsertion';
 
 export type TextboxImportSourceFolder = 'inbox' | 'myStyle';
@@ -15,10 +24,34 @@ export type TextboxImportInsertMode =
   | 'currentPage'
   | 'afterCurrentPage';
 
+export type TextboxImportLayoutMode =
+  | 'continuous'
+  | 'paragraphTextboxes';
+
+export type TextboxImportParagraphSeparator =
+  | 'blankLine'
+  | 'line';
+
+export type TextboxImportRoleStyle = {
+  fontSize: number;
+  bold: boolean;
+};
+
+export type TextboxImportStructureSettings = {
+  layoutMode: TextboxImportLayoutMode;
+  paragraphSeparator: TextboxImportParagraphSeparator;
+  detectMarkdownHeadings: boolean;
+  paragraph: TextboxImportRoleStyle;
+  heading1: TextboxImportRoleStyle;
+  heading2: TextboxImportRoleStyle;
+  heading3: TextboxImportRoleStyle;
+};
+
 export type TextboxImportSettings = {
   sourceFolder: TextboxImportSourceFolder;
   filename: string;
   fontSize: number;
+  structure: TextboxImportStructureSettings;
   marginLeft: number;
   marginTop: number;
   marginRight: number;
@@ -50,6 +83,13 @@ export type TextboxImportPreview = {
   wordCount: number;
   lineCount: number;
   paragraphCount: number;
+  headingCount: number;
+  h1Count: number;
+  h2Count: number;
+  h3Count: number;
+  blockCount: number;
+  layoutMode: TextboxImportLayoutMode;
+  paragraphSeparator: TextboxImportParagraphSeparator;
   expectedTextboxCount: number;
   expectedCreatedPageCount: number;
   currentPageHasImportAreaContent: boolean;
@@ -77,10 +117,53 @@ type CurrentNoteContext = {
   pageElements: Element[];
 };
 
+type PlannedTextboxChunk = {
+  text: string;
+  rect: Rect;
+  fontSize: number;
+  fontPath?: string;
+  bold?: boolean;
+};
+
+type PlannedTextboxPage = {
+  chunks: PlannedTextboxChunk[];
+};
+
+type TextboxImportPlan = {
+  pages: PlannedTextboxPage[];
+  currentPageHasImportAreaContent: boolean;
+  recommendedInsertMode: Exclude<TextboxImportInsertMode, 'auto'>;
+  effectiveInsertMode: Exclude<TextboxImportInsertMode, 'auto'>;
+  expectedCreatedPageCount: number;
+  expectedTextboxCount: number;
+  blockSummary: TextboxImportBlockSummary;
+};
+
 export const DEFAULT_TEXTBOX_IMPORT_SETTINGS: TextboxImportSettings = {
   sourceFolder: 'inbox',
   filename: 'import.txt',
   fontSize: 36,
+  structure: {
+    layoutMode: 'continuous',
+    paragraphSeparator: 'blankLine',
+    detectMarkdownHeadings: true,
+    paragraph: {
+      fontSize: 36,
+      bold: false,
+    },
+    heading1: {
+      fontSize: 52,
+      bold: true,
+    },
+    heading2: {
+      fontSize: 46,
+      bold: true,
+    },
+    heading3: {
+      fontSize: 40,
+      bold: true,
+    },
+  },
   marginLeft: 100,
   marginTop: 100,
   marginRight: 200,
@@ -306,40 +389,78 @@ function resolveEffectiveInsertMode(params: {
 }
 
 function countCreatedPages(params: {
-  chunkCount: number;
+  plannedPageCount: number;
   effectiveInsertMode: Exclude<TextboxImportInsertMode, 'auto'>;
 }): number {
   if (params.effectiveInsertMode === 'currentPage') {
-    return Math.max(0, params.chunkCount - 1);
+    return Math.max(0, params.plannedPageCount - 1);
   }
 
-  return params.chunkCount;
+  return params.plannedPageCount;
+}
+
+function countPlannedTextboxes(pages: PlannedTextboxPage[]): number {
+  return pages.reduce((total, page) => total + page.chunks.length, 0);
+}
+
+function wrapContinuousChunks(params: {
+  chunks: Array<{text: string; rect: Rect}>;
+  fontSize: number;
+}): PlannedTextboxPage[] {
+  return params.chunks.map(chunk => ({
+    chunks: [
+      {
+        text: chunk.text,
+        rect: chunk.rect,
+        fontSize: params.fontSize,
+        bold: false,
+      },
+    ],
+  }));
 }
 
 function buildInsertPages(params: {
-  chunks: Array<{text: string; rect: Rect}>;
+  pages: PlannedTextboxPage[];
   currentPage: number;
-  fontSize: number;
   effectiveInsertMode: Exclude<TextboxImportInsertMode, 'auto'>;
 }) {
   const startsOnCurrentPage = params.effectiveInsertMode === 'currentPage';
 
-  return params.chunks.map((chunk, index) => ({
-    pageNumber: startsOnCurrentPage
-      ? params.currentPage + index
-      : params.currentPage + 1 + index,
-    text: chunk.text,
-    rect: chunk.rect,
-    fontSize: params.fontSize,
-    createPage: startsOnCurrentPage ? index > 0 : true,
-  }));
+  return params.pages.flatMap((page, pageIndex) => {
+    const pageNumber = startsOnCurrentPage
+      ? params.currentPage + pageIndex
+      : params.currentPage + 1 + pageIndex;
+
+    const shouldCreatePlannedPage = startsOnCurrentPage ? pageIndex > 0 : true;
+
+    return page.chunks.map((chunk, chunkIndex) => ({
+      pageNumber,
+      text: chunk.text,
+      rect: chunk.rect,
+      fontSize: chunk.fontSize,
+      fontPath: chunk.fontPath,
+      bold: chunk.bold,
+      createPage: shouldCreatePlannedPage && chunkIndex === 0,
+    }));
+  });
+}
+
+function emptyBlockSummaryForContinuousMode(text: string): TextboxImportBlockSummary {
+  return {
+    blockCount: countParagraphs(text),
+    paragraphCount: countParagraphs(text),
+    headingCount: 0,
+    h1Count: 0,
+    h2Count: 0,
+    h3Count: 0,
+  };
 }
 
 async function buildImportPlan(params: {
   text: string;
   settings: TextboxImportSettings;
   context: CurrentNoteContext;
-}) {
+}): Promise<TextboxImportPlan> {
   const maxRect = buildImportMaxRect(params.context.pageSize, params.settings);
   const currentPageHasImportAreaContent = pageHasContentInImportArea(
     params.context.pageElements,
@@ -353,26 +474,61 @@ async function buildImportPlan(params: {
     recommendedInsertMode,
   });
 
-  const chunks = await paginateTextIntoTextboxPages({
-    text: params.text,
-    maxRect,
-    fontSize: params.settings.fontSize,
-    addExplicitEmptyLineHeight: false,
-  });
+  let pages: PlannedTextboxPage[];
+  let blockSummary: TextboxImportBlockSummary;
 
-  if (chunks.length === 0) {
+  if (params.settings.structure.layoutMode === 'paragraphTextboxes') {
+    const blocks = parseTextboxImportBlocks({
+      text: params.text,
+      structure: params.settings.structure,
+    });
+
+    if (blocks.length === 0) {
+      throw new Error('No import blocks were planned.');
+    }
+
+    blockSummary = summarizeTextboxImportBlocks(blocks);
+
+    const blockPages: TextboxBlockPage[] = await paginateTextboxBlocksIntoPages({
+      blocks,
+      maxRect,
+      addExplicitEmptyLineHeight: false,
+    });
+
+    pages = blockPages.map(page => ({
+      chunks: page.chunks,
+    }));
+  } else {
+    const chunks = await paginateTextIntoTextboxPages({
+      text: params.text,
+      maxRect,
+      fontSize: params.settings.fontSize,
+      addExplicitEmptyLineHeight: false,
+    });
+
+    pages = wrapContinuousChunks({
+      chunks,
+      fontSize: params.settings.fontSize,
+    });
+
+    blockSummary = emptyBlockSummaryForContinuousMode(params.text);
+  }
+
+  if (pages.length === 0 || countPlannedTextboxes(pages) === 0) {
     throw new Error('No import pages were planned.');
   }
 
   return {
-    chunks,
+    pages,
     currentPageHasImportAreaContent,
     recommendedInsertMode,
     effectiveInsertMode,
     expectedCreatedPageCount: countCreatedPages({
-      chunkCount: chunks.length,
+      plannedPageCount: pages.length,
       effectiveInsertMode,
     }),
+    expectedTextboxCount: countPlannedTextboxes(pages),
+    blockSummary,
   };
 }
 
@@ -401,8 +557,15 @@ export async function getTextboxImportPreview(
       characterCount: text.length,
       wordCount: countWords(text),
       lineCount: text.split('\n').length,
-      paragraphCount: countParagraphs(text),
-      expectedTextboxCount: plan.chunks.length,
+      paragraphCount: plan.blockSummary.paragraphCount,
+      headingCount: plan.blockSummary.headingCount,
+      h1Count: plan.blockSummary.h1Count,
+      h2Count: plan.blockSummary.h2Count,
+      h3Count: plan.blockSummary.h3Count,
+      blockCount: plan.blockSummary.blockCount,
+      layoutMode: settings.structure.layoutMode,
+      paragraphSeparator: settings.structure.paragraphSeparator,
+      expectedTextboxCount: plan.expectedTextboxCount,
       expectedCreatedPageCount: plan.expectedCreatedPageCount,
       currentPageHasImportAreaContent: plan.currentPageHasImportAreaContent,
       recommendedInsertMode: plan.recommendedInsertMode,
@@ -441,9 +604,8 @@ export async function performTextboxImport(
     });
 
     const pages = buildInsertPages({
-      chunks: plan.chunks,
+      pages: plan.pages,
       currentPage: context.currentPage,
-      fontSize: settings.fontSize,
       effectiveInsertMode: plan.effectiveInsertMode,
     });
 

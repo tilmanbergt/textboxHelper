@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import {UI_COLORS, styles} from './pluginUiStyles';
 import type {
+  TextboxImportLayoutMode,
+  TextboxImportParagraphSeparator,
   TextboxImportPreview,
   TextboxImportSettings,
 } from '../textboxImportActions';
@@ -33,10 +35,99 @@ type NumericSettingKey =
   | 'marginRight'
   | 'marginBottom';
 
-
+type HeadingStyleKey =
+  | 'heading1'
+  | 'heading2'
+  | 'heading3';
 
 function formatEffectiveInsertMode(mode: 'currentPage' | 'afterCurrentPage'): string {
   return mode === 'currentPage' ? 'Current page' : 'New page after current';
+}
+
+function formatLayoutMode(mode: TextboxImportLayoutMode): string {
+  return mode === 'paragraphTextboxes'
+    ? 'Paragraph textboxes'
+    : 'Continuous text';
+}
+
+function formatParagraphSeparator(separator: TextboxImportParagraphSeparator): string {
+  return separator === 'line' ? 'Every line' : 'Blank lines';
+}
+
+function ImportHelpPanel(): React.JSX.Element {
+  const [expanded, setExpanded] = React.useState(false);
+
+  return (
+    <View style={styles.sectionCard}>
+      <TouchableOpacity
+        activeOpacity={0.75}
+        style={styles.sectionHeaderButton}
+        onPress={() => setExpanded(current => !current)}>
+        <Text style={styles.sectionTitle}>Text file formatting help</Text>
+        <Text style={styles.sectionToggleText}>
+          {expanded ? 'Hide' : 'Show'}
+        </Text>
+      </TouchableOpacity>
+
+      {expanded ? (
+        <View style={styles.sectionBody}>
+          <Text style={styles.helpText}>
+            Use a plain UTF-8 .txt file. Windows and Unix line endings are both
+            handled automatically.
+          </Text>
+
+          <View style={styles.listRow}>
+            <Text style={styles.listTitle}>Paragraphs</Text>
+            <Text style={styles.listDetail}>
+              Choose how paragraphs are detected. “Blank lines” means paragraphs
+              are separated by an empty line. “Every line” means each non-empty
+              line becomes its own textbox.
+            </Text>
+          </View>
+
+          <View style={styles.listRow}>
+            <Text style={styles.listTitle}>Paragraph textboxes</Text>
+            <Text style={styles.listDetail}>
+              When enabled, each paragraph starts as a separate editable
+              Supernote textbox. Several textboxes may appear on the same page.
+              Very long paragraphs may continue in additional textboxes.
+            </Text>
+          </View>
+
+          <View style={styles.listRow}>
+            <Text style={styles.listTitle}>Headings</Text>
+            <Text style={styles.listDetail}>
+              Use Markdown-style headings:
+              {'\n\n'}
+              # Main heading
+              {'\n'}
+              ## Section heading
+              {'\n'}
+              ### Small heading
+              {'\n\n'}
+              Only these three levels are recognized. Leave a space after the #
+              marker. The marker itself is removed during import.
+            </Text>
+          </View>
+
+          <View style={styles.listRow}>
+            <Text style={styles.listTitle}>Example</Text>
+            <Text style={styles.listDetail}>
+              # My Topic
+              {'\n\n'}
+              This is the first paragraph.
+              {'\n'}
+              This line stays in the same paragraph when “Blank lines” is used.
+              {'\n\n'}
+              ## A Section
+              {'\n\n'}
+              This becomes another paragraph textbox.
+            </Text>
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 export function ImportTextFileView({
@@ -57,12 +148,37 @@ export function ImportTextFileView({
     sourcePath = String(error);
   }
 
-
+  const updateStructure = (
+    nextStructure: Partial<TextboxImportSettings['structure']>,
+  ) => {
+    onChangeSettings({
+      ...settings,
+      structure: {
+        ...settings.structure,
+        ...nextStructure,
+      },
+    });
+  };
 
   const setNumericSetting = (key: NumericSettingKey, value: string) => {
     const parsed = Number.parseInt(value, 10);
 
     if (!Number.isFinite(parsed) || parsed < 0) {
+      return;
+    }
+
+    if (key === 'fontSize') {
+      onChangeSettings({
+        ...settings,
+        fontSize: parsed,
+        structure: {
+          ...settings.structure,
+          paragraph: {
+            ...settings.structure.paragraph,
+            fontSize: parsed,
+          },
+        },
+      });
       return;
     }
 
@@ -72,7 +188,48 @@ export function ImportTextFileView({
     });
   };
 
+  const setHeadingFontSize = (
+    key: HeadingStyleKey,
+    value: string,
+  ) => {
+    const parsed = Number.parseInt(value, 10);
 
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return;
+    }
+
+    onChangeSettings({
+      ...settings,
+      structure: {
+        ...settings.structure,
+        [key]: {
+          ...settings.structure[key],
+          fontSize: parsed,
+        },
+      },
+    });
+  };
+
+  const setHeadingsBold = (bold: boolean) => {
+    onChangeSettings({
+      ...settings,
+      structure: {
+        ...settings.structure,
+        heading1: {
+          ...settings.structure.heading1,
+          bold,
+        },
+        heading2: {
+          ...settings.structure.heading2,
+          bold,
+        },
+        heading3: {
+          ...settings.structure.heading3,
+          bold,
+        },
+      },
+    });
+  };
 
   const renderNumericInput = (
     label: string,
@@ -94,6 +251,56 @@ export function ImportTextFileView({
       />
     </View>
   );
+
+  const renderHeadingSizeInput = (
+    label: string,
+    key: HeadingStyleKey,
+  ) => (
+    <View style={styles.importNumberField}>
+      <Text style={styles.importNumberLabel}>{label}</Text>
+      <TextInput
+        value={String(settings.structure[key].fontSize)}
+        onChangeText={value => setHeadingFontSize(key, value)}
+        editable={!isBusy && settings.structure.detectMarkdownHeadings}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="numeric"
+        style={styles.input}
+        placeholder="0"
+        placeholderTextColor={UI_COLORS.gray}
+      />
+    </View>
+  );
+
+  const renderChoiceButton = (params: {
+    label: string;
+    selected: boolean;
+    onPress: () => void;
+    disabled?: boolean;
+  }) => (
+    <TouchableOpacity
+      activeOpacity={0.75}
+      style={[
+        styles.actionButton,
+        params.selected && styles.actionButtonSelected,
+        (isBusy || params.disabled) && styles.actionButtonDisabled,
+      ]}
+      onPress={params.onPress}
+      disabled={isBusy || params.disabled}>
+      <Text
+        style={[
+          styles.actionButtonText,
+          params.selected && styles.actionButtonTextSelected,
+        ]}>
+        {params.label}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  const headingsAreBold =
+    settings.structure.heading1.bold &&
+    settings.structure.heading2.bold &&
+    settings.structure.heading3.bold;
 
   return (
     <View style={styles.screen}>
@@ -124,35 +331,112 @@ export function ImportTextFileView({
           </TouchableOpacity>
         </View>
 
-      <View style={styles.importCompactCard}>
-        <Text style={styles.previewTitle}>Source file</Text>
+        <View style={styles.importCompactCard}>
+          <Text style={styles.previewTitle}>Source file</Text>
 
-        <TextInput
-          value={settings.filename}
-          onChangeText={filename =>
-            onChangeSettings({
-              ...settings,
-              filename,
-            })
-          }
-          editable={!isBusy}
-          autoCapitalize="none"
-          autoCorrect={false}
-          style={styles.input}
-          placeholder="import.txt"
-          placeholderTextColor={UI_COLORS.gray}
-        />
+          <TextInput
+            value={settings.filename}
+            onChangeText={filename =>
+              onChangeSettings({
+                ...settings,
+                filename,
+              })
+            }
+            editable={!isBusy}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.input}
+            placeholder="import.txt"
+            placeholderTextColor={UI_COLORS.gray}
+          />
 
-        <Text style={styles.backupText}>{sourcePath}</Text>
-      </View>
+          <Text style={styles.backupText}>{sourcePath}</Text>
+        </View>
 
+        <ImportHelpPanel />
 
+        <View style={styles.previewCard}>
+          <Text style={styles.previewTitle}>Structure</Text>
+
+          <View style={styles.sectionBody}>
+            <Text style={styles.subsectionTitle}>Import layout</Text>
+            <View style={styles.actionsGrid}>
+              {renderChoiceButton({
+                label: 'Continuous text',
+                selected: settings.structure.layoutMode === 'continuous',
+                onPress: () =>
+                  updateStructure({
+                    layoutMode: 'continuous',
+                  }),
+              })}
+
+              {renderChoiceButton({
+                label: 'Paragraph textboxes',
+                selected: settings.structure.layoutMode === 'paragraphTextboxes',
+                onPress: () =>
+                  updateStructure({
+                    layoutMode: 'paragraphTextboxes',
+                  }),
+              })}
+            </View>
+          </View>
+
+          <View style={styles.sectionBody}>
+            <Text style={styles.subsectionTitle}>Paragraphs are separated by</Text>
+            <View style={styles.actionsGrid}>
+              {renderChoiceButton({
+                label: 'Blank lines',
+                selected: settings.structure.paragraphSeparator === 'blankLine',
+                onPress: () =>
+                  updateStructure({
+                    paragraphSeparator: 'blankLine',
+                  }),
+              })}
+
+              {renderChoiceButton({
+                label: 'Every line',
+                selected: settings.structure.paragraphSeparator === 'line',
+                onPress: () =>
+                  updateStructure({
+                    paragraphSeparator: 'line',
+                  }),
+              })}
+            </View>
+          </View>
+
+          <View style={styles.sectionBody}>
+            <Text style={styles.subsectionTitle}>Headings</Text>
+            <View style={styles.actionsGrid}>
+              {renderChoiceButton({
+                label: 'Recognize #, ##, ###',
+                selected: settings.structure.detectMarkdownHeadings,
+                onPress: () =>
+                  updateStructure({
+                    detectMarkdownHeadings: !settings.structure.detectMarkdownHeadings,
+                  }),
+              })}
+
+              {renderChoiceButton({
+                label: 'Bold headings',
+                selected: headingsAreBold,
+                disabled: !settings.structure.detectMarkdownHeadings,
+                onPress: () => setHeadingsBold(!headingsAreBold),
+              })}
+            </View>
+
+            <View style={styles.importNumberRow}>
+              {renderHeadingSizeInput('# size', 'heading1')}
+              {renderHeadingSizeInput('## size', 'heading2')}
+              {renderHeadingSizeInput('### size', 'heading3')}
+            </View>
+          </View>
+        </View>
 
         <View style={styles.previewCard}>
           <Text style={styles.previewTitle}>Layout</Text>
 
           <View style={styles.importNumberRow}>
-            {renderNumericInput('Font size', 'fontSize', styles.importNumberWide)}
+            {renderNumericInput('Paragraph font size', 'fontSize', styles.importNumberWide)}
           </View>
 
           <View style={styles.importNumberRow}>
@@ -196,16 +480,20 @@ export function ImportTextFileView({
               <Text style={styles.previewText}>
                 {[
                   `Path: ${preview.sourcePath}`,
+                  `Layout mode: ${formatLayoutMode(preview.layoutMode)}`,
+                  `Paragraph separation: ${formatParagraphSeparator(preview.paragraphSeparator)}`,
                   `Words: ${preview.wordCount}`,
                   `Characters: ${preview.characterCount}`,
                   `Lines: ${preview.lineCount}`,
+                  `Blocks: ${preview.blockCount}`,
                   `Paragraphs: ${preview.paragraphCount}`,
+                  `Headings: ${preview.headingCount} (#: ${preview.h1Count}, ##: ${preview.h2Count}, ###: ${preview.h3Count})`,
                   `Expected textboxes: ${preview.expectedTextboxCount}`,
                   `New pages to create: ${preview.expectedCreatedPageCount}`,
-                   `Start: ${formatEffectiveInsertMode(preview.effectiveInsertMode)}`,
-                     preview.currentPageHasImportAreaContent
-                       ? 'Reason: current import area contains content'
-                       : 'Reason: current import area appears empty',
+                  `Start: ${formatEffectiveInsertMode(preview.effectiveInsertMode)}`,
+                  preview.currentPageHasImportAreaContent
+                    ? 'Reason: current import area contains content'
+                    : 'Reason: current import area appears empty',
                 ].join('\n')}
               </Text>
             </View>

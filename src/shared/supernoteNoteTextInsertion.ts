@@ -7,13 +7,15 @@ import {
   type Rect,
 } from 'sn-plugin-lib';
 
-export type InsertTextboxPage = {
+export type TextboxInsertInstruction = {
   pageNumber: number;
   text: string;
   rect: Rect;
   fontSize: number;
   fontPath?: string;
+  bold?: boolean;
   createPage?: boolean;
+  isHeading?: boolean;
 };
 
 export type InsertTextboxPagesProgressUpdate = {
@@ -30,19 +32,20 @@ const MAIN_LAYER = 0;
 const DEFAULT_TEMPLATE_NAME = 'style_white';
 const INSERT_PAGE_TIMEOUT_MS = 8000;
 
+/* -----------------------------
+   helpers
+----------------------------- */
+
 function assertApiSuccess<T>(
-  response: {success?: boolean; result?: T; error?: {message?: string}} | null | undefined,
+  response: { success?: boolean; result?: T; error?: { message?: string } } | null | undefined,
   fallback: string,
 ): T {
-  if (response?.success) {
-    return response.result as T;
-  }
-
+  if (response?.success) return response.result as T;
   throw new Error(response?.error?.message || fallback);
 }
 
 function assertBooleanSuccess(
-  response: {success?: boolean; result?: boolean; error?: {message?: string}} | null | undefined,
+  response: { success?: boolean; result?: boolean; error?: { message?: string } } | null | undefined,
   fallback: string,
 ): void {
   if (!response?.success || response.result !== true) {
@@ -59,23 +62,23 @@ async function withTimeout<T>(
     const timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
 
     promise
-      .then(result => {
+      .then(r => {
         clearTimeout(timer);
-        resolve(result);
+        resolve(r);
       })
-      .catch(error => {
+      .catch(e => {
         clearTimeout(timer);
-        reject(error);
+        reject(e);
       });
   });
 }
 
 async function recycleElements(elements: Element[]): Promise<void> {
   await Promise.all(
-    elements.map(element =>
-      typeof element.recycle === 'function'
-        ? element.recycle().catch(() => undefined)
-        : Promise.resolve(undefined),
+    elements.map(el =>
+      typeof el.recycle === 'function'
+        ? el.recycle().catch(() => undefined)
+        : Promise.resolve(),
     ),
   );
 }
@@ -84,33 +87,34 @@ async function saveCurrentNote(message: string): Promise<void> {
   const result = await PluginNoteAPI.saveCurrentNote();
 
   assertBooleanSuccess(
-    result as {
-      success?: boolean;
-      result?: boolean;
-      error?: {message?: string};
-    },
+    result as any,
     message,
   );
 }
 
-async function createTextboxElement(page: InsertTextboxPage): Promise<Element> {
+/* -----------------------------
+   element creation
+----------------------------- */
+
+async function createTextboxElement(instruction: TextboxInsertInstruction): Promise<Element> {
   const created = await PluginCommAPI.createElement(TEXT_TYPE_NORMAL);
+
   const element = assertApiSuccess<Element>(
-    created as {success?: boolean; result?: Element; error?: {message?: string}},
+    created as any,
     'Failed to create textbox element.',
   );
 
   const textBox = element.textBox ?? new TextBox();
 
-  element.pageNum = page.pageNumber;
+  element.pageNum = instruction.pageNumber;
   element.layerNum = MAIN_LAYER;
 
-  textBox.fontSize = page.fontSize;
-  textBox.fontPath = page.fontPath || null;
-  textBox.textContentFull = page.text;
-  textBox.textRect = page.rect;
+  textBox.fontSize = instruction.fontSize;
+  textBox.fontPath = instruction.fontPath || null;
+  textBox.textContentFull = instruction.text;
+  textBox.textRect = instruction.rect;
   textBox.textAlign = 0;
-  textBox.textBold = 0;
+  textBox.textBold = instruction.bold ? 1 : 0;
   textBox.textItalics = 0;
   textBox.textFrameWidthType = 0;
   textBox.textFrameStyle = 0;
@@ -122,22 +126,30 @@ async function createTextboxElement(page: InsertTextboxPage): Promise<Element> {
   return element;
 }
 
+/* -----------------------------
+   main API
+----------------------------- */
+
 export async function insertTextboxPages(params: {
   notePath: string;
   currentPage: number;
-  pages: InsertTextboxPage[];
+  pages: TextboxInsertInstruction[];
   templateName?: string;
   onProgress?: (update: InsertTextboxPagesProgressUpdate) => void;
 }): Promise<InsertTextboxPagesResult> {
   const templateName = params.templateName ?? DEFAULT_TEMPLATE_NAME;
-  const pagesToCreate = params.pages.filter(page => page.createPage !== false);
 
-  params.onProgress?.({message: 'Saving current note before insertion...'});
-  await saveCurrentNote('Failed to save the current note before inserting pages.');
+  const pagesToCreate = params.pages.filter(p => p.createPage !== false);
 
+  params.onProgress?.({ message: 'Saving current note...' });
+  await saveCurrentNote('Failed to save note before insertion.');
+
+  /* -----------------------------
+     page creation
+  ----------------------------- */
   for (const [index, page] of pagesToCreate.entries()) {
     params.onProgress?.({
-      message: `Creating page ${index + 1} of ${pagesToCreate.length}...`,
+      message: `Creating page ${index + 1} / ${pagesToCreate.length}...`,
     });
 
     const result = await withTimeout(
@@ -147,50 +159,76 @@ export async function insertTextboxPages(params: {
         template: templateName,
       }),
       INSERT_PAGE_TIMEOUT_MS,
-      `Timed out while inserting page ${page.pageNumber}.`,
+      `Timeout creating page ${page.pageNumber}`,
     );
 
-    assertBooleanSuccess(
-      result as {success?: boolean; result?: boolean; error?: {message?: string}},
-      `Failed to insert page ${page.pageNumber}.`,
-    );
+    assertBooleanSuccess(result as any, `Failed page ${page.pageNumber}`);
   }
 
-  let insertedTextboxCount = 0;
+  /* -----------------------------
+     textbox + heading insertion
+  ----------------------------- */
+  let insertedCount = 0;
 
-  for (const [index, page] of params.pages.entries()) {
+  for (const [index, instruction] of params.pages.entries()) {
     params.onProgress?.({
-      message: `Inserting textbox ${index + 1} of ${params.pages.length}...`,
+      message: `Inserting textbox ${index + 1} / ${params.pages.length}...`,
     });
 
     let elements: Element[] = [];
 
     try {
-      const element = await createTextboxElement(page);
+      const element = await createTextboxElement(instruction);
       elements = [element];
 
       const result = await PluginFileAPI.insertElements(
         params.notePath,
-        page.pageNumber,
+        instruction.pageNumber,
         elements,
       );
 
-      assertBooleanSuccess(
-        result as {success?: boolean; result?: boolean; error?: {message?: string}},
-        `Failed to insert textbox on page ${page.pageNumber}.`,
-      );
+      assertBooleanSuccess(result as any, `Failed textbox insert`);
 
-      insertedTextboxCount += 1;
+      insertedCount += 1;
+
+      /* -----------------------------
+         heading → title conversion
+      ----------------------------- */
+      if (instruction.isHeading === true) {
+        const titleRes = await PluginCommAPI.createElement(100);
+
+        const titleElement = assertApiSuccess<Element>(
+          titleRes as any,
+          'Failed to create title element',
+        );
+
+        const textBoxIndex = element.numInPage;
+
+        titleElement.pageNum = instruction.pageNumber;
+        titleElement.layerNum = 0;
+        titleElement.style = 0;
+        titleElement.controlTrailNums = [textBoxIndex];
+
+        await PluginFileAPI.insertElements(
+          params.notePath,
+          instruction.pageNumber,
+          [titleElement],
+        );
+      }
+
     } finally {
       await recycleElements(elements);
     }
   }
 
-  params.onProgress?.({message: 'Saving imported textboxes...'});
-  await saveCurrentNote('Failed to save the note after inserting textboxes.');
+  /* -----------------------------
+     final save
+  ----------------------------- */
+  params.onProgress?.({ message: 'Saving final note...' });
+  await saveCurrentNote('Failed final save.');
 
   return {
     createdPageCount: pagesToCreate.length,
-    insertedTextboxCount,
+    insertedTextboxCount: insertedCount,
   };
 }

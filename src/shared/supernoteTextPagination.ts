@@ -1,15 +1,17 @@
 import type {Rect} from 'sn-plugin-lib';
 import {rectHeight, rectWidth} from './supernoteTextboxGeometry';
 import {
-  DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION,
-  estimateTextboxHeight,
-} from './supernoteTextboxLayout';
+  DEFAULT_TEXTBOX_MIN_HEIGHT,
+  estimateHeightForRect,
+  splitLargeTextBlock,
+  withHeight,
+} from './supernoteTextboxPaginationCore';
 
 export type TextboxPageChunk = {
   text: string;
   rect: Rect;
 };
-
+c
 export type TextboxPaginationOptions = {
   text: string;
   maxRect: Rect;
@@ -19,8 +21,6 @@ export type TextboxPaginationOptions = {
   addExplicitEmptyLineHeight?: boolean;
 };
 
-const DEFAULT_MIN_HEIGHT = 48;
-
 function splitIntoParagraphs(text: string): string[] {
   return text
     .replace(/\r\n?/g, '\n')
@@ -29,73 +29,11 @@ function splitIntoParagraphs(text: string): string[] {
     .filter(Boolean);
 }
 
-function splitLargeParagraph(paragraph: string): string[] {
-  const sentences = paragraph
-    .replace(/\s+/g, ' ')
-    .split(/(?<=[.!?])\s+/)
-    .map(part => part.trim())
-    .filter(Boolean);
-
-  if (sentences.length > 1) {
-    return sentences;
-  }
-
-  const words = paragraph.split(/\s+/).filter(Boolean);
-  const chunks: string[] = [];
-  let current = '';
-
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-
-    if (candidate.length > 900 && current) {
-      chunks.push(current);
-      current = word;
-    } else {
-      current = candidate;
-    }
-  }
-
-  if (current) {
-    chunks.push(current);
-  }
-
-  return chunks;
-}
-
-async function estimateHeightForRect(params: {
-  text: string;
-  rect: Rect;
-  fontSize: number;
-  fontPath?: string;
-  minHeight: number;
-  addExplicitEmptyLineHeight?: boolean;
-}): Promise<number> {
-  const height = await estimateTextboxHeight(
-    params.text,
-    rectWidth(params.rect),
-    params.fontSize,
-    params.fontPath,
-    DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION,
-    params.addExplicitEmptyLineHeight,
-  );
-
-  return Math.max(params.minHeight, Math.ceil(height));
-}
-
-function withHeight(rect: Rect, height: number): Rect {
-  return {
-    left: rect.left,
-    top: rect.top,
-    right: rect.right,
-    bottom: rect.top + height,
-  };
-}
-
 export async function paginateTextIntoTextboxPages(
   options: TextboxPaginationOptions,
 ): Promise<TextboxPageChunk[]> {
   const maxHeight = rectHeight(options.maxRect);
-  const minHeight = options.minHeight ?? DEFAULT_MIN_HEIGHT;
+  const minHeight = options.minHeight ?? DEFAULT_TEXTBOX_MIN_HEIGHT;
 
   if (rectWidth(options.maxRect) <= 0 || maxHeight <= 0) {
     throw new Error('Textbox pagination received an unusable rectangle.');
@@ -138,7 +76,7 @@ export async function paginateTextIntoTextboxPages(
 
     let buffer = '';
 
-    for (const part of splitLargeParagraph(paragraph)) {
+    for (const part of splitLargeTextBlock(paragraph)) {
       const partCandidate = buffer ? `${buffer} ${part}` : part;
 
       if (await fits(partCandidate)) {
