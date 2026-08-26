@@ -5,7 +5,11 @@
     "desc":  "Tools for importing, editing, and exporting Supernote textboxes.",
     "name":  "Textbox Helper",
     "versionCode":  "1",
-    "versionName":  "0.1.0",
-    "jsMainPath":  "index"
+    "versionName":  "0.2.0",
+    "jsMainPath":  "index",
+  "uses-permissions": [
+    "plugin.permission.FILE:READ",
+    "plugin.permission.FILE:WRITE"
+  ]
 }
 

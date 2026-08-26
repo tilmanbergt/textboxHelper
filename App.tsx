@@ -18,6 +18,8 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {DeviceEventEmitter} from 'react-native';
 import {PluginManager} from 'sn-plugin-lib';
+// sn-plugin-lib 0.1.65 migration: runtime permission check (see PluginConfig.json "uses-permissions")
+import {ensurePermissions} from './src/permissions';
 import {
     BUTTON_ID_EXPORT_DOCX,
     BUTTON_ID_IMPORT_TEXT_FILE,
@@ -339,7 +341,26 @@ const refreshNoteContext = useCallback(async () => {
     }
   }, [clearPendingClose, logUiStatus, updateDirectDialog]);
 
+  // sn-plugin-lib 0.1.65 migration: request FILE:READ/FILE:WRITE before wiring up
+  // button routing (declared in PluginConfig.json's "uses-permissions"). Every
+  // action below reads or writes note elements, so if the permission is denied we
+  // show a status message instead of letting the first action fail with a host
+  // error code (1500/1501/1503).
   useEffect(() => {
+    let subscription: {remove: () => void} | undefined;
+
+    (async () => {
+      const granted = await ensurePermissions();
+      if (!granted) {
+        // Plain setStatus (not updateStatus) so this effect doesn't need viewMode
+        // in its dependency array and re-subscribe on every screen change.
+        setStatus(
+          'Missing permission: enable file read/write access for Textbox Helper to work.',
+        );
+        setViewMode('tools');
+        return;
+      }
+
     const routeButton = (buttonId: number) => {
       setBackupPath('');
       setStatus('');
@@ -410,16 +431,17 @@ if (buttonId === BUTTON_ID_EXPORT_DOCX) {
       routeButton(pendingButton);
     }
 
-    const subscription = DeviceEventEmitter.addListener(
+    subscription = DeviceEventEmitter.addListener(
       PLUGIN_BUTTON_EVENT,
       ({id}: {id: number}) => {
         checkPendingButton();
         routeButton(id);
       },
     );
+    })();
 
     return () => {
-      subscription.remove();
+      subscription?.remove();
     };
   }, [clearPendingClose, loadMarkerPreview, loadPreview, startDirectAction]);
 
