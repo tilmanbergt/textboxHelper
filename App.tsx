@@ -44,10 +44,8 @@ import {
   getTextboxActionPreview,
   performTextboxAction,
   TEXTBOX_ACTION_CANCELLED_MESSAGE,
-  type TextboxActionKind,
-  type TextboxActionPreview,
   type TextboxActionProgressUpdate,
-} from './src/textboxActions';
+} from './src/actions/textboxEdits';
 
 import {styles} from './src/ui/pluginUiStyles';
 
@@ -69,9 +67,7 @@ import {ImportTextFileView} from './src/screens/ImportTextFileView';
 
 
 import {
-    ACTION_ORDER,
-  ACTION_LABELS,
-  TextboxToolsView,
+    TextboxToolsView,
   formatPreviewBlocks,
 } from './src/screens/TextboxToolsView';
 
@@ -91,6 +87,12 @@ import {
   BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
   BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
 } from './src/domain/buttonIds';
+import {
+  ACTION_LABELS,
+  ACTION_ORDER,
+  type TextboxActionKind,
+} from './src/domain/textboxActionKinds';
+import type {TextboxActionPreview} from './src/domain/textboxEditPlan';
 
 const ACTION_PROGRESS_LABELS: Record<TextboxActionKind, string> = {
   log: 'Logging textboxes...',

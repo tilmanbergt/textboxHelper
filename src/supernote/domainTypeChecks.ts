@@ -1,5 +1,10 @@
-import type {Point as SdkPoint, Rect as SdkRect} from 'sn-plugin-lib';
-import type {Point, Rect} from '../domain/textboxModel';
+import type {
+  Element as SdkElement,
+  Point as SdkPoint,
+  Rect as SdkRect,
+  TextBox as SdkTextBox,
+} from 'sn-plugin-lib';
+import type {PageElementData, Point, Rect, TextboxData} from '../domain/textboxModel';
 
 /**
  * Compile-time checks only: every SDK value must still be assignable to the domain type that
@@ -9,6 +14,8 @@ import type {Point, Rect} from '../domain/textboxModel';
 export type DomainTypeChecks = [
   SdkRect extends Rect ? true : never,
   SdkPoint extends Point ? true : never,
+  SdkTextBox extends TextboxData ? true : never,
+  SdkElement extends PageElementData ? true : never,
 ];
 
-export const DOMAIN_TYPES_MATCH_SDK: DomainTypeChecks = [true, true];
+export const DOMAIN_TYPES_MATCH_SDK: DomainTypeChecks = [true, true, true, true];

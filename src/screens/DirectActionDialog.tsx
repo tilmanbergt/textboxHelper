@@ -6,7 +6,7 @@ import {
   View,
 } from 'react-native';
 import {UI_COLORS, styles} from '../ui/pluginUiStyles';
-import type {TextboxActionKind} from '../textboxActions';
+import type {TextboxActionKind} from '../domain/textboxActionKinds';
 
 export type DirectDialogState = {
   action: TextboxActionKind | null;

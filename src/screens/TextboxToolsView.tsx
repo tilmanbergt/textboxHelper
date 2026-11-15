@@ -7,27 +7,12 @@ import {
   View,
 } from 'react-native';
 import {UI_COLORS, styles} from '../ui/pluginUiStyles';
-import type {
-  TextboxActionKind,
-  TextboxActionPreview,
-} from '../textboxActions';
-
-export const ACTION_ORDER: TextboxActionKind[] = [
-  'log',
-  'split',
-  'join',
-  'clean',
-  'unwrap',
-];
-
-export const ACTION_LABELS: Record<TextboxActionKind, string> = {
-  log: 'Log All Textboxes',
-  split: 'Split Sentences',
-  splitParagraphs: 'Split Paragraphs',
-  join: 'Join Text Boxes',
-  clean: 'Clean Spaces',
-  unwrap: 'Remove Line Breaks',
-};
+import {
+  ACTION_LABELS,
+  ACTION_ORDER,
+  type TextboxActionKind,
+} from '../domain/textboxActionKinds';
+import type {TextboxActionPreview} from '../domain/textboxEditPlan';
 
 type TextboxToolsViewProps = {
   preview: TextboxActionPreview | null;

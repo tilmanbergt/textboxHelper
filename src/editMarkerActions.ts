@@ -2,7 +2,6 @@ import {Clipboard} from 'react-native';
 import {buildBackupDir, buildBackupPath} from './domain/backupPaths';
 import {createDiagnosticLog} from './domain/diagnosticLog';
 import {appendFontWarning} from './domain/fontPaths';
-import {writeJsonExportFile} from './textboxActions';
 import RNFS from 'react-native-fs';
 import {
   Element,
@@ -41,6 +40,7 @@ import {
   type NativeDetailedMeasurement,
   type TextboxMeasurementCalibration,
 } from './domain/textboxLayout';
+import {writeJsonExportFile} from './storage/exportFile';
 
 /**
  * Edit marker engine.

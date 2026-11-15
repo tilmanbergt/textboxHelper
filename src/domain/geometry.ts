@@ -61,6 +61,15 @@ export function pointInRect(point: {x: number; y: number}, rect: Rect): boolean 
   );
 }
 
+export function rectsOverlap(left: Rect, right: Rect): boolean {
+  return !(
+    left.right <= right.left ||
+    left.left >= right.right ||
+    left.bottom <= right.top ||
+    left.top >= right.bottom
+  );
+}
+
 export function intersectionRect(left: Rect, right: Rect): Rect | null {
   const rect: Rect = {
     left: Math.max(left.left, right.left),
