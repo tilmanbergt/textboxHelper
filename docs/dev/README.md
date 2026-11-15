@@ -41,7 +41,6 @@ The single steps are also available as `npm run typecheck`, `npm run lint` and `
 | `src/permissions.ts` | Asks for FILE:READ and FILE:WRITE at start. |
 | `src/textboxActions.ts` | Split (sentences, paragraphs), join, clean spaces, remove line breaks: preview, backup, apply. |
 | `src/editMarkerActions.ts` | Handwritten delete and replace markers: recognition, preview, backup, apply. |
-| `src/textboxStrikeAnalysis.ts` | Stroke analysis behind the marker recognition. |
 | `src/textboxImportActions.ts` | Import of a text file into textboxes (paragraphs, markdown headings, pagination). |
 | `src/export/` | DOCX export: note context, textbox scan and classification, DOCX generation, the export screen. |
 | `src/shared/` | The shared textbox core, mostly pure: geometry, layout and measurement, hit testing, pagination, import parsing, backup paths, note text insertion. |

@@ -63,7 +63,7 @@ The architecture as built is described in `design-overview.md`. These rules are 
   failure becomes an error with a message the user can understand.
 - **The pluginID never changes** (`PluginConfig.json`: `wkx45auazdre2crs`).
 - **File size.** New files stay at or below 1,000 lines; split by responsibility. Longer files
-  (`textboxActions.ts`, `editMarkerActions.ts`, `textboxStrikeAnalysis.ts`) may only shrink.
+  (`textboxActions.ts`, `editMarkerActions.ts`) may only shrink.
 
 ## 4. UI and logging rules
 
@@ -72,7 +72,7 @@ The architecture as built is described in `design-overview.md`. These rules are 
   confirmation; the result message names the backup.
 - **Labels** are short, English and the same everywhere (toolbar button, dialog title, status
   text). `ACTION_LABELS` in `src/ui/TextboxToolsView.tsx` holds one label per action kind.
-- **Logging:** log lines start with the module in brackets, e.g. `[TextboxStrikeAnalysis] stage`.
+- **Logging:** log lines start with the module in brackets, e.g. `[EditMarkerActions] stage`.
   Every caught error is either shown to the user or logged, with enough context to find the
   cause. Logs never contain more of the user's text than the diagnosis needs; prefer counts and
   ids.

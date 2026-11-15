@@ -40,14 +40,14 @@ repeated spaces, remove manual line breaks. It finds the textboxes in the lasso,
 texts, sizes the new textboxes through the shared layout core, checks that the result fits the
 page without colliding with other elements, writes the backup and applies the change.
 
-### `src/editMarkerActions.ts` and `src/textboxStrikeAnalysis.ts`
+### `src/editMarkerActions.ts`
 
 Handwritten edit markers on textboxes: a delete marker is a line through words; a replace marker
 is a delete line plus two crossing modifier lines, with the replacement taken from typed text.
 Freehand strokes and the Supernote straight-line tool are both recognized.
-`textboxStrikeAnalysis.ts` analyzes the strokes; `editMarkerActions.ts` maps them to words
-through the hit-testing core, resolves replacement sources, builds the preview and applies the
-plan - for the lasso selection or the whole page.
+`editMarkerActions.ts` reads the strokes, maps them to words through the hit-testing core,
+resolves replacement sources, builds the preview and applies the plan - for the lasso selection
+or the whole page.
 Every stage of a marker preview is also recorded in memory (`src/shared/diagnosticLog.ts`); "Save
 Diagnostics" in the review screen writes that trace, with the stroke's raw sample points next to
 the points recognition used, as JSON to the EXPORT folder - only when the user taps it.

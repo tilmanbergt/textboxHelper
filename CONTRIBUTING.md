@@ -29,8 +29,7 @@ Please open an issue first and wait for a go before starting a pull request; sma
 - Add a line to `CHANGELOG.md` under `[Unreleased]` for every user-visible change.
 - Test on a real device, on a copy of a note, and say which device in the PR.
 
-Areas that need extra care: marker recognition (`src/editMarkerActions.ts`,
-`src/textboxStrikeAnalysis.ts`) and text measurement (`src/shared/supernoteTextboxLayout.ts`,
+Areas that need extra care: marker recognition (`src/editMarkerActions.ts`) and text measurement (`src/shared/supernoteTextboxLayout.ts`,
 `TextboxMetricsModule.kt`) - small changes shift behavior across all features.
 
 By contributing you agree that your contribution is licensed under the MIT License of this
