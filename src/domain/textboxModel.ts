@@ -51,6 +51,7 @@ export type PageElementData = {
   title: FrameData | null;
   link: FrameData | null;
   picture: {rect: Rect} | null;
+  geometry: {type: string; points: Point[]} | null;
 };
 
 /** A page element known to carry a text box. */
@@ -58,6 +59,10 @@ export type TextElementData = PageElementData & {textBox: TextboxData};
 
 /** Element type of a normal textbox. */
 export const TEXT_TYPE_NORMAL = 500;
+/** Element type of a handwritten stroke (sn-plugin-lib `Element.TYPE_STROKE`). */
+export const ELEMENT_TYPE_STROKE = 0;
+/** Element type of a geometry such as a straight line (sn-plugin-lib `Element.TYPE_GEO`). */
+export const ELEMENT_TYPE_GEO = 700;
 /** The main layer; textbox tools only touch elements on it. */
 export const MAIN_LAYER = 0;
 /** Font size assumed when a textbox doesn't name one. */

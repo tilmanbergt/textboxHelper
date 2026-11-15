@@ -1,4 +1,5 @@
 import {cloneRect} from './geometry';
+import type {EditMarkerApplyPlan} from './markerTypes';
 import type {TextboxActionKind} from './textboxActionKinds';
 import {DEFAULT_FONT_SIZE, type Rect, type TextElementData} from './textboxModel';
 
@@ -7,28 +8,45 @@ import {DEFAULT_FONT_SIZE, type Rect, type TextElementData} from './textboxModel
  * goes to the clipboard.
  */
 
-export type BackupPayload = {
+/** One original textbox in a backup. */
+export type BackupText = {
+  uuid: string;
+  numInPage: number;
+  layerNum: number;
+  textContentFull: string;
+  textRect: Rect;
+  fontSize: number;
+  fontPath: string | null;
+  textAlign: number;
+  textBold: number;
+  textItalics: number;
+  textFrameWidthType: number;
+  textFrameStyle: number;
+  textEditable: number;
+};
+
+/** Backup of a textbox action (split, join, clean, …). */
+export type TextboxBackupPayload = {
   action: TextboxActionKind;
   createdAt: string;
   notePath: string;
   page: number;
   selectedCount: number;
-  texts: Array<{
-    uuid: string;
-    numInPage: number;
-    layerNum: number;
-    textContentFull: string;
-    textRect: Rect;
-    fontSize: number;
-    fontPath: string | null;
-    textAlign: number;
-    textBold: number;
-    textItalics: number;
-    textFrameWidthType: number;
-    textFrameStyle: number;
-    textEditable: number;
-  }>;
+  texts: BackupText[];
 };
+
+/** Backup of applying edit markers. */
+export type EditMarkerBackupPayload = {
+  action: 'edit-markers';
+  createdAt: string;
+  notePath: string;
+  page: number;
+  selectedMarkerCount: number;
+  recognizedOperationCount: number;
+  texts: BackupText[];
+};
+
+export type BackupPayload = TextboxBackupPayload | EditMarkerBackupPayload;
 
 export const CLIPBOARD_PREVIEW_LIMIT = 3000;
 
@@ -38,8 +56,14 @@ export function buildClipboardSummary(payload: BackupPayload): string {
     `Created: ${payload.createdAt}`,
     `Note: ${payload.notePath}`,
     `Page: ${payload.page}`,
-    '',
   ];
+  if (payload.action === 'edit-markers') {
+    lines.push(
+      `Selected markers: ${payload.selectedMarkerCount}`,
+      `Recognized operations: ${payload.recognizedOperationCount}`,
+    );
+  }
+  lines.push('');
 
   payload.texts.forEach((text, index) => {
     lines.push(`#${index + 1}`);
@@ -55,7 +79,7 @@ export function createBackupPayload(
   notePath: string,
   page: number,
   elements: TextElementData[],
-): BackupPayload {
+): TextboxBackupPayload {
   return {
     action,
     createdAt: new Date().toISOString(),
@@ -76,6 +100,32 @@ export function createBackupPayload(
       textFrameWidthType: element.textBox.textFrameWidthType ?? 0,
       textFrameStyle: element.textBox.textFrameStyle ?? 0,
       textEditable: element.textBox.textEditable ?? 0,
+    })),
+  };
+}
+
+export function createEditMarkerBackupPayload(plan: EditMarkerApplyPlan): EditMarkerBackupPayload {
+  return {
+    action: 'edit-markers',
+    createdAt: new Date().toISOString(),
+    notePath: plan.notePath,
+    page: plan.page,
+    selectedMarkerCount: plan.selectedMarkerCount,
+    recognizedOperationCount: plan.operations.length,
+    texts: plan.textMutations.map(text => ({
+      uuid: text.uuid,
+      numInPage: text.numInPage,
+      layerNum: text.layerNum,
+      textContentFull: text.originalText,
+      textRect: cloneRect(text.textRect),
+      fontSize: text.fontSize,
+      fontPath: text.fontPath,
+      textAlign: text.textAlign,
+      textBold: text.textBold,
+      textItalics: text.textItalics,
+      textFrameWidthType: text.textFrameWidthType,
+      textFrameStyle: text.textFrameStyle,
+      textEditable: text.textEditable,
     })),
   };
 }

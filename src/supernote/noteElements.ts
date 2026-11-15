@@ -5,12 +5,14 @@ import {
   PluginNoteAPI,
   TextBox,
 } from 'sn-plugin-lib';
+import type {EditMarkerPreviewScope} from '../domain/markerTypes';
 import type {PreparedTextInsert} from '../domain/textboxEditPlan';
 import {assertApiSuccess} from './sdkResult';
 
 /**
  * Reading and changing the current page through the SDK: note path, page, page size, page and
- * lasso elements, inserting, changing and deleting textboxes, and hiding the lasso box.
+ * lasso elements, inserting, changing and deleting textboxes and other elements, saving the note,
+ * and hiding the lasso box.
  */
 
 export async function getCurrentPageElementsContext(): Promise<{
@@ -126,12 +128,12 @@ export async function deleteLassoElements(): Promise<void> {
   );
 }
 
-/** Hides the lasso box after a change; a failure is only logged. */
-export async function hideLassoBox(): Promise<void> {
+/** Hides the lasso box after a change; a failure is only logged, under the caller's tag. */
+export async function hideLassoBox(logTag = '[TextboxActions]'): Promise<void> {
   const hideResponse = await PluginCommAPI.setLassoBoxState(2);
   if (!hideResponse?.success) {
     console.log(
-      '[TextboxActions] setLassoBoxState failed',
+      `${logTag} setLassoBoxState failed`,
       JSON.stringify(hideResponse),
     );
   }
@@ -142,5 +144,130 @@ export async function getLassoElements(): Promise<Element[]> {
   return assertApiSuccess(
     lassoResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
     'Could not read the current lasso selection.',
+  );
+}
+
+export type PreviewContext = {
+  notePath: string;
+  page: number;
+  lassoElements: Element[];
+  pageElements: Element[];
+  previewScope: EditMarkerPreviewScope;
+  effectiveSelection: Element[];
+};
+
+export async function getPreviewContext(
+  previewScope: EditMarkerPreviewScope,
+): Promise<PreviewContext> {
+  const fileResponse = await PluginCommAPI.getCurrentFilePath();
+  const pageResponse = await PluginCommAPI.getCurrentPageNum();
+
+  const notePath = assertApiSuccess(
+    fileResponse as {success?: boolean; result?: string; error?: {message?: string}},
+    'Could not determine the current note path.',
+  );
+  const page = assertApiSuccess(
+    pageResponse as {success?: boolean; result?: number; error?: {message?: string}},
+    'Could not determine the current page.',
+  );
+
+  const pageElementsResponse = await PluginFileAPI.getElements(page, notePath);
+  const pageElements = assertApiSuccess(
+    pageElementsResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
+    'Could not read the current page elements.',
+  );
+
+  let lassoElements: Element[] = [];
+
+  if (previewScope === 'lasso') {
+    const lassoResponse = await PluginCommAPI.getLassoElements();
+    lassoElements = assertApiSuccess(
+      lassoResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
+      'Could not read the current lasso selection.',
+    );
+  }
+
+  return {
+    notePath,
+    page,
+    lassoElements,
+    pageElements,
+    previewScope,
+    effectiveSelection: previewScope === 'page' ? pageElements : lassoElements,
+  };
+}
+
+export async function saveCurrentNoteForConsistency(reason: string): Promise<void> {
+  const response = await PluginNoteAPI.saveCurrentNote();
+  assertApiSuccess(
+    response as {success?: boolean; error?: {message?: string}},
+    `Could not save the current note before ${reason}.`,
+  );
+}
+
+export async function modifyPageElements(
+  notePath: string,
+  page: number,
+  elements: Element[],
+): Promise<void> {
+  if (elements.length === 0) {
+    return;
+  }
+
+  const response = await PluginFileAPI.modifyElements(
+    notePath,
+    page,
+    elements as unknown as Object[],
+  );
+  assertApiSuccess(
+    response as {success?: boolean; error?: {message?: string}},
+    `Could not modify page ${page} elements.`,
+  );
+}
+
+export async function deletePageElements(
+  notePath: string,
+  page: number,
+  numsInPage: number[],
+): Promise<void> {
+  const uniqueNums = [...new Set(numsInPage)].filter(num => Number.isInteger(num) && num >= 0);
+  if (uniqueNums.length === 0) {
+    return;
+  }
+
+  const response = await PluginFileAPI.deleteElements(notePath, page, uniqueNums);
+  assertApiSuccess(
+    response as {success?: boolean; error?: {message?: string}},
+    `Could not delete page ${page} elements ${uniqueNums.join(', ')}.`,
+  );
+}
+
+export async function readPageSizeForDiagnostics(
+  notePath: string,
+  page: number,
+): Promise<{width: number; height: number} | string> {
+  try {
+    const response = (await PluginFileAPI.getPageSize(notePath, page)) as {
+      success?: boolean;
+      result?: {width: number; height: number};
+      error?: {message?: string};
+    };
+    return response?.success && response.result
+      ? response.result
+      : `unavailable: ${response?.error?.message || 'no result'}`;
+  } catch (error) {
+    return `unavailable: ${String(error)}`;
+  }
+}
+
+export async function readPageElements(
+  notePath: string,
+  page: number,
+  failureMessage: string,
+): Promise<Element[]> {
+  const pageElementsResponse = await PluginFileAPI.getElements(page, notePath);
+  return assertApiSuccess(
+    pageElementsResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
+    failureMessage,
   );
 }

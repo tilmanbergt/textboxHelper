@@ -18,6 +18,7 @@ function textbox(uuid: string, text: string, textRect: Rect, overrides: Partial<
     title: null,
     link: null,
     picture: null,
+    geometry: null,
     textBox: {
       fontSize: 36,
       fontPath: null,
@@ -43,6 +44,7 @@ const picture = (uuid: string, pictureRect: Rect): PageElementData => ({
   title: null,
   link: null,
   picture: {rect: pictureRect},
+  geometry: null,
 });
 
 describe('action preview', () => {

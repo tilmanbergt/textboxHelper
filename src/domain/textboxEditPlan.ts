@@ -418,8 +418,6 @@ export function buildTextboxLogItems(page: number, pageElements: PageElementData
   });
 }
 
-// "Log All Textboxes": every textbox of the current page with its rectangle and font size,
-// logged and summarized on the clipboard, to check sizes and positions against the device.
 
 export function formatTextboxLogPreviewItem(item: TextboxLogItem): string {
   const shortText = item.text.replace(/\s+/g, ' ').trim().slice(0, 70) || '(empty)';
@@ -430,8 +428,6 @@ export function formatTextboxLogPreviewItem(item: TextboxLogItem): string {
   ].join('\n');
 }
 
-// "Log All Textboxes": every textbox of the current page with its rectangle and font size,
-// logged and summarized on the clipboard, to check sizes and positions against the device.
 
 export function formatTextboxLogClipboard(items: TextboxLogItem[], notePath: string, page: number): string {
   const lines = [

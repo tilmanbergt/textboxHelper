@@ -13,7 +13,7 @@ import type {
   EditMarkerPreview,
   EditMarkerPreviewBlock,
   EditMarkerPreviewScope,
-} from '../editMarkerActions';
+} from '../domain/markerTypes';
 
 type MarkerSection = 'recognition' | 'calibration' | 'help';
 

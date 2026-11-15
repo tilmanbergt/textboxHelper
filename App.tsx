@@ -37,9 +37,7 @@ import {
   resetEditMarkerCalibration,
   saveEditMarkerDiagnostics,
   setEditMarkerCalibration,
-  type EditMarkerPreviewScope,
-  type EditMarkerPreview,
-} from './src/editMarkerActions';
+} from './src/actions/editMarkers';
 import {
   getTextboxActionPreview,
   performTextboxAction,
@@ -93,6 +91,7 @@ import {
   type TextboxActionKind,
 } from './src/domain/textboxActionKinds';
 import type {TextboxActionPreview} from './src/domain/textboxEditPlan';
+import type {EditMarkerPreviewScope, EditMarkerPreview} from './src/domain/markerTypes';
 
 const ACTION_PROGRESS_LABELS: Record<TextboxActionKind, string> = {
   log: 'Logging textboxes...',
