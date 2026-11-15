@@ -8,14 +8,16 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {UI_COLORS, styles} from './pluginUiStyles';
+import {UI_COLORS, styles} from '../ui/pluginUiStyles';
 import type {
-  TextboxImportLayoutMode,
-  TextboxImportParagraphSeparator,
   TextboxImportPreview,
   TextboxImportSettings,
 } from '../textboxImportActions';
 import {resolveTextboxImportPath} from '../textboxImportActions';
+import type {
+  TextboxImportLayoutMode,
+  TextboxImportParagraphSeparator,
+} from '../domain/importSettings';
 
 type ImportTextFileViewProps = {
   settings: TextboxImportSettings;

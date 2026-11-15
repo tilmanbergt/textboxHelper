@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {UI_COLORS, styles} from './pluginUiStyles';
+import {UI_COLORS, styles} from '../ui/pluginUiStyles';
 import type {
   TextboxActionKind,
   TextboxActionPreview,

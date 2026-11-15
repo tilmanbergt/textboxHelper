@@ -19,27 +19,17 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {DeviceEventEmitter} from 'react-native';
 import {PluginManager} from 'sn-plugin-lib';
 // sn-plugin-lib 0.1.65 migration: runtime permission check (see PluginConfig.json "uses-permissions")
-import {ensurePermissions} from './src/permissions';
+import {ensurePermissions} from './src/supernote/permissions';
 import {
-    BUTTON_ID_EXPORT_DOCX,
-    BUTTON_ID_IMPORT_TEXT_FILE,
-     BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS,
-  BUTTON_ID_TEXTBOX_TOOLS,
-  BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS,
-  BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES,
-  BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES,
-  BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
-  BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
-  BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
-  PLUGIN_BUTTON_EVENT,
+    PLUGIN_BUTTON_EVENT,
   checkPendingButton,
-} from './src/pluginRouting';
+} from './src/supernote/pluginRouting';
 
-import ExportScreen from './src/export/ExportScreen';
+import ExportScreen from './src/screens/ExportScreen';
 import {
   refreshExportNoteContext,
   type ExportNoteContext,
-} from './src/export/exportNoteContext';
+} from './src/supernote/exportNoteContext';
 import {
   applyEditMarkerPreview,
   getEditMarkerCalibration,
@@ -65,7 +55,7 @@ import {
   DirectActionDialog,
   createIdleDirectDialog,
   type DirectDialogState,
-} from './src/ui/DirectActionDialog';
+} from './src/screens/DirectActionDialog';
 
 import {
   DEFAULT_TEXTBOX_IMPORT_SETTINGS,
@@ -75,7 +65,7 @@ import {
   type TextboxImportSettings,
 } from './src/textboxImportActions';
 
-import {ImportTextFileView} from './src/ui/ImportTextFileView';
+import {ImportTextFileView} from './src/screens/ImportTextFileView';
 
 
 import {
@@ -83,12 +73,24 @@ import {
   ACTION_LABELS,
   TextboxToolsView,
   formatPreviewBlocks,
-} from './src/ui/TextboxToolsView';
+} from './src/screens/TextboxToolsView';
 
 import {
   EditMarkerReviewView,
   renderHighlightedPreviewBlocks,
-} from './src/ui/EditMarkerReviewView';
+} from './src/screens/EditMarkerReviewView';
+import {
+  BUTTON_ID_EXPORT_DOCX,
+  BUTTON_ID_IMPORT_TEXT_FILE,
+  BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS,
+  BUTTON_ID_TEXTBOX_TOOLS,
+  BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS,
+  BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES,
+  BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES,
+  BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
+  BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
+  BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
+} from './src/domain/buttonIds';
 
 const ACTION_PROGRESS_LABELS: Record<TextboxActionKind, string> = {
   log: 'Logging textboxes...',

@@ -4,20 +4,29 @@ import {
   intersectionRect,
   rectHeight,
   rectWidth,
-} from './shared/supernoteTextboxGeometry';
-import {paginateTextIntoTextboxPages} from './shared/supernoteTextPagination';
+} from './domain/geometry';
+import {paginateTextIntoTextboxPages} from './domain/textPagination';
 import {
   paginateTextboxBlocksIntoPages,
   type TextboxBlockPage,
-} from './shared/supernoteTextboxBlockPagination';
+} from './domain/blockPagination';
 import {
   parseTextboxImportBlocks,
   summarizeTextboxImportBlocks,
   type TextboxImportBlockSummary,
-} from './shared/textboxImportParsing';
-import {insertTextboxPages} from './shared/supernoteNoteTextInsertion';
-import {appendFontWarning} from './shared/fontPaths';
-import {getFontWarning, resetFontWarnings} from './shared/supernoteTextboxLayout';
+} from './domain/importParsing';
+import {insertTextboxPages} from './supernote/noteTextInsertion';
+import {appendFontWarning} from './domain/fontPaths';
+import type {
+  TextboxImportLayoutMode,
+  TextboxImportParagraphSeparator,
+  TextboxImportStructureSettings,
+} from './domain/importSettings';
+import {
+  getFontWarning,
+  measureTextboxHeight,
+  resetFontWarnings,
+} from './supernote/textboxMetrics';
 
 export type TextboxImportSourceFolder = 'inbox' | 'myStyle';
 
@@ -25,29 +34,6 @@ export type TextboxImportInsertMode =
   | 'auto'
   | 'currentPage'
   | 'afterCurrentPage';
-
-export type TextboxImportLayoutMode =
-  | 'continuous'
-  | 'paragraphTextboxes';
-
-export type TextboxImportParagraphSeparator =
-  | 'blankLine'
-  | 'line';
-
-export type TextboxImportRoleStyle = {
-  fontSize: number;
-  bold: boolean;
-};
-
-export type TextboxImportStructureSettings = {
-  layoutMode: TextboxImportLayoutMode;
-  paragraphSeparator: TextboxImportParagraphSeparator;
-  detectMarkdownHeadings: boolean;
-  paragraph: TextboxImportRoleStyle;
-  heading1: TextboxImportRoleStyle;
-  heading2: TextboxImportRoleStyle;
-  heading3: TextboxImportRoleStyle;
-};
 
 export type TextboxImportSettings = {
   sourceFolder: TextboxImportSourceFolder;
@@ -495,6 +481,7 @@ async function buildImportPlan(params: {
       blocks,
       maxRect,
       addExplicitEmptyLineHeight: false,
+      measureHeight: measureTextboxHeight,
     });
 
     pages = blockPages.map(page => ({
@@ -506,6 +493,7 @@ async function buildImportPlan(params: {
       maxRect,
       fontSize: params.settings.fontSize,
       addExplicitEmptyLineHeight: false,
+      measureHeight: measureTextboxHeight,
     });
 
     pages = wrapContinuousChunks({

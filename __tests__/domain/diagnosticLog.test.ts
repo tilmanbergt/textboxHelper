@@ -1,4 +1,4 @@
-import {createDiagnosticLog} from '../src/shared/diagnosticLog';
+import {createDiagnosticLog} from '../../src/domain/diagnosticLog';
 
 describe('diagnostic log', () => {
   it('keeps entries in order with their time since the last clear', () => {

@@ -1,9 +1,9 @@
-import type {Rect} from 'sn-plugin-lib';
+import type {Rect} from './textboxModel';
 import type {
   NativeDetailedMeasurement,
   NativeDetailedWord,
   TextboxMeasurementCalibration,
-} from './supernoteTextboxLayout';
+} from './textboxLayout';
 
 /**
  * Shared text hit-testing helpers for Supernote plugins.

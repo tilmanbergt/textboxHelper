@@ -1,4 +1,5 @@
 import {PluginCommAPI, PluginFileAPI} from 'sn-plugin-lib';
+import {assertApiSuccess} from './sdkResult';
 
 export type ExportNoteContext = {
   filePath: string;
@@ -7,28 +8,20 @@ export type ExportNoteContext = {
   pageInfo: string;
 };
 
-function expectApiResult<T>(result: any, fallbackMessage: string): T {
-  if (!result?.success) {
-    throw new Error(result?.error?.message ?? fallbackMessage);
-  }
-
-  return result.result as T;
-}
-
 export async function refreshExportNoteContext(): Promise<ExportNoteContext> {
-  const filePath = expectApiResult<string>(
+  const filePath = assertApiSuccess<string>(
     await PluginCommAPI.getCurrentFilePath(),
     'Could not determine the current note path.',
   );
 
-  const page = expectApiResult<number>(
+  const page = assertApiSuccess<number>(
     await PluginCommAPI.getCurrentPageNum(),
     'Could not determine the current page.',
   );
 
   let totalPages: number | null = null;
   try {
-    totalPages = expectApiResult<number>(
+    totalPages = assertApiSuccess<number>(
       await PluginFileAPI.getNoteTotalPageNum(filePath),
       'Could not determine the note page count.',
     );

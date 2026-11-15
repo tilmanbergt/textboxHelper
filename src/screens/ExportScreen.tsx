@@ -15,11 +15,11 @@ import {
   type EditableExportClassificationConfig,
   type EditableRoleRuleConfig,
   type StyleRequirement,
-} from './exportConfig';
+} from '../domain/exportConfig';
 import {
   exportScannedDocx,
   MAX_EXPORT_ITEM_COUNT,
-} from './exportScannedDocx';
+} from '../storage/docxExport';
 import {
   getIncludedScanItems,
   getIncludedRoleCounts,
@@ -27,7 +27,7 @@ import {
   summarizeExcludedStyles,
   type ExportScope,
   type ScanSummary,
-} from './scanTextBoxes';
+} from '../export/scanTextBoxes';
 
 type RefreshContext = () => Promise<{
   filePath: string;

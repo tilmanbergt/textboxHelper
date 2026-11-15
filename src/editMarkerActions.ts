@@ -1,7 +1,7 @@
 import {Clipboard} from 'react-native';
-import {buildBackupDir, buildBackupPath} from './shared/backupPaths';
-import {createDiagnosticLog} from './shared/diagnosticLog';
-import {appendFontWarning} from './shared/fontPaths';
+import {buildBackupDir, buildBackupPath} from './domain/backupPaths';
+import {createDiagnosticLog} from './domain/diagnosticLog';
+import {appendFontWarning} from './domain/fontPaths';
 import {writeJsonExportFile} from './textboxActions';
 import RNFS from 'react-native-fs';
 import {
@@ -22,23 +22,25 @@ import {
   rectHeight,
   rectWidth,
   sortTextElementsByReadingOrder,
-} from './shared/supernoteTextboxGeometry';
+} from './domain/geometry';
 import {
   buildResizedTextboxRect,
-  DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION,
   getFontWarning,
   measureDetailedTextLayout,
   resetFontWarnings,
-  type NativeDetailedLine,
-  type NativeDetailedMeasurement,
-  type TextboxMeasurementCalibration,
-} from './shared/supernoteTextboxLayout';
+} from './supernote/textboxMetrics';
 import {
   buildPageWordCandidates,
   findCandidateLineIndexes,
   findLineBandWordCandidates,
   type PageWordCandidate,
-} from './shared/supernoteTextboxHitTesting';
+} from './domain/hitTesting';
+import {
+  DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION,
+  type NativeDetailedLine,
+  type NativeDetailedMeasurement,
+  type TextboxMeasurementCalibration,
+} from './domain/textboxLayout';
 
 /**
  * Edit marker engine.

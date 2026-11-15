@@ -1,4 +1,4 @@
-import {buildBackupDir, buildBackupPath} from '../src/shared/backupPaths';
+import {buildBackupDir, buildBackupPath} from '../../src/domain/backupPaths';
 
 const PLUGIN_DIR = '/data/user/0/com.ratta.supernote.pluginhost/files/plugins/wkx45auazdre2crs';
 

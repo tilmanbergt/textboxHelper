@@ -1,7 +1,7 @@
 import type {
   TextboxImportParagraphSeparator,
   TextboxImportStructureSettings,
-} from '../textboxImportActions';
+} from './importSettings';
 
 export type TextboxImportBlockRole =
   | 'paragraph'

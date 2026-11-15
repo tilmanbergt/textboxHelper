@@ -1,11 +1,12 @@
-import type {Rect} from 'sn-plugin-lib';
-import {rectHeight, rectWidth} from './supernoteTextboxGeometry';
+import type {Rect} from './textboxModel';
+import {rectHeight, rectWidth} from './geometry';
 import {
   DEFAULT_TEXTBOX_MIN_HEIGHT,
   estimateHeightForRect,
+  type MeasureTextboxHeight,
   splitLargeTextBlock,
   withHeight,
-} from './supernoteTextboxPaginationCore';
+} from './paginationCore';
 
 export type TextboxPageChunk = {
   text: string;
@@ -19,6 +20,7 @@ export type TextboxPaginationOptions = {
   fontPath?: string;
   minHeight?: number;
   addExplicitEmptyLineHeight?: boolean;
+  measureHeight: MeasureTextboxHeight;
 };
 
 function splitIntoParagraphs(text: string): string[] {
@@ -51,6 +53,7 @@ export async function paginateTextIntoTextboxPages(
       fontPath: options.fontPath,
       minHeight,
       addExplicitEmptyLineHeight: options.addExplicitEmptyLineHeight,
+      measureHeight: options.measureHeight,
     });
 
     return height <= maxHeight;
@@ -110,6 +113,7 @@ export async function paginateTextIntoTextboxPages(
       fontPath: options.fontPath,
       minHeight,
       addExplicitEmptyLineHeight: options.addExplicitEmptyLineHeight,
+      measureHeight: options.measureHeight,
     });
 
     chunks.push({

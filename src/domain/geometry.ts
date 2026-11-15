@@ -1,4 +1,4 @@
-import type {Rect} from 'sn-plugin-lib';
+import type {Rect} from './textboxModel';
 
 /**
  * Shared geometry helpers for Supernote textbox-aware plugins.

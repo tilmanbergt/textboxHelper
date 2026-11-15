@@ -6,6 +6,7 @@ import {
   TextBox,
   type Rect,
 } from 'sn-plugin-lib';
+import {assertApiSuccess, assertBooleanSuccess, withTimeout} from './sdkResult';
 
 export type TextboxInsertInstruction = {
   pageNumber: number;
@@ -34,43 +35,6 @@ const INSERT_PAGE_TIMEOUT_MS = 8000;
 /* -----------------------------
    helpers
 ----------------------------- */
-
-function assertApiSuccess<T>(
-  response: { success?: boolean; result?: T; error?: { message?: string } } | null | undefined,
-  fallback: string,
-): T {
-  if (response?.success) {return response.result as T;}
-  throw new Error(response?.error?.message || fallback);
-}
-
-function assertBooleanSuccess(
-  response: { success?: boolean; result?: boolean; error?: { message?: string } } | null | undefined,
-  fallback: string,
-): void {
-  if (!response?.success || response.result !== true) {
-    throw new Error(response?.error?.message || fallback);
-  }
-}
-
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  timeoutMessage: string,
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs);
-
-    promise
-      .then(r => {
-        clearTimeout(timer);
-        resolve(r);
-      })
-      .catch(e => {
-        clearTimeout(timer);
-        reject(e);
-      });
-  });
-}
 
 async function recycleElements(elements: Element[]): Promise<void> {
   await Promise.all(

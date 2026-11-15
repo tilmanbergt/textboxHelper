@@ -1,12 +1,13 @@
-import type {Rect} from 'sn-plugin-lib';
-import {rectHeight, rectWidth} from './supernoteTextboxGeometry';
-import type {TextboxImportBlock} from './textboxImportParsing';
+import type {Rect} from './textboxModel';
+import {rectHeight, rectWidth} from './geometry';
+import type {TextboxImportBlock} from './importParsing';
 import {
   DEFAULT_TEXTBOX_MIN_HEIGHT,
   estimateHeightForRect,
+  type MeasureTextboxHeight,
   rectWithTopAndHeight,
   splitLargeTextBlock,
-} from './supernoteTextboxPaginationCore';
+} from './paginationCore';
 
 export type TextboxBlockPageChunk = {
   text: string;
@@ -27,6 +28,7 @@ export type TextboxBlockPaginationOptions = {
   minHeight?: number;
   blockGap?: number;
   addExplicitEmptyLineHeight?: boolean;
+  measureHeight: MeasureTextboxHeight;
 };
 
 const DEFAULT_BLOCK_GAP = 18;
@@ -38,6 +40,7 @@ async function heightForText(params: {
   fontPath?: string;
   minHeight: number;
   addExplicitEmptyLineHeight?: boolean;
+  measureHeight: MeasureTextboxHeight;
 }): Promise<number> {
   return estimateHeightForRect({
     text: params.text,
@@ -46,6 +49,7 @@ async function heightForText(params: {
     fontPath: params.fontPath,
     minHeight: params.minHeight,
     addExplicitEmptyLineHeight: params.addExplicitEmptyLineHeight,
+    measureHeight: params.measureHeight,
   });
 }
 
@@ -56,6 +60,7 @@ async function fitsEmptyPage(params: {
   fontPath?: string;
   minHeight: number;
   addExplicitEmptyLineHeight?: boolean;
+  measureHeight: MeasureTextboxHeight;
 }): Promise<boolean> {
   const height = await heightForText(params);
   return height <= rectHeight(params.maxRect);
@@ -72,6 +77,7 @@ async function splitIntoPageFittingPieces(params: {
   fontPath?: string;
   minHeight: number;
   addExplicitEmptyLineHeight?: boolean;
+  measureHeight: MeasureTextboxHeight;
 }): Promise<string[]> {
   const coarseParts = splitLargeTextBlock(params.text);
   const pieces: string[] = [];
@@ -85,6 +91,7 @@ async function splitIntoPageFittingPieces(params: {
       fontPath: params.fontPath,
       minHeight: params.minHeight,
       addExplicitEmptyLineHeight: params.addExplicitEmptyLineHeight,
+      measureHeight: params.measureHeight,
     });
 
   for (const part of coarseParts) {
@@ -172,6 +179,7 @@ export async function paginateTextboxBlocksIntoPages(
         fontPath: options.fontPath,
         minHeight,
         addExplicitEmptyLineHeight: options.addExplicitEmptyLineHeight,
+        measureHeight: options.measureHeight,
       }),
       maxHeight,
     );
@@ -202,6 +210,7 @@ export async function paginateTextboxBlocksIntoPages(
       fontPath: options.fontPath,
       minHeight,
       addExplicitEmptyLineHeight: options.addExplicitEmptyLineHeight,
+      measureHeight: options.measureHeight,
     });
 
     if (blockHeight <= maxHeight) {
@@ -220,6 +229,7 @@ export async function paginateTextboxBlocksIntoPages(
       fontPath: options.fontPath,
       minHeight,
       addExplicitEmptyLineHeight: options.addExplicitEmptyLineHeight,
+      measureHeight: options.measureHeight,
     });
 
     for (const piece of pieces) {

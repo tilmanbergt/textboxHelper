@@ -1,6 +1,6 @@
 import {Clipboard} from 'react-native';
-import {buildBackupDir, buildBackupPath} from './shared/backupPaths';
-import {appendFontWarning} from './shared/fontPaths';
+import {buildBackupDir, buildBackupPath} from './domain/backupPaths';
+import {appendFontWarning} from './domain/fontPaths';
 import RNFS from 'react-native-fs';
 import {
   Element,
@@ -17,13 +17,13 @@ import {
   rectHeight,
   rectWidth,
   sortTextElementsByReadingOrder,
-} from './shared/supernoteTextboxGeometry';
+} from './domain/geometry';
 import {
-  DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION,
   estimateTextboxHeight as estimateSharedTextboxHeight,
   getFontWarning,
   resetFontWarnings,
-} from './shared/supernoteTextboxLayout';
+} from './supernote/textboxMetrics';
+import {DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION} from './domain/textboxLayout';
 
 /**
  * Textbox tool engine.

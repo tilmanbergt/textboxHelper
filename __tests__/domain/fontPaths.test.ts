@@ -4,7 +4,7 @@ import {
   buildFontWarning,
   fontFileName,
   isDefaultTypefaceStatus,
-} from '../src/shared/fontPaths';
+} from '../../src/domain/fontPaths';
 
 const NOTE_FONT = '/storage/emulated/0/.data/fonts/851tegakizatsu.ttf';
 

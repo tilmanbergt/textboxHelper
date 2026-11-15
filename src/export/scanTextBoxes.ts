@@ -1,5 +1,5 @@
 import {PluginFileAPI, type Rect} from 'sn-plugin-lib';
-import type {ExportClassificationConfig, RoleRuleConfig, StyleRequirement} from './exportConfig';
+import type {ExportClassificationConfig, RoleRuleConfig, StyleRequirement} from '../domain/exportConfig';
 
 export type ExportScope = 'currentPage' | 'wholeNote' | 'pageRange';
 export type TextRole = 'heading' | 'paragraph' | 'comment' | 'meta' | 'unknown';
