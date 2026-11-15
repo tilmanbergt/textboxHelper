@@ -39,7 +39,7 @@ function assertApiSuccess<T>(
   response: { success?: boolean; result?: T; error?: { message?: string } } | null | undefined,
   fallback: string,
 ): T {
-  if (response?.success) return response.result as T;
+  if (response?.success) {return response.result as T;}
   throw new Error(response?.error?.message || fallback);
 }
 
@@ -186,7 +186,7 @@ export async function insertTextboxPages(params: {
         elements,
       );
 
-      assertBooleanSuccess(result as any, `Failed textbox insert`);
+      assertBooleanSuccess(result as any, 'Failed textbox insert');
 
       insertedCount += 1;
     } finally {

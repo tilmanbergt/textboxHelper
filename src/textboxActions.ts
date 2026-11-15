@@ -515,7 +515,7 @@ function splitIntoParagraphCandidates(text: string): string[] {
 
 
       if (countSentences(currentParagraph) > 1) {
-  
+
         paragraphs.push(currentParagraph);
         currentParagraph = nextLine;
       } else {
@@ -1797,7 +1797,7 @@ export async function performTextboxAction(
 
     if (action === 'split') {
       inserts = await buildSplitInserts(textElements[0]);
-    } 
+    }
     else if (action === 'splitParagraphs') {
       inserts = await buildParagraphSplitInserts(textElements[0]);
     }

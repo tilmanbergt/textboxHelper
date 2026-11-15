@@ -79,7 +79,7 @@ PluginManager.registerButton(1, ['NOTE'], {
     ja: 'Apply All Edit Markers',
   }),
   icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
-  showType: 1
+  showType: 1,
 });
 
 PluginManager.registerButton(2, ['NOTE'], {
