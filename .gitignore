@@ -39,4 +39,8 @@ build/outputs/
 /errorlogcomplete.txt
 /strike.txt
 /strike2.txt
-/textbox_lab_log.txt
+/textbox_lab_log.txt/logcat*.txt
+
+# npm is the package manager (package-lock.json); no yarn lockfile
+yarn.lock
+.yarn/

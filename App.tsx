@@ -443,6 +443,10 @@ if (buttonId === BUTTON_ID_EXPORT_DOCX) {
     return () => {
       subscription?.remove();
     };
+    // refreshNoteContext and updateStatus are left out on purpose: updateStatus changes with
+    // viewMode, and re-running this effect re-requests permissions and re-subscribes the
+    // button listener on every screen change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clearPendingClose, loadMarkerPreview, loadPreview, startDirectAction]);
 
 const previewImportTextFile = useCallback(async () => {

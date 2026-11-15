@@ -6,8 +6,9 @@
     "android": "react-native run-android",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest",
-    "typecheck": "tsc --noEmit"
+    "test": "jest --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "check": "tsc --noEmit && eslint . && jest --passWithNoTests"
   },
   "dependencies": {
     "docx": "^9.6.1",
@@ -48,8 +49,8 @@
     "url": "git+https://github.com/tilmanbergt/textboxHelper.git"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Tilman Bergt",
+  "license": "MIT",
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/tilmanbergt/textboxHelper/issues"

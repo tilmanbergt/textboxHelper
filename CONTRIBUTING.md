@@ -7,8 +7,8 @@ This plugin is still evolving quickly, so the main goal of the contribution work
 ## Before You Change Code
 
 - read [README.md](README.md)
-- skim [docs/ARCHITECTURE.md](docs\ARCHITECTURE.md)
-- if you are touching text measurement or hit testing, also read the shared files in [src/shared](src\shared)
+- skim [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- if you are touching text measurement or hit testing, also read the shared files in [src/shared](src/shared)
 
 ## Contribution Principles
 
@@ -30,8 +30,10 @@ This plugin is still evolving quickly, so the main goal of the contribution work
 Before opening a PR, run:
 
 ```sh
-npm run typecheck
+npm run check
 ```
+
+It runs the type check, ESLint and the Jest tests; all three must pass with zero errors.
 
 If you changed behavior that depends on device logs or page geometry, include:
 
@@ -51,9 +53,9 @@ Good PRs for this repository usually include:
 
 ## Areas That Need Extra Care
 
-- [src/editMarkerActions.ts](src\editMarkerActions.ts)
+- [src/editMarkerActions.ts](src/editMarkerActions.ts)
   Marker recognition has many heuristics. Small changes can shift behavior in non-obvious ways.
-- [src/shared/supernoteTextboxLayout.ts](src\shared\supernoteTextboxLayout.ts)
+- [src/shared/supernoteTextboxLayout.ts](src/shared/supernoteTextboxLayout.ts)
   Changes here affect both marker tools and textbox tools.
-- [android/app/src/main/java/com/textboxhelper/TextboxMetricsModule.kt](android\app\src\main\java\com\textboxhelper\TextboxMetricsModule.kt)
+- [android/app/src/main/java/com/textboxhelper/TextboxMetricsModule.kt](android/app/src/main/java/com/textboxhelper/TextboxMetricsModule.kt)
   Native measurement changes can affect wrapping, hit testing, and resize behavior across the whole plugin.

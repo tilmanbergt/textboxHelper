@@ -4,22 +4,21 @@ Use this checklist when preparing the repository for the wider Supernote communi
 
 ## Repository Basics
 
-- choose and add a license
+- license: MIT (`LICENSE`)
 - confirm the repository name is the public name you want to keep
 - check `.gitignore` for local-only files and large debug artifacts
 - make sure README instructions match the current plugin behavior
 
 ## Documentation
 
-- explain the main features in [README.md](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\README.md)
-- keep [docs/ARCHITECTURE.md](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\docs\ARCHITECTURE.md) aligned with the real code structure
-- keep [CONTRIBUTING.md](C:\Users\tilma\AndroidStudioProjects\NoteDraft\textboxHelper\CONTRIBUTING.md) short and actionable
+- explain the main features in [README.md](../README.md)
+- keep [docs/ARCHITECTURE.md](ARCHITECTURE.md) aligned with the real code structure
+- keep [CONTRIBUTING.md](../CONTRIBUTING.md) short and actionable
 - add screenshots or a short demo once the public behavior is stable
 
 ## Quality Gate
 
-- run `npm run typecheck`
-- optionally run `npm test`
+- run `npm run check` (type check, lint, tests)
 - sanity-check the plugin on-device for:
   - textbox tools
   - delete markers

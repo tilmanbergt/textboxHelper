@@ -11,7 +11,7 @@ export type TextboxPageChunk = {
   text: string;
   rect: Rect;
 };
-c
+
 export type TextboxPaginationOptions = {
   text: string;
   maxRect: Rect;

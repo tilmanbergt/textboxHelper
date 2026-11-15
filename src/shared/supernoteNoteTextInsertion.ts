@@ -15,7 +15,6 @@ export type TextboxInsertInstruction = {
   fontPath?: string;
   bold?: boolean;
   createPage?: boolean;
-  isHeading?: boolean;
 };
 
 export type InsertTextboxPagesProgressUpdate = {
@@ -190,32 +189,6 @@ export async function insertTextboxPages(params: {
       assertBooleanSuccess(result as any, `Failed textbox insert`);
 
       insertedCount += 1;
-
-      /* -----------------------------
-         heading → title conversion
-      ----------------------------- */
-      if (instruction.isHeading === true) {
-        const titleRes = await PluginCommAPI.createElement(100);
-
-        const titleElement = assertApiSuccess<Element>(
-          titleRes as any,
-          'Failed to create title element',
-        );
-
-        const textBoxIndex = element.numInPage;
-
-        titleElement.pageNum = instruction.pageNumber;
-        titleElement.layerNum = 0;
-        titleElement.style = 0;
-        titleElement.controlTrailNums = [textBoxIndex];
-
-        await PluginFileAPI.insertElements(
-          params.notePath,
-          instruction.pageNumber,
-          [titleElement],
-        );
-      }
-
     } finally {
       await recycleElements(elements);
     }

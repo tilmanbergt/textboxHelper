@@ -91,7 +91,28 @@ More architectural detail lives in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Development
 
+The project uses npm (`package-lock.json`).
+
 Install dependencies:
 
 ```sh
-yarn install
+npm ci
+```
+
+Check your changes (type check, ESLint, Jest):
+
+```sh
+npm run check
+```
+
+Build the plugin package on Windows:
+
+```powershell
+./buildPlugin.ps1
+```
+
+The build writes the `.snplg` file to `build/outputs/`.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

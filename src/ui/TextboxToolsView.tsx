@@ -23,6 +23,7 @@ export const ACTION_ORDER: TextboxActionKind[] = [
 export const ACTION_LABELS: Record<TextboxActionKind, string> = {
   log: 'Log All Textboxes',
   split: 'Split Sentences',
+  splitParagraphs: 'Split Paragraphs',
   join: 'Join Text Boxes',
   clean: 'Clean Spaces',
   unwrap: 'Remove Line Breaks',
