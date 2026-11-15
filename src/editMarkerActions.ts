@@ -533,6 +533,10 @@ function buildTextboxLogSummary(textbox: TextElement): Record<string, unknown> {
     rect: roundRect(cloneRect(textbox.textBox.textRect)),
     textPreview: (textbox.textBox.textContentFull || '').slice(0, 80).replace(/\s+/g, ' '),
     textLength: (textbox.textBox.textContentFull || '').length,
+    fontSize: textbox.textBox.fontSize,
+    fontPath: textbox.textBox.fontPath,
+    textAlign: textbox.textBox.textAlign,
+    textBold: textbox.textBox.textBold,
   };
 }
 
@@ -1162,6 +1166,9 @@ async function analyzeDeleteMarker(
       measurementLayoutHeight: measurement.layoutHeight,
       measurementLineCount: measurement.lineCount,
       measurementMaxLineWidth: measurement.maxLineWidth,
+      measurementFontSize: measurement.requestedFontSize,
+      measurementFontPath: measurement.fontPath ?? null,
+      typefaceStatus: measurement.typefaceStatus ?? 'unknown (native module without status)',
     },
     measuredLines: measurement.lines.map(line => buildLineLogSummary(line, textboxRect)),
     allWordCandidates: wordCandidates.map(buildWordLogSummary),

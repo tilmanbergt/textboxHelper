@@ -71,6 +71,10 @@ export type NativeDetailedMeasurement = {
   requestedWidth: number;
   requestedFontSize: number;
   includePad: boolean;
+  /** The font file the measurement was asked to use, if any. */
+  fontPath?: string | null;
+  /** Which typeface was used: "loaded", or "default: <reason>" for Android's default typeface. */
+  typefaceStatus?: string;
   layoutHeight: number;
   lineCount: number;
   maxLineWidth: number;

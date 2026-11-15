@@ -43,6 +43,8 @@ class TextboxMetricsModule(
         putInt("requestedWidth", measurement.width)
         putDouble("requestedFontSize", measurement.fontSize.toDouble())
         putBoolean("includePad", measurement.includePad)
+        putString("fontPath", measurement.fontPath)
+        putString("typefaceStatus", measurement.typefaceStatus)
         putInt("layoutHeight", layout.height)
         putInt("lineCount", layout.lineCount)
         putDouble("maxLineWidth", maxLineWidth)
@@ -127,6 +129,8 @@ class TextboxMetricsModule(
         putInt("requestedWidth", measurement.width)
         putDouble("requestedFontSize", measurement.fontSize.toDouble())
         putBoolean("includePad", measurement.includePad)
+        putString("fontPath", measurement.fontPath)
+        putString("typefaceStatus", measurement.typefaceStatus)
         putInt("layoutHeight", layout.height)
         putInt("lineCount", layout.lineCount)
         putDouble("maxLineWidth", maxLineWidth)
@@ -145,7 +149,15 @@ class TextboxMetricsModule(
     val width: Int,
     val fontSize: Float,
     val includePad: Boolean,
+    val fontPath: String?,
+    val typefaceStatus: String,
     val layout: StaticLayout
+  )
+
+  /** The typeface used for a measurement, and why: "default: no fontPath", "loaded", "missing", ... */
+  private data class TypefaceResult(
+    val typeface: Typeface?,
+    val status: String
   )
 
   private fun buildMeasurement(options: ReadableMap): MeasurementContext {
@@ -167,10 +179,11 @@ class TextboxMetricsModule(
       throw IllegalArgumentException("width must be >= 0")
     }
 
+    val typefaceResult = loadTypeface(fontPath)
     val paint = TextPaint().apply {
       isAntiAlias = true
       textSize = fontSize
-      typeface = loadTypeface(fontPath)
+      typeface = typefaceResult.typeface
     }
 
     val layout = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -198,24 +211,34 @@ class TextboxMetricsModule(
       width = width,
       fontSize = fontSize,
       includePad = includePad,
+      fontPath = fontPath,
+      typefaceStatus = typefaceResult.status,
       layout = layout
     )
   }
 
-  private fun loadTypeface(fontPath: String?): Typeface? {
+  /**
+   * Loads the textbox's font file. Without one, Android's default typeface is used, which can lay
+   * out text very differently from the NOTE app; the status says which case applied, so the caller
+   * can report it.
+   */
+  private fun loadTypeface(fontPath: String?): TypefaceResult {
     if (fontPath.isNullOrBlank()) {
-      return null
+      return TypefaceResult(null, "default: no fontPath")
     }
 
     val file = File(fontPath)
     if (!file.exists()) {
-      return null
+      return TypefaceResult(null, "default: font file missing")
+    }
+    if (!file.canRead()) {
+      return TypefaceResult(null, "default: font file not readable")
     }
 
     return try {
-      Typeface.createFromFile(file)
-    } catch (_: Throwable) {
-      null
+      TypefaceResult(Typeface.createFromFile(file), "loaded")
+    } catch (error: Throwable) {
+      TypefaceResult(null, "default: font load failed: ${error.javaClass.simpleName}: ${error.message}")
     }
   }
 }
