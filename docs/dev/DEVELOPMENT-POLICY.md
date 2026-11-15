@@ -62,7 +62,7 @@ The architecture as built is described in `design-overview.md`. These rules are 
 - **Device paths** are joined with `/` only. The plugin writes only to its own folder
   (`PluginManager.getPluginDirPath()`: backups), the app's document folder
   (`RNFS.DocumentDirectoryPath`: temporary files) and the EXPORT folder
-  (`FileUtils.getExportPath()`: DOCX and JSON exports). It reads text files from `Inbox` or
+  (`FileUtils.getExportPath()`: DOCX and JSON exports). It reads text files from `INBOX` or
   `MyStyle/TextboxHelper/inbox`, and font files from `MyStyle/fonts` and
   `MyStyle/TextboxHelper/fonts`. A new place needs a line in the README and in
   `supernote-host-facts.md` if the host restricts it.

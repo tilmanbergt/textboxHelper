@@ -34,7 +34,7 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 
 ### Import Text File
 
-- Import plain text into NOTE textboxes
+- Import plain text into NOTE textboxes, from a `.txt` file in the Supernote's `INBOX` folder
 - Split imported text into paragraph-based textboxes
 
 ### Export DOCX

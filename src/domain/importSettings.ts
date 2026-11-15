@@ -81,7 +81,7 @@ export function resolveTextboxImportFolder(
   sourceFolder: TextboxImportSourceFolder,
 ): string {
   if (sourceFolder === 'inbox') {
-    return '/storage/emulated/0/Inbox';
+    return '/storage/emulated/0/INBOX';
   }
 
   return '/storage/emulated/0/MyStyle/TextboxHelper/inbox';

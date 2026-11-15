@@ -84,7 +84,7 @@ the points recognition used, as JSON to the EXPORT folder - only when the user t
 
 ### Text import (`actions/textImport.ts`)
 
-Import of a UTF-8 text file from `Inbox` or `MyStyle/TextboxHelper/inbox` into textboxes:
+Import of a UTF-8 text file from `INBOX` (the folder's exact name on the device) into textboxes:
 paragraphs split by blank lines (by default), markdown headings detected and set in larger bold
 text, the text paginated over the current page and new pages as needed. Settings and paths are
 in `domain/importSettings.ts`, parsing in `domain/importParsing.ts`, the page plan in

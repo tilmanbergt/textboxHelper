@@ -4,6 +4,10 @@ All notable changes to Textbox Helper are listed here, newest first.
 
 ## [Unreleased]
 
+### Fixed
+
+- Import Text File looks for the file in the Supernote's INBOX folder under the folder's exact name. It used "Inbox", and opening a file there could fail with "Permission denied".
+
 ## [0.2.2] - 2026-11-15
 
 ### Fixed
