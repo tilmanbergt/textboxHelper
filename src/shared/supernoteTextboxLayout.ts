@@ -1,5 +1,10 @@
 import {NativeModules} from 'react-native';
 import type {Rect} from 'sn-plugin-lib';
+import {
+  buildFontFallbackPaths,
+  buildFontWarning,
+  isDefaultTypefaceStatus,
+} from './fontPaths';
 import {rectWidth} from './supernoteTextboxGeometry';
 
 /**
@@ -32,6 +37,10 @@ export type NativeTextMeasurement = {
   requestedWidth: number;
   requestedFontSize: number;
   includePad: boolean;
+  /** The font file the measurement was asked to use, if any. */
+  fontPath?: string | null;
+  /** Which typeface was used: "loaded", "loaded from <path> …", or "default: <reason>". */
+  typefaceStatus?: string;
   layoutHeight: number;
   lineCount: number;
   maxLineWidth: number;
@@ -73,7 +82,7 @@ export type NativeDetailedMeasurement = {
   includePad: boolean;
   /** The font file the measurement was asked to use, if any. */
   fontPath?: string | null;
-  /** Which typeface was used: "loaded", or "default: <reason>" for Android's default typeface. */
+  /** Which typeface was used: "loaded", "loaded from <path> …", or "default: <reason>". */
   typefaceStatus?: string;
   layoutHeight: number;
   lineCount: number;
@@ -89,6 +98,7 @@ type TextboxMetricsModuleType = {
     fontSize: number;
     includePad?: boolean;
     fontPath?: string;
+    fontFallbackPaths?: string[];
   }) => Promise<NativeTextMeasurement>;
   measureTextLayoutDetailed?: (options: {
     text: string;
@@ -96,6 +106,7 @@ type TextboxMetricsModuleType = {
     fontSize: number;
     includePad?: boolean;
     fontPath?: string;
+    fontFallbackPaths?: string[];
   }) => Promise<NativeDetailedMeasurement>;
 };
 
@@ -187,6 +198,33 @@ function getExtraLineStep(fontSize: number): number {
 
 
 
+/** Font paths whose font couldn't be loaded since the last `resetFontWarnings`. */
+const unreadableFontPaths = new Set<string>();
+
+/** Starts collecting unreadable fonts for one action (a preview, a split, an import). */
+export function resetFontWarnings(): void {
+  unreadableFontPaths.clear();
+}
+
+/** The warning for fonts that couldn't be loaded since the last reset, or null. */
+export function getFontWarning(): string | null {
+  return buildFontWarning([...unreadableFontPaths]);
+}
+
+function noteTypefaceStatus(fontPath: string | undefined, typefaceStatus?: string): void {
+  if (fontPath && isDefaultTypefaceStatus(typefaceStatus)) {
+    unreadableFontPaths.add(fontPath);
+  }
+}
+
+/**
+ * The font options for a native measurement: the textbox's font path and the readable places to
+ * try when that path can't be opened (`fontPaths.ts`).
+ */
+function buildFontOptions(fontPath?: string): {fontPath?: string; fontFallbackPaths?: string[]} {
+  return fontPath ? {fontPath, fontFallbackPaths: buildFontFallbackPaths(fontPath)} : {};
+}
+
 export async function measureTextLayout(
   text: string,
   width: number,
@@ -199,13 +237,15 @@ export async function measureTextLayout(
   }
 
   try {
-    return await textboxMetricsModule.measureTextLayout({
+    const measurement = await textboxMetricsModule.measureTextLayout({
       text,
       width: getRequestedWidth(width, calibration),
       fontSize,
       includePad: true,
-      ...(fontPath ? {fontPath} : {}),
+      ...buildFontOptions(fontPath),
     });
+    noteTypefaceStatus(fontPath, measurement?.typefaceStatus);
+    return measurement;
   } catch {
     return null;
   }
@@ -223,13 +263,15 @@ export async function measureDetailedTextLayout(
   }
 
   try {
-    return await textboxMetricsModule.measureTextLayoutDetailed({
+    const measurement = await textboxMetricsModule.measureTextLayoutDetailed({
       text,
       width: getRequestedWidth(width, calibration),
       fontSize,
       includePad: true,
-      ...(fontPath ? {fontPath} : {}),
+      ...buildFontOptions(fontPath),
     });
+    noteTypefaceStatus(fontPath, measurement?.typefaceStatus);
+    return measurement;
   } catch {
     return null;
   }

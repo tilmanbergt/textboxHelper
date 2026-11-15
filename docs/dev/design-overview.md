@@ -79,6 +79,7 @@ Reusable textbox logic, mostly free of React Native and the SDK so it can be tes
 - `textboxImportParsing.ts`: parsing imported text into blocks.
 - `backupPaths.ts`: the backup folder and file paths inside the plugin folder.
 - `diagnosticLog.ts`: a bounded in-memory record of diagnostic entries for one run.
+- `fontPaths.ts`: where to find a readable copy of a textbox font, and the warning without one.
 - `supernoteNoteTextInsertion.ts`: inserting textboxes and pages into a note (uses the SDK).
 
 ## 4. Native measurement (`TextboxMetricsModule.kt`)
@@ -87,7 +88,12 @@ Reusable textbox logic, mostly free of React Native and the SDK so it can be tes
 `measureTextLayoutDetailed`): line count, height, line widths and positions for a text, width,
 font size and optional font file. Textbox heights, wrapping and hit testing are much more reliable
 with the native layout than with a JavaScript estimate; the calibration against the NOTE app's own
-rendering is described in `supernote-host-facts.md` §4.
+rendering is described in `supernote-host-facts.md` §4. The module measures in the textbox's own
+font. A font the plugin can't open in the NOTE app's folder is loaded from a readable copy
+(`MyStyle/fonts`, then `MyStyle/TextboxHelper/fonts`, `src/shared/fontPaths.ts`);
+`typefaceStatus` in every result says which font was used. When no copy is found, the measurement
+remembers the font, and the marker preview, the textbox actions and the import append a warning
+to their message (`resetFontWarnings`/`getFontWarning` in `supernoteTextboxLayout.ts`).
 
 ## 5. Why it is built this way
 

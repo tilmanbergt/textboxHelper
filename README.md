@@ -42,6 +42,15 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 - Scan textbox content from the current note
 - Export recognized textbox content into a DOCX file
 
+## Fonts
+
+Edit markers, Split, Join and Import measure text in the textbox's font. Plugins can't read the
+NOTE app's own font folder, so Textbox Helper looks for the same font file in `MyStyle/fonts`
+(where your own installed fonts already are) and in `MyStyle/TextboxHelper/fonts`. For fonts that
+come with the Supernote, such as 851tegakizatsu, copy the font file to
+`MyStyle/TextboxHelper/fonts`. Without a readable font, the plugin shows a warning, because word
+positions and textbox sizes may be wrong.
+
 ## Installation
 
 1. Download the latest `.snplg` file from GitHub Releases.

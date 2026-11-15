@@ -1,5 +1,6 @@
 import {Clipboard} from 'react-native';
 import {buildBackupDir, buildBackupPath} from './shared/backupPaths';
+import {appendFontWarning} from './shared/fontPaths';
 import RNFS from 'react-native-fs';
 import {
   Element,
@@ -21,6 +22,8 @@ import {
   DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION,
   estimateTextboxHeight as estimateSharedTextboxHeight,
   estimateTextboxHeightFallback,
+  getFontWarning,
+  resetFontWarnings,
   measureTextLayout as measureSharedTextLayout,
   type NativeTextMeasurement,
 } from './shared/supernoteTextboxLayout';
@@ -1658,7 +1661,20 @@ async function recycleElements(elements: Element[]): Promise<void> {
   );
 }
 
+/**
+ * Runs a textbox action and appends a warning to its message when a textbox font couldn't be read,
+ * because then the new textboxes were sized with a standard font (`src/shared/fontPaths.ts`).
+ */
 export async function performTextboxAction(
+  action: TextboxActionKind,
+  options?: TextboxActionExecutionOptions,
+): Promise<TextboxActionResult> {
+  resetFontWarnings();
+  const result = await runTextboxAction(action, options);
+  return {...result, message: appendFontWarning(result.message, getFontWarning())};
+}
+
+async function runTextboxAction(
   action: TextboxActionKind,
   options?: TextboxActionExecutionOptions,
 ): Promise<TextboxActionResult> {

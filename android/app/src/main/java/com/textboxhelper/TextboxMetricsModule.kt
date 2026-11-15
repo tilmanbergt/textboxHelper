@@ -27,6 +27,9 @@ class TextboxMetricsModule(
 
   override fun getName(): String = "TextboxMetrics"
 
+  /** Loaded typefaces by font path, so a font file is loaded once per session. */
+  private val typefaceCache = HashMap<String, TypefaceResult>()
+
   @ReactMethod
   fun measureTextLayout(options: ReadableMap, promise: Promise) {
     try {
@@ -174,12 +177,21 @@ class TextboxMetricsModule(
     } else {
       null
     }
+    val fontFallbackPaths = mutableListOf<String>()
+    if (options.hasKey("fontFallbackPaths") && !options.isNull("fontFallbackPaths")) {
+      val array = options.getArray("fontFallbackPaths")
+      if (array != null) {
+        for (index in 0 until array.size()) {
+          array.getString(index)?.let { fontFallbackPaths.add(it) }
+        }
+      }
+    }
 
     if (width < 0) {
       throw IllegalArgumentException("width must be >= 0")
     }
 
-    val typefaceResult = loadTypeface(fontPath)
+    val typefaceResult = loadTypeface(fontPath, fontFallbackPaths)
     val paint = TextPaint().apply {
       isAntiAlias = true
       textSize = fontSize
@@ -218,27 +230,56 @@ class TextboxMetricsModule(
   }
 
   /**
-   * Loads the textbox's font file. Without one, Android's default typeface is used, which can lay
-   * out text very differently from the NOTE app; the status says which case applied, so the caller
-   * can report it.
+   * Loads the textbox's font, so the measurement lays out text like the NOTE app does.
+   *
+   * Textboxes name their font by a path in the NOTE app's folder /storage/emulated/0/.data/fonts/,
+   * which plugins may not open ("Permission denied", docs/dev/supernote-host-facts.md section 4).
+   * The fallback paths are readable places for a copy of the same file (MyStyle/fonts for fonts
+   * the user installed, MyStyle/TextboxHelper/fonts for others), tried in order. Without a
+   * loadable font, Android's default typeface is used, which lays out text differently; the
+   * status says which case applied, so the caller can warn the user.
    */
-  private fun loadTypeface(fontPath: String?): TypefaceResult {
+  private fun loadTypeface(fontPath: String?, fontFallbackPaths: List<String>): TypefaceResult {
     if (fontPath.isNullOrBlank()) {
       return TypefaceResult(null, "default: no fontPath")
     }
+    typefaceCache[fontPath]?.let { return it }
 
-    val file = File(fontPath)
+    val direct = tryLoadTypeface(fontPath)
+    if (direct.typeface != null) {
+      val result = TypefaceResult(direct.typeface, "loaded")
+      typefaceCache[fontPath] = result
+      return result
+    }
+
+    val fallbackErrors = mutableListOf<String>()
+    for (fallbackPath in fontFallbackPaths) {
+      val attempt = tryLoadTypeface(fallbackPath)
+      if (attempt.typeface != null) {
+        val result = TypefaceResult(
+          attempt.typeface,
+          "loaded from $fallbackPath ($fontPath: ${direct.status})"
+        )
+        typefaceCache[fontPath] = result
+        return result
+      }
+      fallbackErrors.add("$fallbackPath: ${attempt.status}")
+    }
+
+    val tried = if (fallbackErrors.isEmpty()) "" else "; " + fallbackErrors.joinToString("; ")
+    return TypefaceResult(null, "default: $fontPath: ${direct.status}$tried")
+  }
+
+  /** One attempt to load a font file; status is "ok" or why it failed. */
+  private fun tryLoadTypeface(path: String): TypefaceResult {
+    val file = File(path)
     if (!file.exists()) {
-      return TypefaceResult(null, "default: font file missing")
+      return TypefaceResult(null, "missing")
     }
-    if (!file.canRead()) {
-      return TypefaceResult(null, "default: font file not readable")
-    }
-
     return try {
-      TypefaceResult(Typeface.createFromFile(file), "loaded")
+      TypefaceResult(Typeface.createFromFile(file), "ok")
     } catch (error: Throwable) {
-      TypefaceResult(null, "default: font load failed: ${error.javaClass.simpleName}: ${error.message}")
+      TypefaceResult(null, "${error.javaClass.simpleName}: ${error.message}")
     }
   }
 }

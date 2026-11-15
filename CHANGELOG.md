@@ -4,6 +4,11 @@ All notable changes to Textbox Helper are listed here, newest first.
 
 ## [Unreleased]
 
+### Fixed
+
+- Edit markers find the right words again in textboxes with a font you installed yourself. Under the current firmware plugins can't read the NOTE app's font folder, so the text was measured in a standard font: word positions drifted and many markers were ignored or hit the wrong words. The plugin now reads your fonts from MyStyle/fonts. Split, Join and Import size their textboxes with the right font too.
+- For the fonts that come with the Supernote (for example 851tegakizatsu), the plugin has no readable copy. Edit marker review, Split, Join, Clean Spaces, Remove Line Breaks and Import now say so in a warning instead of silently measuring with a standard font. Copy the font file to MyStyle/TextboxHelper/fonts to fix it.
+
 ### Added
 
 - Edit Marker Review: "Save Diagnostics" (under Recognition Details) saves how each marker was read and why it was ignored as a JSON file in the EXPORT folder, to attach to a bug report. It contains short previews of the textboxes' text.

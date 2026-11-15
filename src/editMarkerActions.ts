@@ -1,6 +1,7 @@
 import {Clipboard} from 'react-native';
 import {buildBackupDir, buildBackupPath} from './shared/backupPaths';
 import {createDiagnosticLog} from './shared/diagnosticLog';
+import {appendFontWarning} from './shared/fontPaths';
 import {writeJsonExportFile} from './textboxActions';
 import RNFS from 'react-native-fs';
 import {
@@ -25,7 +26,9 @@ import {
 import {
   buildResizedTextboxRect,
   DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION,
+  getFontWarning,
   measureDetailedTextLayout,
+  resetFontWarnings,
   type NativeDetailedLine,
   type NativeDetailedMeasurement,
   type TextboxMeasurementCalibration,
@@ -1666,8 +1669,25 @@ export async function saveEditMarkerDiagnostics(): Promise<string> {
   });
 }
 
+/**
+ * Builds the edit-marker preview and adds a warning to its summary when a textbox font couldn't be
+ * read, because then word positions were measured in a standard font (`src/shared/fontPaths.ts`).
+ */
 export async function getEditMarkerPreview(
   previewScope: EditMarkerPreviewScope = 'lasso',
+): Promise<EditMarkerPreview> {
+  resetFontWarnings();
+  const preview = await buildEditMarkerPreview(previewScope);
+  const fontWarning = getFontWarning();
+  if (!fontWarning) {
+    return preview;
+  }
+  logEditMarker('fontWarning', {fontWarning});
+  return {...preview, summaryMessage: appendFontWarning(preview.summaryMessage, fontWarning)};
+}
+
+async function buildEditMarkerPreview(
+  previewScope: EditMarkerPreviewScope,
 ): Promise<EditMarkerPreview> {
   let lassoElements: Element[] = [];
   let pageElements: Element[] = [];

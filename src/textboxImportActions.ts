@@ -16,6 +16,8 @@ import {
   type TextboxImportBlockSummary,
 } from './shared/textboxImportParsing';
 import {insertTextboxPages} from './shared/supernoteNoteTextInsertion';
+import {appendFontWarning} from './shared/fontPaths';
+import {getFontWarning, resetFontWarnings} from './shared/supernoteTextboxLayout';
 
 export type TextboxImportSourceFolder = 'inbox' | 'myStyle';
 
@@ -578,7 +580,20 @@ export async function getTextboxImportPreview(
   }
 }
 
+/**
+ * Imports the text file and appends a warning to the message when a font couldn't be read, because
+ * then the textboxes were sized with a standard font (`src/shared/fontPaths.ts`).
+ */
 export async function performTextboxImport(
+  settings: TextboxImportSettings,
+  options?: TextboxImportExecutionOptions,
+): Promise<TextboxImportResult> {
+  resetFontWarnings();
+  const result = await runTextboxImport(settings, options);
+  return {...result, message: appendFontWarning(result.message, getFontWarning())};
+}
+
+async function runTextboxImport(
   settings: TextboxImportSettings,
   options?: TextboxImportExecutionOptions,
 ): Promise<TextboxImportResult> {

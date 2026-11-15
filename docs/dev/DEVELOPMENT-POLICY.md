@@ -56,7 +56,8 @@ The architecture as built is described in `design-overview.md`. These rules are 
   (`PluginManager.getPluginDirPath()`: backups), the app's document folder
   (`RNFS.DocumentDirectoryPath`: temporary files) and the EXPORT folder
   (`FileUtils.getExportPath()`: DOCX and JSON exports). It reads text files from `Inbox` or
-  `MyStyle/TextboxHelper/inbox`. A new place needs a line in the README and in
+  `MyStyle/TextboxHelper/inbox`, and font files from `MyStyle/fonts` and
+  `MyStyle/TextboxHelper/fonts`. A new place needs a line in the README and in
   `supernote-host-facts.md` if the host restricts it.
 - **Host calls are checked.** Every `sn-plugin-lib` call's result is checked for success; a
   failure becomes an error with a message the user can understand.
