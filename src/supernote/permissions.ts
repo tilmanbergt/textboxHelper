@@ -1,4 +1,4 @@
-// src/permissions.ts
+// src/supernote/permissions.ts
 import {PluginManager} from 'sn-plugin-lib';
 
 // Pro Projekt anpassen – siehe Tabelle oben.

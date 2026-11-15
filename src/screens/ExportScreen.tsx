@@ -21,13 +21,15 @@ import {
   MAX_EXPORT_ITEM_COUNT,
 } from '../storage/docxExport';
 import {
+  scanTextBoxes,
+} from '../actions/textboxScan';
+import {
   getIncludedScanItems,
   getIncludedRoleCounts,
-  scanTextBoxes,
   summarizeExcludedStyles,
   type ExportScope,
   type ScanSummary,
-} from '../export/scanTextBoxes';
+} from '../domain/exportClassification';
 
 type RefreshContext = () => Promise<{
   filePath: string;

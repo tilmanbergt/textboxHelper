@@ -46,12 +46,19 @@ or code comment) and why. Silent exceptions are not allowed.
 
 The architecture as built is described in `design-overview.md`. These rules are binding:
 
-- **Pure logic is separate.** Text logic, geometry, pagination and parsing that need no device
-  live in `src/shared/` without React Native or `sn-plugin-lib` imports (`import type` is fine),
-  so Jest can test them with plain Node. New pure logic goes there, with tests.
-- **Reuse the shared textbox core** (`src/shared/`: geometry, layout, hit testing, pagination)
-  instead of adding local helpers in feature files. Textbox height has one source of truth:
-  `supernoteTextboxLayout.ts` with the native `TextboxMetrics` module.
+- **Layers.** Code under `src/` lives in one layer: `domain/` (pure logic), `utils/`,
+  `supernote/` (SDK and native calls), `storage/` (file I/O), `actions/` (the flows behind the
+  buttons), `ui/`, `screens/` (`design-overview.md` §2). A layer imports only from the layers
+  below it; ESLint enforces this, and the rule is never switched off.
+- **Pure logic is separate.** Logic that needs no device lives in `src/domain/` without React
+  Native, `sn-plugin-lib` or file access - not even `import type` from the SDK; the domain types
+  in `domain/textboxModel.ts` stand in for SDK types. New pure logic goes there, with Jest tests
+  in `__tests__/domain/`. Something the logic needs from the device (a text measurement) is
+  passed in as a parameter.
+- **Reuse the shared textbox core** (`domain/geometry.ts`, `hitTesting.ts`, `textboxLayout.ts`,
+  the pagination) instead of adding local helpers. Textbox height has one source of truth:
+  `supernote/textboxMetrics.ts` with the native `TextboxMetrics` module. SDK calls go through
+  `src/supernote/` (`noteElements.ts`, `sdkResult.ts`) rather than being repeated in flows.
 - **Device paths** are joined with `/` only. The plugin writes only to its own folder
   (`PluginManager.getPluginDirPath()`: backups), the app's document folder
   (`RNFS.DocumentDirectoryPath`: temporary files) and the EXPORT folder
@@ -62,8 +69,7 @@ The architecture as built is described in `design-overview.md`. These rules are 
 - **Host calls are checked.** Every `sn-plugin-lib` call's result is checked for success; a
   failure becomes an error with a message the user can understand.
 - **The pluginID never changes** (`PluginConfig.json`: `wkx45auazdre2crs`).
-- **File size.** New files stay at or below 1,000 lines; split by responsibility. Longer files
-  (`textboxActions.ts`, `editMarkerActions.ts`) may only shrink.
+- **File size.** Files stay at or below 1,000 lines; split by responsibility.
 
 ## 4. UI and logging rules
 
@@ -71,7 +77,7 @@ The architecture as built is described in `design-overview.md`. These rules are 
 - **Destructive actions** go through a review screen or the direct-action dialog with an explicit
   confirmation; the result message names the backup.
 - **Labels** are short, English and the same everywhere (toolbar button, dialog title, status
-  text). `ACTION_LABELS` in `src/ui/TextboxToolsView.tsx` holds one label per action kind.
+  text). `ACTION_LABELS` in `src/domain/textboxActionKinds.ts` holds one label per action kind.
 - **Logging:** log lines start with the module in brackets, e.g. `[EditMarkerActions] stage`.
   Every caught error is either shown to the user or logged, with enough context to find the
   cause. Logs never contain more of the user's text than the diagnosis needs; prefer counts and

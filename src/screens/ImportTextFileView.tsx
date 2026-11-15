@@ -11,13 +11,13 @@ import {
 import {UI_COLORS, styles} from '../ui/pluginUiStyles';
 import type {
   TextboxImportPreview,
-  TextboxImportSettings,
-} from '../textboxImportActions';
-import {resolveTextboxImportPath} from '../textboxImportActions';
+} from '../actions/textImport';
 import type {
   TextboxImportLayoutMode,
   TextboxImportParagraphSeparator,
 } from '../domain/importSettings';
+import type {TextboxImportSettings} from '../domain/importSettings';
+import {resolveTextboxImportPath} from '../domain/importSettings';
 
 type ImportTextFileViewProps = {
   settings: TextboxImportSettings;

@@ -39,3 +39,11 @@ export async function withTimeout<T>(
       });
   });
 }
+
+export function tryApiResult<T>(result: any): T | null {
+  if (!result?.success) {
+    return null;
+  }
+
+  return (result.result as T) ?? null;
+}

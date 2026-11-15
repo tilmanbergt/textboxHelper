@@ -37,15 +37,14 @@ The single steps are also available as `npm run typecheck`, `npm run lint` and `
 |---|---|
 | `index.js` | Registers the toolbar buttons (lasso toolbar and NOTE toolbar) and starts routing. If a button doesn't appear where expected, start here. |
 | `App.tsx` | The plugin window: asks for file permissions, routes each button press to a view, runs previews and actions, shows status and results. |
-| `src/pluginRouting.ts` | Button ids and the bridge from Supernote button presses into React Native. |
-| `src/permissions.ts` | Asks for FILE:READ and FILE:WRITE at start. |
-| `src/textboxActions.ts` | Split (sentences, paragraphs), join, clean spaces, remove line breaks: preview, backup, apply. |
-| `src/editMarkerActions.ts` | Handwritten delete and replace markers: recognition, preview, backup, apply. |
-| `src/textboxImportActions.ts` | Import of a text file into textboxes (paragraphs, markdown headings, pagination). |
-| `src/export/` | DOCX export: note context, textbox scan and classification, DOCX generation, the export screen. |
-| `src/shared/` | The shared textbox core, mostly pure: geometry, layout and measurement, hit testing, pagination, import parsing, backup paths, note text insertion. |
-| `src/ui/` | Views and dialogs of the plugin window, and their styles. |
-| `__tests__/` | Jest tests. |
+| `src/actions/` | The flows behind the buttons: `textboxEdits.ts` (split, join, clean, remove line breaks, Log All Textboxes), `editMarkers.ts` and `editMarkerAnalysis.ts` (handwritten delete and replace markers), `textImport.ts` (text file into textboxes), `textboxScan.ts` (scan for the DOCX export). |
+| `src/domain/` | Pure logic, tested with Jest: text splitting, edit plans, marker strokes and text changes, geometry, hit testing, pagination, import parsing and planning, export classification, backup payloads, button ids and action labels, the domain types (`textboxModel.ts`). |
+| `src/supernote/` | Device access: SDK calls (`noteElements.ts`, `noteTextInsertion.ts`, `markerStrokeRead.ts`, `exportNoteContext.ts`, `sdkResult.ts`), native text measurement (`textboxMetrics.ts`), button routing, permissions. If a host call fails, start here. |
+| `src/storage/` | Files: backups, JSON into EXPORT, the import text file, DOCX. |
+| `src/utils/` | The edit-marker diagnostics trace. |
+| `src/screens/` | The views and dialogs of the plugin window. |
+| `src/ui/` | Shared styles of the screens. |
+| `__tests__/domain/` | Jest tests, one file per domain module or group. |
 | `android/.../com/textboxhelper/TextboxMetricsModule.kt` | Native module: Android `StaticLayout` text measurement for textbox sizes and hit testing. |
 
 ## Documents

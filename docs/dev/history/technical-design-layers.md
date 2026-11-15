@@ -1,10 +1,9 @@
 # Technical design: splitting the code into layers
 
-Status: APPROVED (2026-11-15), with the `actions/` layer (§4.1) added after review. Drafted on
-`1fbbe4d` ("Add working agreement") and brought up to date with 0.2.2 (`9338597`: Save
-Diagnostics, font fallback), which is the base of L1. First step of Phase 2 (architecture) in the
-internal backlog. Branch: `feature/layers`, merged into `main` with `--no-ff` once every step
-below is done and device-tested.
+Status: DONE (2026-11-15), as built in §9. Drafted on `1fbbe4d` ("Add working agreement") and
+brought up to date with 0.2.2 (`9338597`: Save Diagnostics, font fallback). First step of Phase 2
+(architecture) in the internal backlog. Branch: `feature/layers`, merged into `main` with `--no-ff`
+once every step was done and device-tested.
 
 ## 1. Requirements as decided
 
@@ -319,3 +318,60 @@ documents that describe a half-moved structure. (Exception to policy §5, stated
 2. **A separate `actions/` layer** for the flows; `storage/` holds only file I/O (§4.1).
 3. **Own domain types (§4.2)**, so an SDK update shows up as a compile error in one place.
 4. **The empty-message fallback (§4.6)** is accepted as the only behaviour difference.
+
+## 9. As built
+
+**Commits.** L1 went directly onto `main` (`a3db075`); L2 (`087b2b5`), L3 (`3d1e3fe`), L4
+(`a80412f`), and L5 with L6 in one commit followed on `feature/layers`. The design commit itself
+was replaced by L1, which carries the approved version of this document.
+
+**Result.** About 10,400 lines of TS/TSX (12,800 at 0.2.2). Every file is under 1,000 lines; the
+largest are `screens/ExportScreen.tsx` (979), `actions/editMarkers.ts` (688) and
+`screens/ImportTextFileView.tsx` (519). By layer: `domain/` 23 files (3,678 lines), `utils/` 1,
+`supernote/` 9 (1,079), `storage/` 4, `actions/` 5 (2,004), `ui/` 1, `screens/` 5 (2,116). 79
+Jest tests in 12 files (3 at `1fbbe4d`). `console.*` calls: 17 (40 at `1fbbe4d`).
+
+**Moved code.** The throwaway check of §4.5 compared every moved top-level declaration with its
+original after whitespace normalization: L2 166 identical, 9 changed; L3 55 and 13; L4 80 and 26;
+L5 58 and 5. Every changed one was read: the differences are domain types instead of SDK types
+(§4.2), generics where a function returns what it gets, the measurement or calibration passed in
+(§4.3), the SDK wrappers below, the shared backup, and `assertApiSuccess` instead of
+`expectApiResult` (§4.6).
+
+**Deviations from §4-§5.**
+
+- `utils/editMarkerLog.ts` (the diagnostics trace and `logEditMarker`) exists already: both the
+  stroke reading in `supernote/` and the flows in `actions/` write to the trace, and `utils/` is the
+  one layer both may import. The design had `utils/` empty until the logging step.
+- The import's pure part is two files: `domain/importSettings.ts` (settings, defaults, paths) and
+  `domain/importPlan.ts` (preview text, import area, insert mode, page plan). Its four structure
+  types moved to `importSettings.ts` in L2 already, so `importParsing.ts` never imported upwards.
+- `storage/exportFile.ts` (`writeJsonExportFile`, kept for Save Diagnostics) and
+  `storage/importFile.ts` (`readUtf8TextFile`) are their own files; the flows that used to sit in
+  `storage/` in the first draft are in `actions/` (decision 2).
+- The SDK calls that were written inline in the flows became functions in
+  `supernote/noteElements.ts` with the same messages: `getLassoElements`, `deleteLassoElements`,
+  `insertTextboxElement`, `hideLassoBox(logTag)` (each flow keeps its own log prefix),
+  `readPageElements`, `getPreviewContext`, `getCurrentNoteContext`, `modifyPageElements`,
+  `deletePageElements`, `saveCurrentNoteForConsistency`, `readPageSizeForDiagnostics`.
+  `actions/textboxScan.ts` still calls `PluginFileAPI` itself (read only, inside the scan loop),
+  as §4.4 planned.
+- `domain/textboxModel.ts` also holds `ELEMENT_TYPE_STROKE` and `ELEMENT_TYPE_GEO` (for
+  `Element.TYPE_STROKE`/`TYPE_GEO`) and the shared constants; `supernote/domainTypeChecks.ts`
+  checks `Rect`, `Point`, `TextBox`, `Element` and both element types against the SDK.
+- The marker candidate types are generic over the element type
+  (`MarkerDeleteCandidate<Element, TextElement>` in the flow), so the flow keeps its SDK elements
+  without casts while the pure functions read only domain types.
+- `domain/textboxEditPlan.ensureNoCollision` still logs a collision with `console.log`; it moves
+  to the caller in the logging step.
+- Removed in L4 besides §3: `buildOperationDetail` and `applyWordDeletionsToText` (no callers;
+  the old file had silenced the unused warning for exactly these two).
+- `tsconfig.json` and ESLint skip `build/` (L2): a staged copy of source files there had broken the
+  type check.
+- Git does not detect `textboxActions.ts -> actions/textboxEdits.ts` and
+  `editMarkerActions.ts -> actions/editMarkers.ts` as renames (too much changed); the history of
+  those lines is in the parent commits.
+
+**Found on the way** (internal backlog): a closing quote or bracket after a sentence end moves to
+the next sentence (recorded as a known issue in `__tests__/domain/textSplitting.test.ts`), and a
+garbled `»` in the sentence-boundary pattern; both are as in 0.2.2.

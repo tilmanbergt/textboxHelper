@@ -1,7 +1,7 @@
 import {Document, HeadingLevel, Packer, Paragraph, TextRun} from 'docx';
 import RNFS from 'react-native-fs';
 import {FileUtils} from 'sn-plugin-lib';
-import {getIncludedScanItems, type ScanSummary} from '../export/scanTextBoxes';
+import {getIncludedScanItems, type ScanSummary} from '../domain/exportClassification';
 
 export const MAX_EXPORT_ITEM_COUNT = 999;
 

@@ -5,6 +5,7 @@ import {
   PluginNoteAPI,
   TextBox,
 } from 'sn-plugin-lib';
+import type {Size} from '../domain/importPlan';
 import type {EditMarkerPreviewScope} from '../domain/markerTypes';
 import type {PreparedTextInsert} from '../domain/textboxEditPlan';
 import {assertApiSuccess} from './sdkResult';
@@ -270,4 +271,46 @@ export async function readPageElements(
     pageElementsResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
     failureMessage,
   );
+}
+
+type ApiResponse<T> = {
+  success?: boolean;
+  result?: T;
+  error?: {message?: string};
+};
+
+export type CurrentNoteContext = {
+  notePath: string;
+  currentPage: number;
+  pageSize: Size;
+  pageElements: Element[];
+};
+
+export async function getCurrentNoteContext(): Promise<CurrentNoteContext> {
+  const notePath = assertApiSuccess<string>(
+    (await PluginCommAPI.getCurrentFilePath()) as ApiResponse<string>,
+    'Could not determine the current note path.',
+  );
+
+  const currentPage = assertApiSuccess<number>(
+    (await PluginCommAPI.getCurrentPageNum()) as ApiResponse<number>,
+    'Could not determine the current page.',
+  );
+
+  const pageSize = assertApiSuccess<Size>(
+    (await PluginFileAPI.getPageSize(notePath, currentPage)) as ApiResponse<Size>,
+    'Could not read the current page size.',
+  );
+
+  const pageElements = assertApiSuccess<Element[]>(
+    (await PluginFileAPI.getElements(currentPage, notePath)) as ApiResponse<Element[]>,
+    'Could not read current page elements.',
+  );
+
+  return {
+    notePath,
+    currentPage,
+    pageSize,
+    pageElements,
+  };
 }

@@ -1,7 +1,7 @@
 # Textbox Helper - design overview
 
 > **About this document.** How the plugin is built and why: the flow from a button press to a
-> changed note, the modules and their responsibilities, the shared textbox core. Living document:
+> changed note, the layers, the features and where they live. Living document:
 > present tense, no history, no plans. Update it in the same change that moves a responsibility
 > or adds a module. The binding rules are in `DEVELOPMENT-POLICY.md` §3.
 
@@ -12,75 +12,91 @@ confirmed change to the open note - rather than around a generic editor architec
 
 1. A toolbar button press enters through `index.js`, where every button is registered: the
    lasso toolbar (split, join, clean, remove line breaks, apply edit markers, the Textbox Tools
-   panel) and the NOTE toolbar (apply all edit markers, import a text file, export DOCX).
-2. `src/pluginRouting.ts` receives the press and forwards it into React Native as an event; a
-   press that arrives before the app listens is kept as pending and picked up at start.
-3. `App.tsx` makes sure the file permissions are granted, then routes the button to a view: the
+   panel) and the NOTE toolbar (apply all edit markers, import a text file, export DOCX). The
+   button ids are in `src/domain/buttonIds.ts`.
+2. `src/supernote/pluginRouting.ts` receives the press and forwards it into React Native as an
+   event; a press that arrives before the app listens is kept as pending and picked up at start.
+3. `App.tsx` makes sure the file permissions are granted, then routes the button to a screen: the
    Textbox Tools panel, the direct-action dialog, the edit-marker review, the import view or the
    export screen.
-4. The feature module builds a **preview**: it reads the lassoed or page elements, computes what
-   would change and shows it.
-5. After the user confirms, the module writes a **backup** of the affected text (a JSON file in the
-   plugin folder plus a summary on the clipboard), then changes the page elements through
-   `sn-plugin-lib` and saves the note. The result message names the backup file.
+4. The action flow in `src/actions/` builds a **preview**: it reads the lassoed or page elements
+   through `src/supernote/`, lets `src/domain/` compute what would change, and the screen shows it.
+5. After the user confirms, the flow writes a **backup** of the affected text
+   (`src/storage/backupFile.ts`: a JSON file in the plugin folder plus a summary on the clipboard),
+   then changes the page elements through `src/supernote/` and saves the note. The result message
+   names the backup file.
 
-## 2. Modules
+## 2. Layers
 
-### `App.tsx` and `src/ui/`
+The code under `src/` is split into layers; ESLint (`.eslintrc.js`) enforces which layer may
+import which (`DEVELOPMENT-POLICY.md` §3).
+
+| Layer | Holds | Imports |
+|---|---|---|
+| `domain/` | Pure logic and its types: text splitting, edit plans, marker recognition math, pagination, import planning, export classification, backup payloads. No React Native, no SDK, no I/O. | `domain/` only |
+| `utils/` | Cross-cutting helpers: the edit-marker diagnostics trace (`editMarkerLog.ts`). | `domain/` |
+| `supernote/` | Everything that talks to the device: `sn-plugin-lib` calls (`noteElements.ts`, `noteTextInsertion.ts`, `markerStrokeRead.ts`, `exportNoteContext.ts`), the native measurement (`textboxMetrics.ts`), routing and permissions. | `domain/`, `utils/` |
+| `storage/` | File I/O: backups (`backupFile.ts`), JSON into EXPORT (`exportFile.ts`), the import text file (`importFile.ts`), DOCX (`docxExport.ts`). | the three above |
+| `actions/` | The flows behind the buttons: preview, backup, change. | everything above |
+| `ui/` | Shared building blocks of the screens (`pluginUiStyles.ts`). | everything above |
+| `screens/` | One file per screen or dialog. | everything |
+
+An action has three parts: what changes (`domain/`), reading and changing the note
+(`supernote/`) and files (`storage/`). `actions/` ties them together; an action that needs no
+file doesn't import `storage/`.
+
+`domain/textboxModel.ts` holds the page shapes the pure logic works with (`Rect`, `TextboxData`,
+`PageElementData`, the element type constants). They are structural subsets of the SDK types, so
+SDK values pass into domain functions unchanged; `supernote/domainTypeChecks.ts` makes the type
+check fail if the SDK types drift away from them.
+
+## 3. Features
+
+### Screens and `App.tsx`
 
 `App.tsx` owns the user flow: permissions, routing, previews, progress, cancellation, status and
-result messages. `src/ui/` holds the views and dialogs (`TextboxToolsView`, `DirectActionDialog`,
-`EditMarkerReviewView`, `ImportTextFileView`) and their styles; `ACTION_LABELS` there is the one
-label per action kind.
+result messages. `src/screens/` holds the views and dialogs (`TextboxToolsView`,
+`DirectActionDialog`, `EditMarkerReviewView`, `ImportTextFileView`, `ExportScreen`);
+`src/ui/pluginUiStyles.ts` their styles. `ACTION_LABELS` in `src/domain/textboxActionKinds.ts`
+is the one label per action kind.
 
-### `src/textboxActions.ts`
+### Textbox actions (`actions/textboxEdits.ts`)
 
 Direct textbox editing: split by sentence, split by paragraph, join in reading order, clean
-repeated spaces, remove manual line breaks. It finds the textboxes in the lasso, computes the new
-texts, sizes the new textboxes through the shared layout core, checks that the result fits the
-page without colliding with other elements, writes the backup and applies the change.
+repeated spaces, remove manual line breaks, and "Log All Textboxes". The flow finds the textboxes
+in the lasso, `domain/textSplitting.ts` computes the new texts, `domain/textboxEditPlan.ts` the
+preview, the new textboxes and the checks that the result fits the page without colliding with
+other elements; the new textboxes are sized through the native measurement.
 
-### `src/editMarkerActions.ts`
+### Edit markers (`actions/editMarkers.ts`, `actions/editMarkerAnalysis.ts`)
 
 Handwritten edit markers on textboxes: a delete marker is a line through words; a replace marker
 is a delete line plus two crossing modifier lines, with the replacement taken from typed text.
 Freehand strokes and the Supernote straight-line tool are both recognized.
-`editMarkerActions.ts` reads the strokes, maps them to words through the hit-testing core,
-resolves replacement sources, builds the preview and applies the plan - for the lasso selection
-or the whole page.
-Every stage of a marker preview is also recorded in memory (`src/shared/diagnosticLog.ts`); "Save
+`supernote/markerStrokeRead.ts` reads the strokes; `actions/editMarkerAnalysis.ts` maps one
+marker to words through the hit-testing core and the native measurement;
+`actions/editMarkers.ts` pairs replace marks, resolves replacement sources, builds the preview
+and applies the plan - for the lasso selection or the whole page. The pure parts are in
+`domain/markerStrokes.ts`, `domain/markerText.ts` and `domain/markerTypes.ts`.
+Every stage of a marker preview is also recorded in memory (`utils/editMarkerLog.ts`); "Save
 Diagnostics" in the review screen writes that trace, with the stroke's raw sample points next to
 the points recognition used, as JSON to the EXPORT folder - only when the user taps it.
 
-### `src/textboxImportActions.ts`
+### Text import (`actions/textImport.ts`)
 
 Import of a UTF-8 text file from `Inbox` or `MyStyle/TextboxHelper/inbox` into textboxes:
-paragraphs split by blank lines (by default), markdown headings detected and set in larger bold text, the text
-paginated over the current page and new pages as needed.
+paragraphs split by blank lines (by default), markdown headings detected and set in larger bold
+text, the text paginated over the current page and new pages as needed. Settings and paths are
+in `domain/importSettings.ts`, parsing in `domain/importParsing.ts`, the page plan in
+`domain/importPlan.ts`, the pagination in `domain/*Pagination.ts` (the height measurement is
+passed in, so it is tested without the device).
 
-### `src/export/`
+### DOCX export (`actions/textboxScan.ts`, `storage/docxExport.ts`)
 
-DOCX export: reads the note context, scans the textboxes of the current page, the whole note or a
-page range, classifies them (heading, paragraph, comment, meta) by configurable rules, and writes
-a DOCX file (library `docx`) to the EXPORT folder through a temporary file.
-
-## 3. The shared textbox core (`src/shared/`)
-
-Reusable textbox logic, mostly free of React Native and the SDK so it can be tested with Jest:
-
-- `supernoteTextboxGeometry.ts`: rectangle math, overlap, point-in-rect, reading order.
-- `supernoteTextboxLayout.ts`: textbox measurement - the native measurement bridge, its
-  calibration, a fallback estimate and the final textbox height. It is the single source of truth
-  for textbox height.
-- `supernoteTextboxHitTesting.ts`: page-space word boxes from measured text, line bands, word and
-  approximate character lookup by page coordinate.
-- `supernoteTextboxPaginationCore.ts`, `supernoteTextboxBlockPagination.ts`,
-  `supernoteTextPagination.ts`: splitting text and blocks over pages.
-- `textboxImportParsing.ts`: parsing imported text into blocks.
-- `backupPaths.ts`: the backup folder and file paths inside the plugin folder.
-- `diagnosticLog.ts`: a bounded in-memory record of diagnostic entries for one run.
-- `fontPaths.ts`: where to find a readable copy of a textbox font, and the warning without one.
-- `supernoteNoteTextInsertion.ts`: inserting textboxes and pages into a note (uses the SDK).
+Reads the note context, scans the textboxes of the current page, the whole note or a page range,
+classifies them (heading, paragraph, comment, meta) by configurable rules
+(`domain/exportConfig.ts`, `domain/exportClassification.ts`), and writes a DOCX file (library
+`docx`) to the EXPORT folder through a temporary file.
 
 ## 4. Native measurement (`TextboxMetricsModule.kt`)
 
@@ -88,19 +104,24 @@ Reusable textbox logic, mostly free of React Native and the SDK so it can be tes
 `measureTextLayoutDetailed`): line count, height, line widths and positions for a text, width,
 font size and optional font file. Textbox heights, wrapping and hit testing are much more reliable
 with the native layout than with a JavaScript estimate; the calibration against the NOTE app's own
-rendering is described in `supernote-host-facts.md` §4. The module measures in the textbox's own
-font. A font the plugin can't open in the NOTE app's folder is loaded from a readable copy
-(`MyStyle/fonts`, then `MyStyle/TextboxHelper/fonts`, `src/shared/fontPaths.ts`);
-`typefaceStatus` in every result says which font was used. When no copy is found, the measurement
-remembers the font, and the marker preview, the textbox actions and the import append a warning
-to their message (`resetFontWarnings`/`getFontWarning` in `supernoteTextboxLayout.ts`).
+rendering is described in `supernote-host-facts.md` §4. `src/supernote/textboxMetrics.ts` is the
+single source of truth for textbox height; its pure half (calibration, fallback estimate, empty
+lines) is `src/domain/textboxLayout.ts`. The module measures in the textbox's own font. A font
+the plugin can't open in the NOTE app's folder is loaded from a readable copy (`MyStyle/fonts`,
+then `MyStyle/TextboxHelper/fonts`, `src/domain/fontPaths.ts`); `typefaceStatus` in every result
+says which font was used. When no copy is found, the measurement remembers the font, and the
+marker preview, the textbox actions and the import append a warning to their message
+(`resetFontWarnings`/`getFontWarning` in `textboxMetrics.ts`).
 
 ## 5. Why it is built this way
 
 - **Preview, backup, then change** keeps the user's text safe even when a heuristic is wrong: the
   user sees the change first, and the backup holds the original text if something unexpected
   happens anyway.
-- **One shared textbox core** keeps sizing and hit testing consistent across splitting, joining,
-  markers and import; a fix in the core fixes every feature.
+- **One shared textbox core** (`domain/geometry.ts`, `hitTesting.ts`, `textboxLayout.ts`, the
+  pagination, and `supernote/textboxMetrics.ts`) keeps sizing and hit testing consistent across
+  splitting, joining, markers and import; a fix in the core fixes every feature.
+- **Layers** keep the logic testable: everything in `domain/` runs in Jest without a device, and
+  the SDK is reached only through `supernote/`.
 - **Native measurement** because the NOTE app renders with Android's text stack; measuring with the
   same stack, plus a small calibration, predicts its wrapping closely.

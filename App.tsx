@@ -54,12 +54,10 @@ import {
 } from './src/screens/DirectActionDialog';
 
 import {
-  DEFAULT_TEXTBOX_IMPORT_SETTINGS,
   getTextboxImportPreview,
   performTextboxImport,
   type TextboxImportPreview,
-  type TextboxImportSettings,
-} from './src/textboxImportActions';
+} from './src/actions/textImport';
 
 import {ImportTextFileView} from './src/screens/ImportTextFileView';
 
@@ -92,6 +90,10 @@ import {
 } from './src/domain/textboxActionKinds';
 import type {TextboxActionPreview} from './src/domain/textboxEditPlan';
 import type {EditMarkerPreviewScope, EditMarkerPreview} from './src/domain/markerTypes';
+import {
+  DEFAULT_TEXTBOX_IMPORT_SETTINGS,
+  type TextboxImportSettings,
+} from './src/domain/importSettings';
 
 const ACTION_PROGRESS_LABELS: Record<TextboxActionKind, string> = {
   log: 'Logging textboxes...',
