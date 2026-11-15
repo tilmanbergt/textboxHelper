@@ -38,21 +38,22 @@ Library: `sn-plugin-lib` 0.2.3.
 
 ## 4. Text measurement
 
-- **Textbox fonts** are reported as a file path in `textBox.fontPath`. Non-system fonts point
-  into the NOTE app's folder `/storage/emulated/0/.data/fonts/` (for example
-  `/storage/emulated/0/.data/fonts/851tegakizatsu.ttf`); system fonts point into
-  `/system/fonts/` (for example `DroidSansFallbackFull.ttf`) and load directly.
+- **Textbox fonts** are reported as a file path in `textBox.fontPath`, in one of three places:
+  the system font in `/system/fonts/` (for example `DroidSansFallbackFull.ttf`), fonts the user
+  installed in `/storage/emulated/0/MyStyle/fonts/` (for example
+  `TilmanHandwriting1-Regular.ttf`) - both load directly - and the fonts Ratta ships in the NOTE
+  app's folder `/storage/emulated/0/.data/fonts/` (for example `851tegakizatsu.ttf`).
 - **Plugins may not open files in `/storage/emulated/0/.data/`.** `File.exists()` and
   `canRead()` report true, but `Typeface.createFromFile` fails with "Font not found" and a
   `FileInputStream` with "Permission denied". `FileUtils.copyFile` of `sn-plugin-lib` is plain Java
   in the same process and fails the same way; no SDK call returns a textbox's font.
-- **Fonts the user installed** also sit in `/storage/emulated/0/MyStyle/fonts/`, where plugins can
-  read them; the fonts Ratta ships (such as 851tegakizatsu) don't. `TextboxMetricsModule.kt`
+- **The fonts Ratta ships** (such as 851tegakizatsu) have no copy that plugins can read; the user
+  can put one in `MyStyle/TextboxHelper/fonts/` under the same file name (851 Tegaki Zatsu 0.883
+  from the author's site matches the built-in font). `TextboxMetricsModule.kt`
   tries the textbox's path, then `MyStyle/fonts/<name>`, then `MyStyle/TextboxHelper/fonts/<name>`
   (`src/shared/fontPaths.ts`); its `typefaceStatus` says which one loaded. Without a font,
   Android's default typeface lays the text out about 12 % narrower and with a different line
   height than the NOTE app, and every flow that measured that way shows a warning.
-
 - The NOTE app wraps textbox text a little earlier than an Android `StaticLayout` of the same
   width. `supernoteTextboxLayout.ts` measures with a width reduced by 30 px
   (`widthAdjustment`), calibrated on the device.

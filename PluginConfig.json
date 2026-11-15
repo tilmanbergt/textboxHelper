@@ -4,8 +4,8 @@
     "iconPath":  "",
     "desc":  "Tools for importing, editing, and exporting Supernote textboxes.",
     "name":  "Textbox Helper",
-    "versionCode":  "2",
-    "versionName":  "0.2.1",
+    "versionCode":  "3",
+    "versionName":  "0.2.2",
     "jsMainPath":  "index",
   "uses-permissions": [
     "plugin.permission.FILE:READ",

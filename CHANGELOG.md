@@ -4,6 +4,8 @@ All notable changes to Textbox Helper are listed here, newest first.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-15
+
 ### Fixed
 
 - Edit markers find the right words again in textboxes with a font you installed yourself. Under the current firmware plugins can't read the NOTE app's font folder, so the text was measured in a standard font: word positions drifted and many markers were ignored or hit the wrong words. The plugin now reads your fonts from MyStyle/fonts. Split, Join and Import size their textboxes with the right font too.

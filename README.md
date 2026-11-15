@@ -44,12 +44,17 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 
 ## Fonts
 
-Edit markers, Split, Join and Import measure text in the textbox's font. Plugins can't read the
-NOTE app's own font folder, so Textbox Helper looks for the same font file in `MyStyle/fonts`
-(where your own installed fonts already are) and in `MyStyle/TextboxHelper/fonts`. For fonts that
-come with the Supernote, such as 851tegakizatsu, copy the font file to
-`MyStyle/TextboxHelper/fonts`. Without a readable font, the plugin shows a warning, because word
-positions and textbox sizes may be wrong.
+Edit markers, Split, Join and Import measure text in the textbox's font, so they know where each
+word sits. The system font and fonts you installed yourself (in `MyStyle/fonts`) work as they are.
+
+The fonts that come with the Supernote, such as 851tegakizatsu, sit in a folder plugins can't
+read. For those, put a copy of the font file in `MyStyle/TextboxHelper/fonts`, named exactly like
+the font, for example `MyStyle/TextboxHelper/fonts/851tegakizatsu.ttf`. 851 Tegaki Zatsu is a
+free font by 8:51:22 pm (http://pm85122.onamae.jp/); rename the downloaded
+`851tegaki_zatsu_normal_0883.ttf`.
+
+Without a readable font, the plugin shows a warning, because word positions and textbox sizes may
+be wrong.
 
 ## Installation
 
