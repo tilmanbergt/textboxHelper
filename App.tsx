@@ -19,27 +19,17 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {DeviceEventEmitter} from 'react-native';
 import {PluginManager} from 'sn-plugin-lib';
 // sn-plugin-lib 0.1.65 migration: runtime permission check (see PluginConfig.json "uses-permissions")
-import {ensurePermissions} from './src/permissions';
+import {ensurePermissions} from './src/supernote/permissions';
 import {
-    BUTTON_ID_EXPORT_DOCX,
-    BUTTON_ID_IMPORT_TEXT_FILE,
-     BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS,
-  BUTTON_ID_TEXTBOX_TOOLS,
-  BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS,
-  BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES,
-  BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES,
-  BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
-  BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
-  BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
-  PLUGIN_BUTTON_EVENT,
+    PLUGIN_BUTTON_EVENT,
   checkPendingButton,
-} from './src/pluginRouting';
+} from './src/supernote/pluginRouting';
 
-import ExportScreen from './src/export/ExportScreen';
+import ExportScreen from './src/screens/ExportScreen';
 import {
   refreshExportNoteContext,
   type ExportNoteContext,
-} from './src/export/exportNoteContext';
+} from './src/supernote/exportNoteContext';
 import {
   applyEditMarkerPreview,
   getEditMarkerCalibration,
@@ -47,17 +37,13 @@ import {
   resetEditMarkerCalibration,
   saveEditMarkerDiagnostics,
   setEditMarkerCalibration,
-  type EditMarkerPreviewScope,
-  type EditMarkerPreview,
-} from './src/editMarkerActions';
+} from './src/actions/editMarkers';
 import {
   getTextboxActionPreview,
   performTextboxAction,
   TEXTBOX_ACTION_CANCELLED_MESSAGE,
-  type TextboxActionKind,
-  type TextboxActionPreview,
   type TextboxActionProgressUpdate,
-} from './src/textboxActions';
+} from './src/actions/textboxEdits';
 
 import {styles} from './src/ui/pluginUiStyles';
 
@@ -65,30 +51,49 @@ import {
   DirectActionDialog,
   createIdleDirectDialog,
   type DirectDialogState,
-} from './src/ui/DirectActionDialog';
+} from './src/screens/DirectActionDialog';
 
 import {
-  DEFAULT_TEXTBOX_IMPORT_SETTINGS,
   getTextboxImportPreview,
   performTextboxImport,
   type TextboxImportPreview,
-  type TextboxImportSettings,
-} from './src/textboxImportActions';
+} from './src/actions/textImport';
 
-import {ImportTextFileView} from './src/ui/ImportTextFileView';
+import {ImportTextFileView} from './src/screens/ImportTextFileView';
 
 
 import {
-    ACTION_ORDER,
-  ACTION_LABELS,
-  TextboxToolsView,
+    TextboxToolsView,
   formatPreviewBlocks,
-} from './src/ui/TextboxToolsView';
+} from './src/screens/TextboxToolsView';
 
 import {
   EditMarkerReviewView,
   renderHighlightedPreviewBlocks,
-} from './src/ui/EditMarkerReviewView';
+} from './src/screens/EditMarkerReviewView';
+import {
+  BUTTON_ID_EXPORT_DOCX,
+  BUTTON_ID_IMPORT_TEXT_FILE,
+  BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS,
+  BUTTON_ID_TEXTBOX_TOOLS,
+  BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS,
+  BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES,
+  BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES,
+  BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
+  BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
+  BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
+} from './src/domain/buttonIds';
+import {
+  ACTION_LABELS,
+  ACTION_ORDER,
+  type TextboxActionKind,
+} from './src/domain/textboxActionKinds';
+import type {TextboxActionPreview} from './src/domain/textboxEditPlan';
+import type {EditMarkerPreviewScope, EditMarkerPreview} from './src/domain/markerTypes';
+import {
+  DEFAULT_TEXTBOX_IMPORT_SETTINGS,
+  type TextboxImportSettings,
+} from './src/domain/importSettings';
 
 const ACTION_PROGRESS_LABELS: Record<TextboxActionKind, string> = {
   log: 'Logging textboxes...',

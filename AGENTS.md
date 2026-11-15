@@ -18,7 +18,7 @@ repeat them: it says what a code review looks for.
 - **Device paths use `/` only and stay in allowed places.** Flag a path joined with `\`, and a
   write outside the plugin folder (`PluginManager.getPluginDirPath()`), the app's document
   folder (`RNFS.DocumentDirectoryPath`) or the EXPORT folder (`FileUtils.getExportPath()`).
-  Instead: build paths with a helper like `src/shared/backupPaths.ts`.
+  Instead: build paths with a helper like `src/domain/backupPaths.ts`.
 - **The pluginID never changes.** Flag any change to `pluginID` or `pluginKey` in
   `PluginConfig.json`.
 - **No network.** The plugin has no INTERNET permission. Flag a `fetch`, socket or other network

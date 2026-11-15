@@ -16,8 +16,8 @@ import {PluginManager} from 'sn-plugin-lib';
 import App from './App';
 import {name as appName} from './app.json';
 import {
-BUTTON_ID_EXPORT_DOCX,
-BUTTON_ID_IMPORT_TEXT_FILE,
+  BUTTON_ID_EXPORT_DOCX,
+  BUTTON_ID_IMPORT_TEXT_FILE,
   BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS,
   BUTTON_ID_TEXTBOX_TOOLS,
   BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS,
@@ -26,8 +26,8 @@ BUTTON_ID_IMPORT_TEXT_FILE,
   BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
   BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
   BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
-  initPluginRouting,
-} from './src/pluginRouting';
+} from './src/domain/buttonIds';
+import {initPluginRouting} from './src/supernote/pluginRouting';
 
 AppRegistry.registerComponent(appName, () => App);
 

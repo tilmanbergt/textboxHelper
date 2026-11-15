@@ -16,8 +16,9 @@ Short version:
 - The user's text is never lost: every action that changes a note shows a preview first and
   writes a backup before it touches the page.
 - Paths on the device are joined with `/` only (`docs/dev/supernote-host-facts.md`).
-- New pure logic goes into `src/shared/` without React Native or SDK imports (`import type` is
-  fine) and gets Jest tests in `__tests__/`.
+- Code lives in layers (`domain/`, `utils/`, `supernote/`, `storage/`, `actions/`, `ui/`,
+  `screens/`); ESLint enforces the imports. New pure logic goes into `src/domain/` without React
+  Native or SDK imports and gets Jest tests in `__tests__/domain/`.
 - Comments say what and why, never when: no dates, no change history. New files stay ≤ 1,000
   lines.
 - Living docs (`docs/dev/README.md` lists them) describe the current state only; open work goes
