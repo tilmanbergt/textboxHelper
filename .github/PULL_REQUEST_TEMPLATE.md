@@ -1,15 +1,15 @@
-## Summary
+﻿## Summary
 
-- what problem does this change solve?
-- what changed?
+- What problem does this change solve?
+- What changed?
 
-## Verification
+## Checks
 
-- [ ] `npm run typecheck`
-- [ ] relevant on-device flow tested
+- [ ] `npm run check` passes (type check, ESLint with zero warnings, Jest)
+- [ ] CHANGELOG `[Unreleased]` updated (user-visible changes)
+- [ ] Tested on the device - which device, which flows:
 
-## Notes For Review
+## Notes for review
 
-- edge cases considered:
-- logs or screenshots attached if behavior is geometry-sensitive:
-- follow-up work intentionally left out of this PR:
+- Edge cases considered:
+- Screenshots or logs, if the behavior is about layout or recognition:

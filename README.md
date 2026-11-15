@@ -51,43 +51,10 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 
 ## Project Structure
 
-- [index.js](index.js)  
-  Registers Supernote buttons and starts plugin routing.
-
-- [App.tsx](App.tsx)  
-  Main review UI for textbox actions, edit-marker actions, import, and export.
-
-- [src/pluginRouting.ts](src/pluginRouting.ts)  
-  Central button IDs and bridge from Supernote button presses into React Native.
-
-- [src/textboxActions.ts](src/textboxActions.ts)  
-  Textbox split, join, clean, and unwrap logic, plus preview and execution flow.
-
-- [src/editMarkerActions.ts](src/editMarkerActions.ts)  
-  Handwritten marker recognition, replace-source resolution, preview generation, and apply logic.
-
-- [src/textboxImportActions.ts](src/textboxImportActions.ts)  
-  Text-file import preview and execution.
-
-- [src/export](src/export)  
-  DOCX export UI, note context reading, textbox scanning, and DOCX generation.
-
-- [src/ui](src/ui)  
-  Reusable UI components for plugin screens and dialogs.
-
-- [src/shared/supernoteTextboxGeometry.ts](src/shared/supernoteTextboxGeometry.ts)  
-  Shared page-space rectangle and reading-order helpers.
-
-- [src/shared/supernoteTextboxLayout.ts](src/shared/supernoteTextboxLayout.ts)  
-  Shared textbox measurement and height calculation logic.
-
-- [src/shared/supernoteTextboxHitTesting.ts](src/shared/supernoteTextboxHitTesting.ts)  
-  Shared mapping from measured text layout to page-space hit testing.
-
-- [android/app/src/main/java/com/textboxhelper/TextboxMetricsModule.kt](android/app/src/main/java/com/textboxhelper/TextboxMetricsModule.kt)  
-  Android native module used for accurate textbox text measurement.
-
-More architectural detail lives in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+A tour of the code, build instructions and the developer documents are in
+[docs/dev/README.md](docs/dev/README.md). How the plugin is built:
+[docs/dev/design-overview.md](docs/dev/design-overview.md). Rules for every change:
+[docs/dev/DEVELOPMENT-POLICY.md](docs/dev/DEVELOPMENT-POLICY.md).
 
 ## Development
 
@@ -99,7 +66,7 @@ Install dependencies:
 npm ci
 ```
 
-Check your changes (type check, ESLint, Jest):
+Check your changes (type check, ESLint with zero warnings, Jest):
 
 ```sh
 npm run check

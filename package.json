@@ -8,7 +8,7 @@
     "start": "react-native start",
     "test": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "check": "tsc --noEmit && eslint . && jest --passWithNoTests"
+    "check": "tsc --noEmit && eslint . --max-warnings 0 && jest --passWithNoTests"
   },
   "dependencies": {
     "docx": "^9.6.1",
