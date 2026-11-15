@@ -48,6 +48,9 @@ Freehand strokes and the Supernote straight-line tool are both recognized.
 `textboxStrikeAnalysis.ts` analyzes the strokes; `editMarkerActions.ts` maps them to words
 through the hit-testing core, resolves replacement sources, builds the preview and applies the
 plan - for the lasso selection or the whole page.
+Every stage of a marker preview is also recorded in memory (`src/shared/diagnosticLog.ts`); "Save
+Diagnostics" in the review screen writes that trace, with the stroke's raw sample points next to
+the points recognition used, as JSON to the EXPORT folder - only when the user taps it.
 
 ### `src/textboxImportActions.ts`
 
@@ -75,6 +78,7 @@ Reusable textbox logic, mostly free of React Native and the SDK so it can be tes
   `supernoteTextPagination.ts`: splitting text and blocks over pages.
 - `textboxImportParsing.ts`: parsing imported text into blocks.
 - `backupPaths.ts`: the backup folder and file paths inside the plugin folder.
+- `diagnosticLog.ts`: a bounded in-memory record of diagnostic entries for one run.
 - `supernoteNoteTextInsertion.ts`: inserting textboxes and pages into a note (uses the SDK).
 
 ## 4. Native measurement (`TextboxMetricsModule.kt`)

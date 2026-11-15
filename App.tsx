@@ -45,6 +45,7 @@ import {
   getEditMarkerCalibration,
   getEditMarkerPreview,
   resetEditMarkerCalibration,
+  saveEditMarkerDiagnostics,
   setEditMarkerCalibration,
   type EditMarkerPreviewScope,
   type EditMarkerPreview,
@@ -685,6 +686,13 @@ if (viewMode === 'markers') {
       onRefreshCalibration={() => {
         if (!isMarkerPreviewLoading && !isMarkerBusy) {
           void loadMarkerPreview();
+        }
+      }}
+      onSaveDiagnostics={() => {
+        if (!isMarkerPreviewLoading && !isMarkerBusy) {
+          saveEditMarkerDiagnostics()
+            .then(path => updateStatus(`Diagnostics saved: ${path}`))
+            .catch(error => updateStatus(`Could not save diagnostics: ${String(error)}`));
         }
       }}
     />

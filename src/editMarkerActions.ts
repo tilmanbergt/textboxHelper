@@ -1,5 +1,7 @@
 import {Clipboard} from 'react-native';
 import {buildBackupDir, buildBackupPath} from './shared/backupPaths';
+import {createDiagnosticLog} from './shared/diagnosticLog';
+import {writeJsonExportFile} from './textboxActions';
 import RNFS from 'react-native-fs';
 import {
   Element,
@@ -270,7 +272,15 @@ let currentEditMarkerCalibration: EditMarkerCalibration = {
   ...DEFAULT_EDIT_MARKER_CALIBRATION,
 };
 
+/**
+ * Every stage of the last edit-marker preview, for "Save Diagnostics" in the review screen. Each
+ * marker needs about ten entries, so 4,000 cover a full page of markers.
+ */
+const markerDiagnostics = createDiagnosticLog(4000);
+let lastDiagnosticsScope: EditMarkerPreviewScope | null = null;
+
 function logEditMarker(stage: string, payload?: unknown): void {
+  markerDiagnostics.add(stage, payload);
   if (payload === undefined) {
     console.log(`[EditMarkerActions] ${stage}`);
     return;
@@ -836,7 +846,8 @@ async function readAccessorRange<T>(
     }
 
     return await accessor.getRange(0, size);
-  } catch {
+  } catch (error) {
+    logEditMarker('accessorReadFailed', {message: String(error)});
     return [];
   }
 }
@@ -885,7 +896,43 @@ function buildStrokeStatsFromRect(rect: Rect): StrokeStats | null {
   ]);
 }
 
+/**
+ * Diagnostics only: the stroke's raw sample points (`Stroke.points`), logged next to the source
+ * that recognition uses below. With sn-plugin-lib 0.2.x the raw points are page pixels
+ * (`docs/dev/supernote-host-facts.md`), so the two can be compared directly.
+ */
+async function logRawStrokePoints(element: Element): Promise<void> {
+  if (!element.stroke) {
+    return;
+  }
+  const rawPoints = (await readAccessorRange<{x?: unknown; y?: unknown}>(element.stroke.points))
+    .map(point =>
+      typeof point?.x === 'number' && typeof point?.y === 'number'
+        ? {x: point.x, y: point.y}
+        : null,
+    )
+    .filter((point): point is {x: number; y: number} => !!point);
+  const rawStats = buildStrokeStats(rawPoints);
+  logEditMarker('markerRawStrokePoints', {
+    markerUuid: element.uuid,
+    markerNumInPage: element.numInPage,
+    pointCount: rawPoints.length,
+    stats: rawStats
+      ? {
+          rect: roundRect(rawStats.rect),
+          width: roundNumber(rawStats.width),
+          height: roundNumber(rawStats.height),
+          straightness: roundNumber(rawStats.straightness),
+          angleDeg: roundNumber(rawStats.angleDeg),
+          firstPoint: {x: roundNumber(rawStats.firstPoint.x), y: roundNumber(rawStats.firstPoint.y)},
+          lastPoint: {x: roundNumber(rawStats.lastPoint.x), y: roundNumber(rawStats.lastPoint.y)},
+        }
+      : null,
+  });
+}
+
 async function loadMarkerStrokeStats(element: Element): Promise<StrokeStats | null> {
+  await logRawStrokePoints(element);
   if (isStraightLineGeometryElement(element)) {
     const geometryPoints = element.geometry?.points
       .map(point =>
@@ -928,6 +975,9 @@ async function loadMarkerStrokeStats(element: Element): Promise<StrokeStats | nu
       markerNumInPage: element.numInPage,
       sourceType: 'stroke-recognPoints',
       pointCount: points.length,
+      rect: roundRect(recognPointStats.rect),
+      straightness: roundNumber(recognPointStats.straightness),
+      angleDeg: roundNumber(recognPointStats.angleDeg),
     });
     return recognPointStats;
   }
@@ -951,6 +1001,7 @@ async function loadMarkerStrokeStats(element: Element): Promise<StrokeStats | nu
       markerNumInPage: element.numInPage,
       sourceType: 'stroke-contours',
       pointCount: contourPoints.length,
+      rect: roundRect(contourStats.rect),
     });
     return contourStats;
   }
@@ -1559,11 +1610,66 @@ function reportProgress(
   options?.onProgress?.({message, canCancel});
 }
 
+function countElementTypes(elements: Element[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  elements.forEach(element => {
+    const key = `type-${element.type}-layer-${element.layerNum}`;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  return counts;
+}
+
+async function readPageSizeForDiagnostics(
+  notePath: string,
+  page: number,
+): Promise<{width: number; height: number} | string> {
+  try {
+    const response = (await PluginFileAPI.getPageSize(notePath, page)) as {
+      success?: boolean;
+      result?: {width: number; height: number};
+      error?: {message?: string};
+    };
+    return response?.success && response.result
+      ? response.result
+      : `unavailable: ${response?.error?.message || 'no result'}`;
+  } catch (error) {
+    return `unavailable: ${String(error)}`;
+  }
+}
+
+/**
+ * Writes the trace of the last edit-marker preview as JSON to the EXPORT folder, only when the
+ * user taps "Save Diagnostics". It contains the stages of every marker (sources, stroke and word
+ * positions, the reason a marker was ignored) and short text previews of the textboxes involved.
+ */
+export async function saveEditMarkerDiagnostics(): Promise<string> {
+  const snapshot = markerDiagnostics.snapshot();
+  if (snapshot.entries.length === 0) {
+    throw new Error('There is no marker preview to save diagnostics for yet.');
+  }
+  const createdAt = new Date().toISOString();
+  const fileName = `textboxhelper-marker-diagnostics-${createdAt.replace(/[:.]/g, '-')}.json`;
+  return writeJsonExportFile(fileName, {
+    kind: 'edit-marker-diagnostics',
+    createdAt,
+    previewScope: lastDiagnosticsScope,
+    entryCount: snapshot.entries.length,
+    droppedCount: snapshot.droppedCount,
+    entries: snapshot.entries,
+  });
+}
+
 export async function getEditMarkerPreview(
   previewScope: EditMarkerPreviewScope = 'lasso',
 ): Promise<EditMarkerPreview> {
   let lassoElements: Element[] = [];
   let pageElements: Element[] = [];
+  markerDiagnostics.clear();
+  lastDiagnosticsScope = previewScope;
+  logEditMarker('previewStart', {
+    previewScope,
+    calibration: {...currentEditMarkerCalibration},
+  });
 
   try {
     const context = await getPreviewContext(previewScope);
@@ -1573,6 +1679,15 @@ export async function getEditMarkerPreview(
 
     const selectedMarkers = effectiveSelection.filter(isSupportedEditMarkerElement);
     const selectedTextboxes = sortTextElements(effectiveSelection.filter(isNormalTextElement));
+    logEditMarker('previewContext', {
+      page: context.page,
+      pageSize: await readPageSizeForDiagnostics(context.notePath, context.page),
+      lassoElementCount: lassoElements.length,
+      pageElementCount: pageElements.length,
+      elementTypes: countElementTypes(effectiveSelection),
+      selectedMarkerCount: selectedMarkers.length,
+      selectedTextboxCount: selectedTextboxes.length,
+    });
 
     if (effectiveSelection.length === 0) {
       return createEmptyPreview();
@@ -1929,6 +2044,13 @@ export async function getEditMarkerPreview(
             textMutations,
           }
         : null;
+
+    logEditMarker('previewResult', {
+      selectedMarkerCount: selectedMarkers.length,
+      recognizedOperationCount: operations.length,
+      ignoredMarkerCount: visibleIgnoredMarkers.length,
+      ignoredReasons: visibleIgnoredMarkers.map(marker => marker.reason),
+    });
 
     return {
       selectedMarkerCount: selectedMarkers.length,

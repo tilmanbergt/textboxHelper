@@ -4,6 +4,10 @@ All notable changes to Textbox Helper are listed here, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- Edit Marker Review: "Save Diagnostics" (under Recognition Details) saves how each marker was read and why it was ignored as a JSON file in the EXPORT folder, to attach to a bug report. It contains short previews of the textboxes' text.
+
 ## [0.2.1] - 2026-11-15
 
 ### Fixed

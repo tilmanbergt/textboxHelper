@@ -39,6 +39,7 @@ type EditMarkerReviewViewProps = {
   }) => void;
   onResetCalibration: () => void;
   onRefreshCalibration: () => void;
+  onSaveDiagnostics: () => void;
 };
 
 export function renderHighlightedTextSegments(
@@ -146,6 +147,7 @@ export function EditMarkerReviewView({
   onChangeCalibration,
   onResetCalibration,
   onRefreshCalibration,
+  onSaveDiagnostics,
 }: EditMarkerReviewViewProps): React.JSX.Element {
   const renderMarkerOperations = () => {
     if (!markerPreview || markerPreview.operations.length === 0) {
@@ -261,6 +263,16 @@ export function EditMarkerReviewView({
 
             <Text style={styles.subsectionTitle}>Ignored</Text>
             {renderIgnoredMarkers()}
+
+            <View style={styles.calibrationInlineGroup}>
+              <TouchableOpacity
+                activeOpacity={0.75}
+                style={styles.calibrationButton}
+                onPress={onSaveDiagnostics}
+                disabled={isMarkerPreviewLoading || isMarkerBusy}>
+                <Text style={styles.calibrationButtonText}>Save Diagnostics</Text>
+              </TouchableOpacity>
+            </View>
           </View>,
         )}
 

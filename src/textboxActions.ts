@@ -2227,7 +2227,7 @@ function groupScanItemsByFontSize(items: ExportedTextboxScanItem[]): Array<{
     }));
 }
 
-async function writeJsonExportFile(fileName: string, payload: unknown): Promise<string> {
+export async function writeJsonExportFile(fileName: string, payload: unknown): Promise<string> {
   const exportDir = await FileUtils.getExportPath();
   await FileUtils.makeDir(exportDir);
 
