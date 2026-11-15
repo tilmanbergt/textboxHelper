@@ -1,4 +1,5 @@
 import {Clipboard} from 'react-native';
+import {buildBackupDir, buildBackupPath} from './shared/backupPaths';
 import RNFS from 'react-native-fs';
 import {
   Element,
@@ -1450,11 +1451,13 @@ async function writeBackupFile(payload: BackupPayload): Promise<{
   clipboardSummary: string;
 }> {
   const pluginDir = await PluginManager.getPluginDirPath();
-  const backupDir = `${pluginDir}\\textbox-action-backups`;
+  if (!pluginDir) {
+    throw new Error('Could not find the plugin folder for the backup. Nothing was changed.');
+  }
+  const backupDir = buildBackupDir(pluginDir);
   await RNFS.mkdir(backupDir);
 
-  const safeTimestamp = payload.createdAt.replace(/[:.]/g, '-');
-  const backupPath = `${backupDir}\\edit-markers-${safeTimestamp}.json`;
+  const backupPath = buildBackupPath(pluginDir, 'edit-markers', payload.createdAt);
   await RNFS.writeFile(backupPath, JSON.stringify(payload, null, 2), 'utf8');
 
   const clipboardSummary = buildClipboardSummary(payload);
