@@ -21,6 +21,14 @@ Library: `sn-plugin-lib` 0.2.3.
   `__tests__/domain/backupPaths.test.ts`.
 - `PluginManager.getPluginDirPath()` is typed `string | null | undefined`; a missing value stops
   the action before anything is written.
+- **Settings** live in the plugin folder too: `<pluginDir>/settings.json`
+  (`storage/settingsFile.ts`). A missing plugin folder means the settings stay in memory for the
+  session.
+- **The file selector** `RattaFileSelector.selectFile` (sn-plugin-lib) opens the Supernote's own
+  file selector: `suffixList` limits the file types, `needSelectFolder` + `limitPath` open it in
+  a folder and keep the user there. It answers with an array of absolute paths, or null/empty
+  when cancelled. Import uses it for `INBOX` and `.txt` (`supernote/fileSelector.ts`); the
+  returned path is checked again (`importPathRelativeToInbox`). Not yet confirmed on the device.
 
 ## 2. Permissions
 

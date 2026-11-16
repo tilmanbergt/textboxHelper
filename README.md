@@ -35,12 +35,13 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 
 ### Import Text File
 
-- Import plain text into NOTE textboxes, from a `.txt` file in the Supernote's `INBOX` folder
+- Import plain text into NOTE textboxes, from a `.txt` file in the Supernote's `INBOX` folder (or a folder inside it), chosen with the Supernote file selector
 - Split imported text into paragraph-based textboxes
+- See the planned pages drawn to scale before importing; the preview updates by itself
 
 ### Export DOCX
 
-- Scan textbox content from the current note
+- See which textboxes of the page, the note or a page range will be exported, as a list that updates by itself
 - Export recognized textbox content into a DOCX file
 
 ## Fonts
@@ -56,6 +57,11 @@ free font by 8:51:22 pm (http://pm85122.onamae.jp/); rename the downloaded
 
 Without a readable font, the plugin shows a warning, because word positions and textbox sizes may
 be wrong.
+
+## Settings
+
+The plugin remembers the import settings, the export pages and rules, and the edit-marker
+calibration in `settings.json` in its own plugin folder.
 
 ## Installation
 

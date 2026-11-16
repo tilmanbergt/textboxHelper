@@ -61,10 +61,10 @@ The architecture as built is described in `design-overview.md`. These rules are 
   `supernote/textboxMetrics.ts` with the native `TextboxMetrics` module. SDK calls go through
   `src/supernote/` (`noteElements.ts`, `sdkResult.ts`) rather than being repeated in flows.
 - **Device paths** are joined with `/` only. The plugin writes only to its own folder
-  (`PluginManager.getPluginDirPath()`: backups), the app's document folder
+  (`PluginManager.getPluginDirPath()`: backups, `settings.json`), the app's document folder
   (`RNFS.DocumentDirectoryPath`: temporary files) and the EXPORT folder
-  (`FileUtils.getExportPath()`: DOCX and JSON exports). It reads text files from `INBOX` or
-  `MyStyle/TextboxHelper/inbox`, and font files from `MyStyle/fonts` and
+  (`FileUtils.getExportPath()`: DOCX and JSON exports). It reads text files from `INBOX` (chosen
+  with the Supernote file selector), and font files from `MyStyle/fonts` and
   `MyStyle/TextboxHelper/fonts`. A new place needs a line in the README and in
   `supernote-host-facts.md` if the host restricts it.
 - **Host calls are checked.** Every `sn-plugin-lib` call's result is checked for success; a

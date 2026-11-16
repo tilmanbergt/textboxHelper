@@ -5,7 +5,7 @@ export async function readUtf8TextFile(path: string): Promise<string> {
   const exists = await RNFS.exists(path);
 
   if (!exists) {
-    throw new Error(`File not found: ${path}`);
+    throw new Error(`File not found: ${path.split('/').slice(-1)[0]}. Choose it again.`);
   }
 
   return RNFS.readFile(path, 'utf8');

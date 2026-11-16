@@ -19,3 +19,10 @@ export function buildBackupPath(pluginDir: string, name: string, createdAtIso: s
   const safeTimestamp = createdAtIso.replace(/[:.]/g, '-');
   return `${buildBackupDir(pluginDir)}/${name}-${safeTimestamp}.json`;
 }
+
+/** The settings file the plugin remembers its settings in (domain/settingsModel.ts). */
+export const SETTINGS_FILE_NAME = 'settings.json';
+
+export function buildSettingsPath(pluginDir: string): string {
+  return `${pluginDir.replace(/\/+$/, '')}/${SETTINGS_FILE_NAME}`;
+}

@@ -19,6 +19,7 @@ import type {
   EditMarkerPreviewScope,
 } from '../../domain/markerTypes';
 import {fileNameOf, userMessage} from '../../domain/userMessage';
+import {updateSettings} from '../../storage/settingsFile';
 import type {FrameStatus} from '../../ui/ScreenFrame';
 
 export interface EditMarkerReview {
@@ -76,12 +77,18 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
     void load();
   }, [load]);
 
+  // Calibration is kept between sessions so it can be tuned over time (settings file).
+  const remember = (next: EditMarkerCalibration) => {
+    setCalibration(next);
+    updateSettings(current => ({...current, markers: {calibration: next}}));
+  };
+
   const changeCalibration = useCallback(
     (next: Partial<EditMarkerCalibration>) => {
       if (loading || busy) {
         return;
       }
-      setCalibration(setEditMarkerCalibration(next));
+      remember(setEditMarkerCalibration(next));
       void load();
     },
     [busy, load, loading],
@@ -91,7 +98,7 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
     if (loading || busy) {
       return;
     }
-    setCalibration(resetEditMarkerCalibration());
+    remember(resetEditMarkerCalibration());
     void load();
   }, [busy, load, loading]);
 

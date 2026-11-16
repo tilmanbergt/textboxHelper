@@ -82,7 +82,16 @@ export type TextboxImportPreview = {
   effectiveInsertMode: Exclude<TextboxImportInsertMode, 'auto'>;
   startPreview: string;
   endPreview: string;
+  /** The page the import starts from (0-based) and its size in page pixels. */
+  currentPage: number;
+  pageSize: {width: number; height: number};
+  /** The first planned pages with their textboxes, to draw them to scale. */
+  pages: PlannedTextboxPage[];
+  plannedPageCount: number;
 };
+
+/** How many planned pages the preview carries; the counts cover all of them. */
+const PREVIEW_PAGE_LIMIT = 3;
 const BLANK_TEMPLATE_NAME = 'style_white';
 
 async function buildImportPlan(params: {
@@ -171,7 +180,7 @@ export async function getTextboxImportPreview(
   const text = normalizeImportedText(rawText);
 
   if (!text) {
-    throw new Error(`File is empty after cleanup: ${sourcePath}`);
+    throw new Error('The file is empty.');
   }
 
   const context = await getCurrentNoteContext();
@@ -203,6 +212,10 @@ export async function getTextboxImportPreview(
       effectiveInsertMode: plan.effectiveInsertMode,
       startPreview: buildPreviewText(text, true),
       endPreview: buildPreviewText(text, false),
+      currentPage: context.currentPage,
+      pageSize: {width: context.pageSize.width, height: context.pageSize.height},
+      pages: plan.pages.slice(0, PREVIEW_PAGE_LIMIT),
+      plannedPageCount: plan.pages.length,
     };
   } finally {
     await recycleElements(context.pageElements);
@@ -233,7 +246,7 @@ async function runTextboxImport(
   const text = normalizeImportedText(rawText);
 
   if (!text) {
-    throw new Error(`File is empty after cleanup: ${sourcePath}`);
+    throw new Error('The file is empty.');
   }
 
   options?.onProgress?.({message: 'Reading current note context...'});
