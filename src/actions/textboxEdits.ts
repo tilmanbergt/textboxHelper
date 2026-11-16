@@ -11,7 +11,7 @@ import {
   splitIntoParagraphCandidates,
   splitIntoSentenceCandidates,
 } from '../domain/textSplitting';
-import {createEmptyAvailability, type TextboxActionKind} from '../domain/textboxActionKinds';
+import type {TextboxActionKind} from '../domain/textboxActionKinds';
 import {
   buildActionPreview,
   buildJoinedTextboxText,
@@ -219,44 +219,14 @@ async function insertTextBoxes(
   }
 }
 
-export async function getTextboxActionPreview(
-  action: TextboxActionKind | null,
-): Promise<TextboxActionPreview> {
+/** Reads the lasso selection once and builds every action's preview for it. */
+export async function getTextboxActionPreview(): Promise<TextboxActionPreview> {
   let lassoElements: Element[] = [];
-  let pageElements: Element[] = [];
-
   try {
-    if (action === 'log') {
-      const context = await getCurrentPageElementsContext();
-      pageElements = context.pageElements;
-      const textboxes = buildTextboxLogItems(context.page, pageElements);
-
-      return {
-        selectedCount: textboxes.length,
-        beforeBlocks: [],
-        afterBlocks: [
-          textboxes.length > 0
-            ? `Execute to log ${textboxes.length} textboxes on this page.`
-            : 'No normal main-layer textboxes found on this page.',
-        ],
-        availableActions: {
-          ...createEmptyAvailability(),
-          log: true,
-        },
-        selectionMessage:
-          textboxes.length === 1
-            ? '1 textbox on current page'
-            : `${textboxes.length} textboxes on current page`,
-        hasOnlyTextboxes: true,
-      };
-    }
-
     lassoElements = await getLassoElements();
-
-    return buildActionPreview(lassoElements, action);
+    return buildActionPreview(lassoElements);
   } finally {
     await recycleElements(lassoElements);
-    await recycleElements(pageElements);
   }
 }
 

@@ -6,6 +6,8 @@ All notable changes to Textbox Helper are listed here, newest first.
 
 ### Changed
 
+- Textbox Tools (the lasso screen) is new and never scrolls: the actions on the left, After and Before of the chosen action on the right, paged. Split Paragraphs is now on this screen too. An action that doesn't fit the selection is greyed with the reason ("needs exactly 1 textbox", "nothing to clean"); when only one action fits, it is already chosen. The button names the action ("Apply Join Text Boxes"); after it the screen shows the result and the backup's file name. "Log All Textboxes" moved to Details.
+- The lasso toolbar actions show their progress in a small, calmer card; Cancel works until the first change.
 - Edit Markers has a new, calmer review screen that never scrolls. The changes are listed on the left (with an "Ignored" tab for markers that couldn't be used); the right side shows one changed textbox at a time with the removed words struck through and replacements in bold. Tap a change to see it in its textbox. After Apply the screen stays open with the result and the backup's file name. Calibration and Save Diagnostics moved to "Details"; the marker help is behind "?". A font warning shows in the status line when word positions were measured in a standard font.
 
 ### Fixed

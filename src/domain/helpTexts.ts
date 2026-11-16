@@ -47,3 +47,16 @@ The note button reads every marker on the page. The lasso toolbar button reads o
 
 ## Wrong words picked?
 Details has the calibration (X offset, Width) and Save Diagnostics for a bug report. The values are kept for next time.`;
+
+export const TEXTBOX_TOOLS_HELP = `## The actions
+Split Sentences: one textbox becomes one textbox per sentence.
+Split Paragraphs: one textbox becomes one textbox per paragraph.
+Join Text Boxes: textboxes stacked in one column become one, in reading order.
+Clean Spaces: repeated spaces and spaces before punctuation go.
+Remove Line Breaks: manual line breaks inside the textbox go.
+
+## Choosing
+An action that doesn't fit the lasso selection is greyed, with the reason next to it. After shows the result, Before the textboxes as they are now.
+
+## Apply
+A backup of the textboxes is written first; the status line names it. The same actions are in the lasso toolbar, where they apply right away.`;

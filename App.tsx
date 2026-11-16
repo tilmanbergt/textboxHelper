@@ -3,63 +3,24 @@
  */
 
 /**
- * Main plugin UI shell.
+ * The plugin's shell: asks for the file permissions, listens for the Supernote buttons and opens
+ * one screen per press. Each screen is keyed by the press (`launchKey`), so a screen opened again
+ * starts fresh; the screens own their state (technical-design-calmer-screens.md §3.3).
  *
- * Responsibilities:
- * - react to Supernote button presses
- * - load preview data for textbox tools and edit markers
- * - render review flows
- * - hand execution requests back to the feature modules
- *
- * The goal is for this file to stay focused on presentation and screen flow rather
- * than geometry, text measurement, or mutation logic.
+ * Import and Export still get their state from here until their calmer-screens steps (S4, S5).
  */
 
-import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {DeviceEventEmitter} from 'react-native';
 import {PluginManager} from 'sn-plugin-lib';
-// sn-plugin-lib 0.1.65 migration: runtime permission check (see PluginConfig.json "uses-permissions")
 import {ensurePermissions} from './src/supernote/permissions';
-import {
-    PLUGIN_BUTTON_EVENT,
-  checkPendingButton,
-} from './src/supernote/pluginRouting';
-
-import ExportScreen from './src/screens/ExportScreen';
-import PagingTestScreen from './src/screens/dev/PagingTestScreen';
-import {
-  refreshExportNoteContext,
-  type ExportNoteContext,
-} from './src/supernote/exportNoteContext';
-import {
-  getTextboxActionPreview,
-  performTextboxAction,
-  TEXTBOX_ACTION_CANCELLED_MESSAGE,
-  type TextboxActionProgressUpdate,
-} from './src/actions/textboxEdits';
-
-
-import {
-  DirectActionDialog,
-  createIdleDirectDialog,
-  type DirectDialogState,
-} from './src/screens/DirectActionDialog';
-
+import {PLUGIN_BUTTON_EVENT, checkPendingButton} from './src/supernote/pluginRouting';
+import {refreshExportNoteContext, type ExportNoteContext} from './src/supernote/exportNoteContext';
 import {
   getTextboxImportPreview,
   performTextboxImport,
   type TextboxImportPreview,
 } from './src/actions/textImport';
-
-import {ImportTextFileView} from './src/screens/ImportTextFileView';
-
-
-import {
-    TextboxToolsView,
-  formatPreviewBlocks,
-} from './src/screens/TextboxToolsView';
-
-import EditMarkerReviewScreen from './src/screens/markers/EditMarkerReviewScreen';
 import {
   BUTTON_ID_EXPORT_DOCX,
   BUTTON_ID_IMPORT_TEXT_FILE,
@@ -69,531 +30,196 @@ import {
   BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES,
   BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES,
   BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
-  BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
   BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
+  BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
 } from './src/domain/buttonIds';
-import {
-  ACTION_LABELS,
-  ACTION_ORDER,
-  type TextboxActionKind,
-} from './src/domain/textboxActionKinds';
-import type {TextboxActionPreview} from './src/domain/textboxEditPlan';
+import {DEFAULT_TEXTBOX_IMPORT_SETTINGS, type TextboxImportSettings} from './src/domain/importSettings';
 import type {EditMarkerPreviewScope} from './src/domain/markerTypes';
-import {
-  DEFAULT_TEXTBOX_IMPORT_SETTINGS,
-  type TextboxImportSettings,
-} from './src/domain/importSettings';
+import type {TextboxActionKind} from './src/domain/textboxActionKinds';
+import DirectActionScreen from './src/screens/direct/DirectActionScreen';
+import ExportScreen from './src/screens/ExportScreen';
+import {ImportTextFileView} from './src/screens/ImportTextFileView';
+import EditMarkerReviewScreen from './src/screens/markers/EditMarkerReviewScreen';
+import TextboxToolsScreen from './src/screens/tools/TextboxToolsScreen';
+import ScreenFrame from './src/ui/ScreenFrame';
 
-const ACTION_PROGRESS_LABELS: Record<TextboxActionKind, string> = {
-  log: 'Logging textboxes...',
-  split: 'Splitting textboxes...',
-  join: 'Joining textboxes...',
-  clean: 'Cleaning spaces...',
-  unwrap: 'Removing line breaks...',
-  splitParagraphs: 'Splitting paragraphs...',
+type Screen = 'routing' | 'permission' | 'tools' | 'markers' | 'direct' | 'import' | 'export';
+
+const DIRECT_ACTIONS: Record<number, TextboxActionKind> = {
+  [BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX]: 'split',
+  [BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX]: 'splitParagraphs',
+  [BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES]: 'join',
+  [BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES]: 'clean',
+  [BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS]: 'unwrap',
 };
 
-type ViewMode =
-  | 'routing'
-  | 'tools'
-  | 'markers'
-  | 'direct'
-  | 'import'
-  | 'exportDocx';
-
-
-
-
-
-
-
-
-
 function App(): React.JSX.Element | null {
-    const [importSettings, setImportSettings] = useState<TextboxImportSettings>(
-      DEFAULT_TEXTBOX_IMPORT_SETTINGS,
-    );
-    const [isImportBusy, setIsImportBusy] = useState(false);
-    const [importPreview, setImportPreview] =
-      useState<TextboxImportPreview | null>(null);
-      const [exportNoteContext, setExportNoteContext] =
-        useState<ExportNoteContext | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('routing');
-  // Temporary (calmer screens S1): the paging test screen over the lasso screen; removed in S3.
-  const [pagingTestOpen, setPagingTestOpen] = useState(false);
-  const [currentAction, setCurrentAction] = useState<TextboxActionKind | null>(null);
-  const [preview, setPreview] = useState<TextboxActionPreview | null>(null);
-  const [markerScope, setMarkerScope] = useState<EditMarkerPreviewScope>('lasso');
-  // Changes with every button press, so a screen opened again starts fresh (its key).
+  const [screen, setScreen] = useState<Screen>('routing');
+  // Changes with every button press: the screen's key, so it starts fresh.
   const [launchKey, setLaunchKey] = useState(0);
-  const [isBusy, setIsBusy] = useState(false);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [markerScope, setMarkerScope] = useState<EditMarkerPreviewScope>('lasso');
+  const [directAction, setDirectAction] = useState<TextboxActionKind>('split');
+
+  // Import (old screen until step S4).
+  const [importSettings, setImportSettings] = useState<TextboxImportSettings>(DEFAULT_TEXTBOX_IMPORT_SETTINGS);
+  const [isImportBusy, setIsImportBusy] = useState(false);
+  const [importPreview, setImportPreview] = useState<TextboxImportPreview | null>(null);
   const [status, setStatus] = useState('');
-  const [backupPath, setBackupPath] = useState('');
-  const [directDialog, setDirectDialog] = useState<DirectDialogState>(
-    createIdleDirectDialog(),
-  );
-
-  const cancelRequestedRef = useRef(false);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearPendingClose = useCallback(() => {
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-  }, []);
-
-  const logUiStatus = useCallback((scope: ViewMode, message: string) => {
-    console.log(
-      '[TextboxActionsUI] status',
-      JSON.stringify({
-        scope,
-        message,
-      }),
-    );
-  }, []);
-const refreshNoteContext = useCallback(async () => {
-  const nextContext = await refreshExportNoteContext();
-  setExportNoteContext(nextContext);
-
-  return {
-    filePath: nextContext.filePath,
-    page: nextContext.page,
-  };
-}, []);
-  const updateStatus = useCallback((message: string) => {
-    logUiStatus(viewMode, message);
-    setStatus(message);
-  }, [logUiStatus, viewMode]);
-
-  const updateDirectDialog = useCallback((nextDialog: DirectDialogState) => {
-    logUiStatus('direct', nextDialog.message);
-    setDirectDialog(nextDialog);
-  }, [logUiStatus]);
-
-  const loadPreview = useCallback(async (action: TextboxActionKind | null) => {
-    setIsPreviewLoading(true);
-
-    try {
-      const nextPreview = await getTextboxActionPreview(action);
-      setPreview(nextPreview);
-
-      if (action && nextPreview.availableActions[action]) {
-        setCurrentAction(action);
-      } else {
-        setCurrentAction(null);
-      }
-
-      if (action !== 'log' && nextPreview.selectedCount === 0) {
-        updateStatus('Select one or more main-layer textboxes.');
-        return;
-      }
-
-      if (!nextPreview.hasOnlyTextboxes) {
-        updateStatus('Only normal main-layer textboxes are supported.');
-        return;
-      }
-
-      if (action && !nextPreview.availableActions[action]) {
-        updateStatus(`${ACTION_LABELS[action]} is not available for the current selection.`);
-        return;
-      }
-
-      updateStatus('');
-    } catch (error) {
-      updateStatus(`Could not read the current selection: ${String(error)}`);
-    } finally {
-      setIsPreviewLoading(false);
-    }
-  }, [updateStatus]);
-
-
-  useEffect(() => {
-    return () => {
-      clearPendingClose();
-    };
-  }, [clearPendingClose]);
+  // Export (old screen until step S5).
+  const [exportNoteContext, setExportNoteContext] = useState<ExportNoteContext | null>(null);
 
   const closePluginView = useCallback(() => {
-    clearPendingClose();
     PluginManager.closePluginView();
-  }, [clearPendingClose]);
+  }, []);
 
-  const startDirectAction = useCallback(async (action: TextboxActionKind) => {
-    clearPendingClose();
-    cancelRequestedRef.current = false;
-    setViewMode('direct');
-    updateDirectDialog({
-      action,
-      title: ACTION_LABELS[action],
-      message: ACTION_PROGRESS_LABELS[action],
-      isBusy: true,
-      canCancel: true,
-      showOk: false,
-      backupPath: '',
-    });
+  const refreshNoteContext = useCallback(async () => {
+    const nextContext = await refreshExportNoteContext();
+    setExportNoteContext(nextContext);
+    return {filePath: nextContext.filePath, page: nextContext.page};
+  }, []);
 
-    try {
-      const result = await performTextboxAction(action, {
-        isCancelled: () => cancelRequestedRef.current,
-        onProgress: (update: TextboxActionProgressUpdate) => {
-          logUiStatus('direct', update.message);
-          setDirectDialog(current => ({
-            ...current,
-            action,
-            title: ACTION_LABELS[action],
-            message: update.message,
-            canCancel: update.canCancel,
-          }));
-        },
-      });
-
-      updateDirectDialog({
-        action,
-        title: ACTION_LABELS[action],
-        message: result.message,
-        isBusy: false,
-        canCancel: false,
-        showOk: false,
-        backupPath: result.backupPath,
-      });
-
-      closeTimerRef.current = setTimeout(() => {
-        PluginManager.closePluginView();
-      }, 700);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : String(error);
-      const isCancelled = message === TEXTBOX_ACTION_CANCELLED_MESSAGE;
-
-      updateDirectDialog({
-        action,
-        title: ACTION_LABELS[action],
-        message: isCancelled ? 'Cancelled before making changes.' : message,
-        isBusy: false,
-        canCancel: false,
-        showOk: true,
-        backupPath: '',
+  const routeButton = (buttonId: number) => {
+    setLaunchKey(key => key + 1);
+    setStatus('');
+    if (buttonId === BUTTON_ID_TEXTBOX_TOOLS) {
+      setScreen('tools');
+      return;
+    }
+    if (buttonId === BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS || buttonId === BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS) {
+      setMarkerScope(buttonId === BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS ? 'page' : 'lasso');
+      setScreen('markers');
+      return;
+    }
+    if (DIRECT_ACTIONS[buttonId]) {
+      setDirectAction(DIRECT_ACTIONS[buttonId]);
+      setScreen('direct');
+      return;
+    }
+    if (buttonId === BUTTON_ID_IMPORT_TEXT_FILE) {
+      setImportPreview(null);
+      setScreen('import');
+      return;
+    }
+    if (buttonId === BUTTON_ID_EXPORT_DOCX) {
+      setExportNoteContext(null);
+      setScreen('export');
+      void refreshNoteContext().catch(error => {
+        console.warn('[App] could not read the note context', String(error));
       });
     }
-  }, [clearPendingClose, logUiStatus, updateDirectDialog]);
+  };
 
-  // sn-plugin-lib 0.1.65 migration: request FILE:READ/FILE:WRITE before wiring up
-  // button routing (declared in PluginConfig.json's "uses-permissions"). Every
-  // action below reads or writes note elements, so if the permission is denied we
-  // show a status message instead of letting the first action fail with a host
-  // error code (1500/1501/1503).
+  // The listener subscribes once and always calls the latest routeButton.
+  const routeButtonRef = useRef(routeButton);
+  routeButtonRef.current = routeButton;
+
+  // FILE:READ/FILE:WRITE are asked for before the buttons are wired: every screen reads or writes
+  // note elements, and without the permission the first host call would fail with an error code.
   useEffect(() => {
     let subscription: {remove: () => void} | undefined;
-
+    let active = true;
     (async () => {
       const granted = await ensurePermissions();
+      if (!active) {
+        return;
+      }
       if (!granted) {
-        // Plain setStatus (not updateStatus) so this effect doesn't need viewMode
-        // in its dependency array and re-subscribe on every screen change.
-        setStatus(
-          'Missing permission: enable file read/write access for Textbox Helper to work.',
-        );
-        setViewMode('tools');
+        setScreen('permission');
         return;
       }
-
-    const routeButton = (buttonId: number) => {
-      setBackupPath('');
-      setStatus('');
-      setDirectDialog(createIdleDirectDialog());
-      clearPendingClose();
-      cancelRequestedRef.current = false;
-
-      if (buttonId === BUTTON_ID_TEXTBOX_TOOLS) {
-        setViewMode('tools');
-        loadPreview(null);
-        return;
+      const pendingButton = checkPendingButton();
+      if (pendingButton !== null) {
+        routeButtonRef.current(pendingButton);
       }
-   if (buttonId === BUTTON_ID_IMPORT_TEXT_FILE) {
-          setViewMode('import');
-            updateStatus('');
-          return;
-        }
-if (buttonId === BUTTON_ID_EXPORT_DOCX) {
-  setViewMode('exportDocx');
-  setExportNoteContext(null);
-  updateStatus('');
-
-  void refreshNoteContext().catch(error => {
-    updateStatus(`Could not read current note context: ${String(error)}`);
-  });
-
-  return;
-}
-      if (
-        buttonId === BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS ||
-        buttonId === BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS
-      ) {
-        setMarkerScope(buttonId === BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS ? 'page' : 'lasso');
-        setLaunchKey(key => key + 1);
-        setViewMode('markers');
-        return;
-      }
-
-      if (buttonId === BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX) {
-        startDirectAction('split');
-        return;
-      }
-
-      if (buttonId === BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX) {
-        startDirectAction('splitParagraphs');
-        return;
-      }
-
-      if (buttonId === BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES) {
-        startDirectAction('join');
-        return;
-      }
-
-      if (buttonId === BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES) {
-        startDirectAction('clean');
-        return;
-      }
-
-      if (buttonId === BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS) {
-        startDirectAction('unwrap');
-      }
-    };
-
-    const pendingButton = checkPendingButton();
-    if (pendingButton !== null) {
-      routeButton(pendingButton);
-    }
-
-    subscription = DeviceEventEmitter.addListener(
-      PLUGIN_BUTTON_EVENT,
-      ({id}: {id: number}) => {
+      subscription = DeviceEventEmitter.addListener(PLUGIN_BUTTON_EVENT, ({id}: {id: number}) => {
         checkPendingButton();
-        routeButton(id);
-      },
-    );
+        routeButtonRef.current(id);
+      });
     })();
-
     return () => {
+      active = false;
       subscription?.remove();
     };
-    // refreshNoteContext and updateStatus are left out on purpose: updateStatus changes with
-    // viewMode, and re-running this effect re-requests permissions and re-subscribes the
-    // button listener on every screen change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clearPendingClose, loadPreview, startDirectAction]);
+  }, []);
 
-const previewImportTextFile = useCallback(async () => {
-  setIsImportBusy(true);
-  setImportPreview(null);
-  updateStatus('Reading import file...');
-
-  try {
-    const nextPreview = await getTextboxImportPreview(importSettings);
-    setImportPreview(nextPreview);
-    updateStatus(
-      `Read ${nextPreview.wordCount} words, ${nextPreview.characterCount} characters, ${nextPreview.paragraphCount} paragraphs.`,
-    );
-  } catch (error) {
-    updateStatus(`Could not preview import file: ${String(error)}`);
-  } finally {
-    setIsImportBusy(false);
-  }
-}, [importSettings, updateStatus]);
-
-const executeImportTextFile = useCallback(async () => {
-  setIsImportBusy(true);
-  updateStatus('Starting text import...');
-
-  try {
-    const result = await performTextboxImport(importSettings, {
-      onProgress: update => {
-        updateStatus(update.message);
-      },
-    });
-
+  const previewImportTextFile = useCallback(async () => {
+    setIsImportBusy(true);
     setImportPreview(null);
-    updateStatus(result.message);
-  } catch (error) {
-    updateStatus(`Import failed: ${String(error)}`);
-  } finally {
-    setIsImportBusy(false);
-  }
-}, [importSettings, updateStatus]);
-
-
-  const executeCurrentAction = useCallback(async () => {
-    if (!currentAction) {
-      return;
-    }
-
-    setIsBusy(true);
-    setBackupPath('');
-    updateStatus(`Executing ${ACTION_LABELS[currentAction]}...`);
-
+    setStatus('Reading import file...');
     try {
-      const result = await performTextboxAction(currentAction);
-      setBackupPath(result.backupPath);
-      if (currentAction === 'log') {
-        setPreview(current => current
-          ? {
-              ...current,
-              beforeBlocks: [],
-              afterBlocks: result.previewBlocks || [],
-              selectionMessage: result.message,
-            }
-          : current,
-        );
-      } else {
-        setPreview(null);
-        setCurrentAction(null);
-      }
-      updateStatus(result.message);
+      const nextPreview = await getTextboxImportPreview(importSettings);
+      setImportPreview(nextPreview);
+      setStatus(
+        `Read ${nextPreview.wordCount} words, ${nextPreview.characterCount} characters, ${nextPreview.paragraphCount} paragraphs.`,
+      );
     } catch (error) {
-      updateStatus(`Textbox action failed: ${String(error)}`);
+      setStatus(`Could not preview import file: ${String(error)}`);
     } finally {
-      setIsBusy(false);
+      setIsImportBusy(false);
     }
-  }, [currentAction, updateStatus]);
+  }, [importSettings]);
 
-
-  const availableActionLabels = useMemo(() => {
-    if (!preview) {
-      return [];
-    }
-
-    return ACTION_ORDER.filter(action => preview.availableActions[action]).map(
-      action => ACTION_LABELS[action],
-    );
-  }, [preview]);
-
-  const beforePreviewText = useMemo(
-    () => formatPreviewBlocks(preview?.beforeBlocks || [], 'No textbox text to preview.'),
-    [preview],
-  );
-  const afterPreviewText = useMemo(() => {
-    if (!currentAction) {
-      return 'Choose an action above to preview the result.';
-    }
-
-    return formatPreviewBlocks(
-      preview?.afterBlocks || [],
-      'This action is not available for the current selection.',
-    );
-  }, [currentAction, preview]);
-
-
-  const canExecute =
-    !!currentAction &&
-    !!preview &&
-    preview.availableActions[currentAction] &&
-    !isBusy &&
-    !isPreviewLoading;
-
-
-  const handleDirectCancel = useCallback(() => {
-    if (directDialog.isBusy && directDialog.canCancel) {
-      cancelRequestedRef.current = true;
-      updateDirectDialog({
-        ...directDialog,
-        message: 'Canceling before changes are applied...',
-        canCancel: false,
+  const executeImportTextFile = useCallback(async () => {
+    setIsImportBusy(true);
+    setStatus('Starting text import...');
+    try {
+      const result = await performTextboxImport(importSettings, {
+        onProgress: update => setStatus(update.message),
       });
-      return;
+      setImportPreview(null);
+      setStatus(result.message);
+    } catch (error) {
+      setStatus(`Import failed: ${String(error)}`);
+    } finally {
+      setIsImportBusy(false);
     }
+  }, [importSettings]);
 
-    if (directDialog.isBusy) {
-      updateDirectDialog({
-        ...directDialog,
-        message: 'Finishing the current change safely...',
-      });
-      return;
-    }
-
-    closePluginView();
-  }, [closePluginView, directDialog, updateDirectDialog]);
-
-
-
-
-
-
-
-if (viewMode === 'direct') {
-  return (
-    <DirectActionDialog
-      dialog={directDialog}
-      onCancelOrClose={handleDirectCancel}
-      onOk={closePluginView}
-    />
-  );
-}
-
-if (viewMode === 'markers') {
-  return <EditMarkerReviewScreen key={launchKey} scope={markerScope} onClose={closePluginView} />;
-}
-
-if (viewMode === 'import') {
-  return (
-    <ImportTextFileView
-      settings={importSettings}
-      preview={importPreview}
-      isBusy={isImportBusy}
-      status={status}
-      onChangeSettings={nextSettings => {
-        setImportSettings(nextSettings);
-        setImportPreview(null);
-        updateStatus('');
-      }}
-      onPreview={previewImportTextFile}
-      onImport={executeImportTextFile}
-      onClose={closePluginView}
-    />
-  );
-}
-
-if (viewMode === 'exportDocx') {
-  return (
-    <ExportScreen
-      pageInfo={
-        exportNoteContext?.pageInfo ??
-        'Reading current note context...'
-      }
-      currentPage={exportNoteContext?.page ?? null}
-      onClose={closePluginView}
-      refreshNoteContext={refreshNoteContext}
-    />
-  );
-}
-
-if (viewMode === 'routing') {
-  return null;
-}
-  if (pagingTestOpen) {
-    return <PagingTestScreen onBack={() => setPagingTestOpen(false)} />;
+  switch (screen) {
+    case 'routing':
+      return null;
+    case 'permission':
+      return (
+        <ScreenFrame
+          title="Textbox Tools"
+          onClose={closePluginView}
+          status={{kind: 'error', text: 'Missing permission: allow file read and write access for this plugin.'}}>
+          {null}
+        </ScreenFrame>
+      );
+    case 'tools':
+      return <TextboxToolsScreen key={launchKey} onClose={closePluginView} />;
+    case 'markers':
+      return <EditMarkerReviewScreen key={launchKey} scope={markerScope} onClose={closePluginView} />;
+    case 'direct':
+      return <DirectActionScreen key={launchKey} action={directAction} onClose={closePluginView} />;
+    case 'import':
+      return (
+        <ImportTextFileView
+          settings={importSettings}
+          preview={importPreview}
+          isBusy={isImportBusy}
+          status={status}
+          onChangeSettings={nextSettings => {
+            setImportSettings(nextSettings);
+            setImportPreview(null);
+            setStatus('');
+          }}
+          onPreview={previewImportTextFile}
+          onImport={executeImportTextFile}
+          onClose={closePluginView}
+        />
+      );
+    case 'export':
+      return (
+        <ExportScreen
+          pageInfo={exportNoteContext?.pageInfo ?? 'Reading current note context...'}
+          currentPage={exportNoteContext?.page ?? null}
+          onClose={closePluginView}
+          refreshNoteContext={refreshNoteContext}
+        />
+      );
   }
-  return (
-    <TextboxToolsView
-      preview={preview}
-      currentAction={currentAction}
-      isBusy={isBusy}
-      isPreviewLoading={isPreviewLoading}
-      status={status}
-      backupPath={backupPath}
-      canExecute={canExecute}
-      beforePreviewText={beforePreviewText}
-      afterPreviewText={afterPreviewText}
-      availableActionLabels={availableActionLabels}
-      onSelectAction={loadPreview}
-      onExecute={executeCurrentAction}
-      onClose={closePluginView}
-      onOpenPagingTest={() => setPagingTestOpen(true)}
-    />
-  );
 }
-
-
 
 export default App;

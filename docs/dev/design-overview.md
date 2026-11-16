@@ -55,20 +55,22 @@ check fail if the SDK types drift away from them.
 ### Screens and `App.tsx`
 
 `App.tsx` owns permissions and button routing; it opens one screen per button, keyed by the press,
-so a screen opened again starts fresh. Screens built on `ui/ScreenFrame.tsx` own their state in a
-hook next to them: `screens/markers/` (`EditMarkerReviewScreen`, `MarkerDetailsScreen`,
-`useEditMarkerReview`). The older screens (`TextboxToolsView`, `DirectActionDialog`,
-`ImportTextFileView`, `ExportScreen`) still get their state from `App.tsx` and their styles from
-`src/ui/pluginUiStyles.ts` until technical-design-calmer-screens.md replaces them. `ACTION_LABELS` in `src/domain/textboxActionKinds.ts`
-is the one label per action kind.
+so a screen opened again starts fresh. The button listener subscribes once and calls the latest
+router through a ref. Screens are built on `ui/ScreenFrame.tsx` and own their state in a hook next
+to them: `screens/markers/` (edit-marker review and Details), `screens/tools/` (the lasso screen,
+its Details with "Log All Textboxes"), `screens/direct/` (the toolbar actions' progress card). The
+older screens (`ImportTextFileView`, `ExportScreen`) still get their state from `App.tsx` and their
+styles from `src/ui/pluginUiStyles.ts` until technical-design-calmer-screens.md replaces them.
+`src/domain/textboxActionKinds.ts` holds one label and one progress text per action kind
+(`ACTION_LABELS`, `ACTION_PROGRESS_LABELS`) and the lasso screen's order (`ACTION_ORDER`).
 
 ### Textbox actions (`actions/textboxEdits.ts`)
 
 Direct textbox editing: split by sentence, split by paragraph, join in reading order, clean
 repeated spaces, remove manual line breaks, and "Log All Textboxes". The flow finds the textboxes
 in the lasso, `domain/textSplitting.ts` computes the new texts, `domain/textboxEditPlan.ts` the
-preview, the new textboxes and the checks that the result fits the page without colliding with
-other elements; the new textboxes are sized through the native measurement.
+preview of every action at once (with the reason an action can't be chosen), the new textboxes
+and the checks that the result fits the page without colliding with other elements; the new textboxes are sized through the native measurement.
 
 ### Edit markers (`actions/editMarkers.ts`, `actions/editMarkerAnalysis.ts`)
 

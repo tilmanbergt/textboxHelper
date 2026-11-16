@@ -14,10 +14,11 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 
 ### Textbox Tools
 
-- Split one textbox into sentence-based textboxes
+- Split one textbox into sentence-based or paragraph-based textboxes
 - Join selected textboxes in reading order
 - Clean repeated spaces
 - Remove manual line breaks
+- See every action's result before applying it; actions that don't fit the selection say why
 
 ### Edit Markers
 
