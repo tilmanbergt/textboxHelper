@@ -54,10 +54,12 @@ check fail if the SDK types drift away from them.
 
 ### Screens and `App.tsx`
 
-`App.tsx` owns the user flow: permissions, routing, previews, progress, cancellation, status and
-result messages. `src/screens/` holds the views and dialogs (`TextboxToolsView`,
-`DirectActionDialog`, `EditMarkerReviewView`, `ImportTextFileView`, `ExportScreen`);
-`src/ui/pluginUiStyles.ts` their styles. `ACTION_LABELS` in `src/domain/textboxActionKinds.ts`
+`App.tsx` owns permissions and button routing; it opens one screen per button, keyed by the press,
+so a screen opened again starts fresh. Screens built on `ui/ScreenFrame.tsx` own their state in a
+hook next to them: `screens/markers/` (`EditMarkerReviewScreen`, `MarkerDetailsScreen`,
+`useEditMarkerReview`). The older screens (`TextboxToolsView`, `DirectActionDialog`,
+`ImportTextFileView`, `ExportScreen`) still get their state from `App.tsx` and their styles from
+`src/ui/pluginUiStyles.ts` until technical-design-calmer-screens.md replaces them. `ACTION_LABELS` in `src/domain/textboxActionKinds.ts`
 is the one label per action kind.
 
 ### Textbox actions (`actions/textboxEdits.ts`)
@@ -77,9 +79,12 @@ Freehand strokes and the Supernote straight-line tool are both recognized.
 marker to words through the hit-testing core and the native measurement;
 `actions/editMarkers.ts` pairs replace marks, resolves replacement sources, builds the preview
 and applies the plan - for the lasso selection or the whole page. The pure parts are in
-`domain/markerStrokes.ts`, `domain/markerText.ts` and `domain/markerTypes.ts`.
+`domain/markerStrokes.ts`, `domain/markerText.ts` and `domain/markerTypes.ts`. The preview
+shows each affected textbox as diff segments (`domain/markerDiff.ts`): the original text with the
+removed ranges struck through and replacements in bold, built from the same ranges the apply step
+uses, so the review shows exactly what will change.
 Every stage of a marker preview is also recorded in memory (`utils/editMarkerLog.ts`); "Save
-Diagnostics" in the review screen writes that trace, with the stroke's raw sample points next to
+Diagnostics" (review → Details) writes that trace, with the stroke's raw sample points next to
 the points recognition used, as JSON to the EXPORT folder - only when the user taps it.
 
 ### Text import (`actions/textImport.ts`)

@@ -1,5 +1,6 @@
 import type {PageWordCandidate} from './hitTesting';
 import type {TextboxMeasurementCalibration} from './textboxLayout';
+import type {TextSegment} from './textPages';
 import type {PageElementData, Rect, TextElementData} from './textboxModel';
 
 /**
@@ -16,12 +17,6 @@ export type EditMarkerHighlightRange = {
   end: number;
 };
 
-export type EditMarkerPreviewBlock = {
-  id: string;
-  text: string;
-  highlightRanges: EditMarkerHighlightRange[];
-};
-
 export type RecognizedEditOperation = {
   id: string;
   kind: EditMarkerOperationKind;
@@ -35,6 +30,8 @@ export type RecognizedEditOperation = {
   detail: string;
   words: string[];
   replacementText?: string;
+  /** Where the operation's first range starts in the textbox's original text (review jumps there). */
+  textStart: number;
 };
 
 export type IgnoredEditMarker = {
@@ -44,16 +41,23 @@ export type IgnoredEditMarker = {
   reason: string;
 };
 
+export type EditMarkerTextboxPreview = {
+  uuid: string;
+  numInPage: number;
+  segments: TextSegment[];
+  changeCount: number;
+};
+
 export type EditMarkerPreview = {
   selectedMarkerCount: number;
   selectedTextboxCount: number;
   recognizedOperationCount: number;
   selectionMessage: string;
   summaryMessage: string;
-  beforePreviewBlocks: EditMarkerPreviewBlock[];
-  afterPreviewBlocks: EditMarkerPreviewBlock[];
-  beforeBlocks: string[];
-  afterBlocks: string[];
+  /** The affected textboxes in reading order, as diff segments (domain/markerDiff.ts). */
+  textboxes: EditMarkerTextboxPreview[];
+  /** Set when a textbox font couldn't be read and word positions were measured in a standard font. */
+  fontWarning: string | null;
   operations: RecognizedEditOperation[];
   ignoredMarkers: IgnoredEditMarker[];
   canApply: boolean;

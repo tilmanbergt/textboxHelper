@@ -24,8 +24,8 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 - Recognize handwritten delete markers
 - Recognize replace markers as a delete line plus two crossing modifier lines
 - Support both freehand strokes and Supernote straight-line geometry
-- Preview all changes before applying them
-- Save diagnostics of a marker preview to the EXPORT folder (Recognition Details → Save Diagnostics), for bug reports
+- Review all changes before applying them: removed words struck through, replacements in bold, one textbox at a time
+- Calibrate the text measurement and save diagnostics of a marker preview to the EXPORT folder (Details), for bug reports
 
 ### Apply All Edit Markers
 

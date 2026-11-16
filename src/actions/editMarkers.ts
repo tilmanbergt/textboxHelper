@@ -1,6 +1,7 @@
 import type {Element, TextBox} from 'sn-plugin-lib';
 import {createEditMarkerBackupPayload} from '../domain/backupPayload';
-import {appendFontWarning} from '../domain/fontPaths';
+import {buildDiffSegments} from '../domain/markerDiff';
+import {plural} from '../domain/plural';
 import {cloneRect} from '../domain/geometry';
 import {
   buildRecognizeRect,
@@ -10,7 +11,6 @@ import {
 } from '../domain/markerStrokes';
 import {
   applyTextMutationRanges,
-  applyTextMutationRangesDetailed,
   buildIgnoredMarker,
   buildOperationDetailWithReplacement,
   buildReplacementLineLogSummary,
@@ -21,7 +21,6 @@ import {
   countElementTypes,
   createEmptyPreview,
   formatOperationSnippet,
-  mergeHighlightRanges,
 } from '../domain/markerText';
 import type {
   EditMarkerCalibration,
@@ -33,7 +32,6 @@ import type {
   RecognizedEditOperation,
   TextMutationPlan,
   TextMutationRange,
-  WordCandidate,
 } from '../domain/markerTypes';
 import {DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION} from '../domain/textboxLayout';
 import {DEFAULT_FONT_SIZE} from '../domain/textboxModel';
@@ -173,7 +171,7 @@ export async function getEditMarkerPreview(
     return preview;
   }
   logEditMarker('fontWarning', {fontWarning});
-  return {...preview, summaryMessage: appendFontWarning(preview.summaryMessage, fontWarning)};
+  return {...preview, fontWarning};
 }
 
 async function buildEditMarkerPreview(
@@ -213,19 +211,7 @@ async function buildEditMarkerPreview(
     if (selectedMarkers.length === 0) {
       return {
         ...createEmptyPreview(0, selectedTextboxes.length),
-        summaryMessage: 'Select one or more handwritten edit markers.',
-        beforePreviewBlocks: selectedTextboxes.map(textbox => ({
-          id: textbox.uuid,
-          text: textbox.textBox.textContentFull || '',
-          highlightRanges: [],
-        })),
-        afterPreviewBlocks: selectedTextboxes.map(textbox => ({
-          id: textbox.uuid,
-          text: textbox.textBox.textContentFull || '',
-          highlightRanges: [],
-        })),
-        beforeBlocks: selectedTextboxes.map(textbox => textbox.textBox.textContentFull || ''),
-        afterBlocks: selectedTextboxes.map(textbox => textbox.textBox.textContentFull || ''),
+        summaryMessage: 'No edit markers in the selection.',
       };
     }
 
@@ -291,7 +277,6 @@ async function buildEditMarkerPreview(
 
     const usedRangesByTextbox = new Map<string, Set<string>>();
     const operations: RecognizedEditOperation[] = [];
-    const groupedWords = new Map<string, WordCandidate[]>();
     const groupedTextboxes = new Map<string, TextElement>();
     const groupedRanges = new Map<string, TextMutationRange[]>();
     const replacementSourceTextboxNums = new Set<number>();
@@ -424,7 +409,6 @@ async function buildEditMarkerPreview(
 
       usedRangesByTextbox.set(textboxUuid, usedRanges);
       groupedTextboxes.set(textboxUuid, candidate.targetTextbox);
-      groupedWords.set(textboxUuid, [...(groupedWords.get(textboxUuid) || []), ...nextWords]);
 
       const wordTexts = nextWords.map(word => word.text);
       const kind: EditMarkerOperationKind = replaceInfo?.replacementText ? 'replace' : 'delete';
@@ -461,6 +445,7 @@ async function buildEditMarkerPreview(
         ),
         words: wordTexts,
         replacementText: replaceInfo?.replacementText,
+        textStart: nextWords[0].start,
       });
     });
 
@@ -503,49 +488,12 @@ async function buildEditMarkerPreview(
       }))
     ).filter((mutation): mutation is TextMutationPlan => !!mutation);
 
-    const relevantTextboxes =
-      textMutations.length > 0
-        ? textMutations
-        : selectedTextboxes.map(textbox => ({
-            uuid: textbox.uuid,
-            numInPage: textbox.numInPage,
-            layerNum: textbox.layerNum,
-            originalText: textbox.textBox.textContentFull || '',
-            nextText: textbox.textBox.textContentFull || '',
-            textRect: cloneRect(textbox.textBox.textRect),
-            nextTextRect: cloneRect(textbox.textBox.textRect),
-            fontSize: textbox.textBox.fontSize || DEFAULT_FONT_SIZE,
-            fontPath: textbox.textBox.fontPath,
-            textAlign: textbox.textBox.textAlign ?? 0,
-            textBold: textbox.textBox.textBold ?? 0,
-            textItalics: textbox.textBox.textItalics ?? 0,
-            textFrameWidthType: textbox.textBox.textFrameWidthType ?? 0,
-            textFrameStyle: textbox.textBox.textFrameStyle ?? 0,
-            textEditable: textbox.textBox.textEditable ?? 0,
-          }));
-
-    const beforePreviewBlocks = relevantTextboxes.map(textbox => ({
-      id: textbox.uuid,
-      text: textbox.originalText,
-      highlightRanges: mergeHighlightRanges(
-        (groupedWords.get(textbox.uuid) || []).map(word => ({
-          start: word.start,
-          end: word.end,
-        })),
-      ),
+    const textboxes = textMutations.map(mutation => ({
+      uuid: mutation.uuid,
+      numInPage: mutation.numInPage,
+      segments: buildDiffSegments(mutation.originalText, groupedRanges.get(mutation.uuid) || []),
+      changeCount: operations.filter(operation => operation.targetTextboxUuid === mutation.uuid).length,
     }));
-    const afterPreviewBlocks = relevantTextboxes.map(textbox => {
-      const detailedMutation = applyTextMutationRangesDetailed(
-        textbox.originalText,
-        groupedRanges.get(textbox.uuid) || [],
-      );
-
-      return {
-        id: textbox.uuid,
-        text: detailedMutation.text,
-        highlightRanges: detailedMutation.insertedRanges,
-      };
-    });
 
     const recognizedMarkerNums = [
       ...new Set(operations.flatMap(operation => operation.consumedMarkerNums)),
@@ -584,10 +532,8 @@ async function buildEditMarkerPreview(
         visibleIgnoredMarkers.length,
         selectedMarkers.length,
       ),
-      beforePreviewBlocks,
-      afterPreviewBlocks,
-      beforeBlocks: relevantTextboxes.map(textbox => textbox.originalText),
-      afterBlocks: relevantTextboxes.map(textbox => textbox.nextText),
+      textboxes,
+      fontWarning: null,
       operations,
       ignoredMarkers: visibleIgnoredMarkers,
       canApply: !!applyPlan,
@@ -675,7 +621,7 @@ export async function applyEditMarkerPreview(
     await hideLassoBox('[EditMarkerActions]');
 
     return {
-      message: `Applied ${plan.operations.length} recognized edit operations and removed ${plan.recognizedMarkerNums.length} marker(s).`,
+      message: `Applied ${plural(plan.operations.length, 'change')} and removed ${plural(plan.recognizedMarkerNums.length, 'marker')}.`,
       backupPath,
       clipboardSummary,
       appliedOperationCount: plan.operations.length,

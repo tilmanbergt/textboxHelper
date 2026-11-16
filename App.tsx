@@ -32,21 +32,12 @@ import {
   type ExportNoteContext,
 } from './src/supernote/exportNoteContext';
 import {
-  applyEditMarkerPreview,
-  getEditMarkerCalibration,
-  getEditMarkerPreview,
-  resetEditMarkerCalibration,
-  saveEditMarkerDiagnostics,
-  setEditMarkerCalibration,
-} from './src/actions/editMarkers';
-import {
   getTextboxActionPreview,
   performTextboxAction,
   TEXTBOX_ACTION_CANCELLED_MESSAGE,
   type TextboxActionProgressUpdate,
 } from './src/actions/textboxEdits';
 
-import {styles} from './src/ui/pluginUiStyles';
 
 import {
   DirectActionDialog,
@@ -68,10 +59,7 @@ import {
   formatPreviewBlocks,
 } from './src/screens/TextboxToolsView';
 
-import {
-  EditMarkerReviewView,
-  renderHighlightedPreviewBlocks,
-} from './src/screens/EditMarkerReviewView';
+import EditMarkerReviewScreen from './src/screens/markers/EditMarkerReviewScreen';
 import {
   BUTTON_ID_EXPORT_DOCX,
   BUTTON_ID_IMPORT_TEXT_FILE,
@@ -90,7 +78,7 @@ import {
   type TextboxActionKind,
 } from './src/domain/textboxActionKinds';
 import type {TextboxActionPreview} from './src/domain/textboxEditPlan';
-import type {EditMarkerPreviewScope, EditMarkerPreview} from './src/domain/markerTypes';
+import type {EditMarkerPreviewScope} from './src/domain/markerTypes';
 import {
   DEFAULT_TEXTBOX_IMPORT_SETTINGS,
   type TextboxImportSettings,
@@ -112,7 +100,6 @@ type ViewMode =
   | 'direct'
   | 'import'
   | 'exportDocx';
-  type MarkerSection = 'recognition' | 'calibration' | 'help';
 
 
 
@@ -136,23 +123,13 @@ function App(): React.JSX.Element | null {
   const [pagingTestOpen, setPagingTestOpen] = useState(false);
   const [currentAction, setCurrentAction] = useState<TextboxActionKind | null>(null);
   const [preview, setPreview] = useState<TextboxActionPreview | null>(null);
-  const [markerPreview, setMarkerPreview] = useState<EditMarkerPreview | null>(null);
-  const [markerPreviewScope, setMarkerPreviewScope] =
-    useState<EditMarkerPreviewScope>('lasso');
-  const [activeMarkerSection, setActiveMarkerSection] =
-    useState<MarkerSection>('help');
+  const [markerScope, setMarkerScope] = useState<EditMarkerPreviewScope>('lasso');
+  // Changes with every button press, so a screen opened again starts fresh (its key).
+  const [launchKey, setLaunchKey] = useState(0);
   const [isBusy, setIsBusy] = useState(false);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-  const [isMarkerPreviewLoading, setIsMarkerPreviewLoading] = useState(false);
-  const [isMarkerBusy, setIsMarkerBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [backupPath, setBackupPath] = useState('');
-  const [markerOffsetX, setMarkerOffsetX] = useState(
-    () => getEditMarkerCalibration().offsetX,
-  );
-  const [markerWidthAdjustment, setMarkerWidthAdjustment] = useState(
-    () => getEditMarkerCalibration().widthAdjustment,
-  );
   const [directDialog, setDirectDialog] = useState<DirectDialogState>(
     createIdleDirectDialog(),
   );
@@ -231,54 +208,6 @@ const refreshNoteContext = useCallback(async () => {
     }
   }, [updateStatus]);
 
-  const loadMarkerPreview = useCallback(async (
-    nextScope: EditMarkerPreviewScope = markerPreviewScope,
-  ) => {
-    setIsMarkerPreviewLoading(true);
-
-    try {
-      const nextPreview = await getEditMarkerPreview(nextScope);
-      setMarkerPreview(nextPreview);
-      setMarkerPreviewScope(nextScope);
-      setActiveMarkerSection(
-        nextPreview.recognizedOperationCount > 0 ? 'recognition' : 'help',
-      );
-
-      if (nextPreview.selectedMarkerCount === 0) {
-        updateStatus(
-          nextScope === 'page'
-            ? 'No edit markers or straight-line markers were found on this page.'
-            : 'Select one or more handwritten or straight-line edit markers.',
-        );
-        return;
-      }
-
-      if (!nextPreview.canApply) {
-        updateStatus(nextPreview.summaryMessage);
-        return;
-      }
-
-      updateStatus('');
-   } catch (error) {
-     updateStatus(
-       nextScope === 'page'
-         ? `Could not read the current page markers: ${String(error)}`
-         : `Could not read the current marker selection: ${String(error)}`,
-     );
-   } finally {
-     setIsMarkerPreviewLoading(false);
-   }
-  }, [markerPreviewScope, updateStatus]);
-
-  const reloadMarkerPreviewWithCalibration = useCallback(
-    async (nextCalibration: {offsetX?: number; widthAdjustment?: number}) => {
-      const appliedCalibration = setEditMarkerCalibration(nextCalibration);
-      setMarkerOffsetX(appliedCalibration.offsetX);
-      setMarkerWidthAdjustment(appliedCalibration.widthAdjustment);
-      await loadMarkerPreview();
-    },
-    [loadMarkerPreview],
-  );
 
   useEffect(() => {
     return () => {
@@ -398,15 +327,13 @@ if (buttonId === BUTTON_ID_EXPORT_DOCX) {
 
   return;
 }
-      if (buttonId === BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS) {
+      if (
+        buttonId === BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS ||
+        buttonId === BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS
+      ) {
+        setMarkerScope(buttonId === BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS ? 'page' : 'lasso');
+        setLaunchKey(key => key + 1);
         setViewMode('markers');
-        loadMarkerPreview('lasso');
-        return;
-      }
-
-      if (buttonId === BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS) {
-        setViewMode('markers');
-        loadMarkerPreview('page');
         return;
       }
 
@@ -456,7 +383,7 @@ if (buttonId === BUTTON_ID_EXPORT_DOCX) {
     // viewMode, and re-running this effect re-requests permissions and re-subscribes the
     // button listener on every screen change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clearPendingClose, loadMarkerPreview, loadPreview, startDirectAction]);
+  }, [clearPendingClose, loadPreview, startDirectAction]);
 
 const previewImportTextFile = useCallback(async () => {
   setIsImportBusy(true);
@@ -531,40 +458,6 @@ const executeImportTextFile = useCallback(async () => {
     }
   }, [currentAction, updateStatus]);
 
-  const executeEditMarkers = useCallback(async () => {
-    if (!markerPreview?.canApply) {
-      return;
-    }
-
-    setIsMarkerBusy(true);
-    setBackupPath('');
-    updateStatus('Applying recognized edit markers...');
-
-    try {
-      const result = await applyEditMarkerPreview(markerPreview, {
-        onProgress: update => {
-          updateStatus(update.message);
-        },
-      });
-      setBackupPath(result.backupPath);
-
-      try {
-        const refreshedPreview = await getEditMarkerPreview(markerPreviewScope);
-        setMarkerPreview(refreshedPreview);
-      } catch {
-        // Preserve the success message even if the lasso state is already gone.
-      }
-
-      updateStatus(result.message);
-      closeTimerRef.current = setTimeout(() => {
-        PluginManager.closePluginView();
-      }, 700);
-    } catch (error) {
-      updateStatus(`Edit marker apply failed: ${String(error)}`);
-    } finally {
-      setIsMarkerBusy(false);
-    }
-  }, [markerPreview, markerPreviewScope, updateStatus]);
 
   const availableActionLabels = useMemo(() => {
     if (!preview) {
@@ -591,24 +484,6 @@ const executeImportTextFile = useCallback(async () => {
     );
   }, [currentAction, preview]);
 
-  const markerBeforePreviewContent = useMemo(
-    () =>
-      renderHighlightedPreviewBlocks(
-        markerPreview?.beforePreviewBlocks || [],
-        'No relevant textbox text found for the selected markers.',
-        styles.deletedPreviewText,
-      ),
-    [markerPreview],
-  );
-  const markerAfterPreviewContent = useMemo(
-    () =>
-      renderHighlightedPreviewBlocks(
-        markerPreview?.afterPreviewBlocks || [],
-        'No recognized marker operations are ready to preview.',
-        styles.insertedPreviewText,
-      ),
-    [markerPreview],
-  );
 
   const canExecute =
     !!currentAction &&
@@ -617,10 +492,6 @@ const executeImportTextFile = useCallback(async () => {
     !isBusy &&
     !isPreviewLoading;
 
-  const canApplyMarkers =
-    !!markerPreview?.canApply &&
-    !isMarkerBusy &&
-    !isMarkerPreviewLoading;
 
   const handleDirectCancel = useCallback(() => {
     if (directDialog.isBusy && directDialog.canCancel) {
@@ -661,50 +532,7 @@ if (viewMode === 'direct') {
 }
 
 if (viewMode === 'markers') {
-  return (
-    <EditMarkerReviewView
-      markerPreview={markerPreview}
-      markerPreviewScope={markerPreviewScope}
-      activeMarkerSection={activeMarkerSection}
-      markerBeforePreviewContent={markerBeforePreviewContent}
-      markerAfterPreviewContent={markerAfterPreviewContent}
-      markerOffsetX={markerOffsetX}
-      markerWidthAdjustment={markerWidthAdjustment}
-      isMarkerBusy={isMarkerBusy}
-      isMarkerPreviewLoading={isMarkerPreviewLoading}
-      canApplyMarkers={canApplyMarkers}
-      status={status}
-      backupPath={backupPath}
-      onClose={closePluginView}
-      onApply={executeEditMarkers}
-      onSetActiveMarkerSection={setActiveMarkerSection}
-      onChangeCalibration={nextCalibration => {
-        if (!isMarkerPreviewLoading && !isMarkerBusy) {
-          void reloadMarkerPreviewWithCalibration(nextCalibration);
-        }
-      }}
-      onResetCalibration={() => {
-        if (!isMarkerPreviewLoading && !isMarkerBusy) {
-          const nextCalibration = resetEditMarkerCalibration();
-          setMarkerOffsetX(nextCalibration.offsetX);
-          setMarkerWidthAdjustment(nextCalibration.widthAdjustment);
-          void loadMarkerPreview();
-        }
-      }}
-      onRefreshCalibration={() => {
-        if (!isMarkerPreviewLoading && !isMarkerBusy) {
-          void loadMarkerPreview();
-        }
-      }}
-      onSaveDiagnostics={() => {
-        if (!isMarkerPreviewLoading && !isMarkerBusy) {
-          saveEditMarkerDiagnostics()
-            .then(path => updateStatus(`Diagnostics saved: ${path}`))
-            .catch(error => updateStatus(`Could not save diagnostics: ${String(error)}`));
-        }
-      }}
-    />
-  );
+  return <EditMarkerReviewScreen key={launchKey} scope={markerScope} onClose={closePluginView} />;
 }
 
 if (viewMode === 'import') {

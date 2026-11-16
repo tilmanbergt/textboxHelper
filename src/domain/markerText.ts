@@ -1,3 +1,4 @@
+import {plural} from './plural';
 import {cloneRect, rectHeight, rectOverlapHeight} from './geometry';
 import type {
   EditMarkerCalibration,
@@ -79,26 +80,15 @@ export function buildSummaryMessage(
   selectedMarkerCount: number,
 ): string {
   if (selectedMarkerCount === 0) {
-    return 'Select one or more handwritten edit markers.';
+    return 'No edit markers found.';
   }
-
   if (operationCount === 0) {
-    if (ignoredCount > 0) {
-      return ignoredCount === 1
-        ? 'No operations recognized. 1 selected marker was ignored.'
-        : `No operations recognized. ${ignoredCount} selected markers were ignored.`;
-    }
-
-    return 'No operations recognized yet.';
+    return ignoredCount > 0
+      ? `No changes recognized; ${plural(ignoredCount, 'marker')} could not be used (see Ignored).`
+      : 'No changes recognized yet.';
   }
-
-  if (ignoredCount === 0) {
-    return operationCount === 1
-      ? 'Recognized 1 operation.'
-      : `Recognized ${operationCount} operations.`;
-  }
-
-  return `Recognized ${operationCount} operations. Ignored ${ignoredCount} markers.`;
+  const ignored = ignoredCount > 0 ? ` ${plural(ignoredCount, 'marker')} ignored.` : '';
+  return `${plural(operationCount, 'change')} recognized.${ignored}`;
 }
 
 export function shortenSnippet(text: string, limit = 44): string {
@@ -252,7 +242,7 @@ function normalizeTextAfterEdit(text: string): string {
     .trim();
 }
 
-function getUniqueTextMutationRanges(ranges: TextMutationRange[]): TextMutationRange[] {
+export function getUniqueTextMutationRanges(ranges: TextMutationRange[]): TextMutationRange[] {
   return [...ranges]
     .sort((left, right) => {
       if (left.start !== right.start) {
@@ -358,12 +348,10 @@ export function createEmptyPreview(
     selectionMessage: buildSelectionMessage(selectedMarkerCount, selectedTextboxCount),
     summaryMessage:
       selectedMarkerCount === 0
-        ? 'Select one or more handwritten edit markers.'
-        : 'No operations recognized yet.',
-    beforePreviewBlocks: [],
-    afterPreviewBlocks: [],
-    beforeBlocks: [],
-    afterBlocks: [],
+        ? 'No edit markers found.'
+        : 'No changes recognized yet.',
+    textboxes: [],
+    fontWarning: null,
     operations: [],
     ignoredMarkers: [],
     canApply: false,
