@@ -43,7 +43,7 @@ The single steps are also available as `npm run typecheck`, `npm run lint` and `
 | `src/storage/` | Files: backups, JSON into EXPORT, the import text file, DOCX. |
 | `src/utils/` | The edit-marker diagnostics trace. |
 | `src/screens/` | The views and dialogs of the plugin window. |
-| `src/ui/` | Shared styles of the screens. |
+| `src/ui/` | Shared building blocks of the screens: `ScreenFrame`, buttons, tabs, paging (`PagedSection`, `PagedText`), `theme.ts`; the old screens still use `pluginUiStyles.ts`. |
 | `__tests__/domain/` | Jest tests, one file per domain module or group. |
 | `android/.../com/textboxhelper/TextboxMetricsModule.kt` | Native module: Android `StaticLayout` text measurement for textbox sizes and hit testing. |
 

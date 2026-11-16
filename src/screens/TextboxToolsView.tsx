@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-imports -- scrolls until the calmer-screens step replaces this screen */
 import React from 'react';
 import {
   ScrollView,
@@ -28,6 +29,8 @@ type TextboxToolsViewProps = {
   onSelectAction: (action: TextboxActionKind) => void;
   onExecute: () => void;
   onClose: () => void;
+  /** Temporary (calmer screens S1): opens the paging test screen; removed in step S3. */
+  onOpenPagingTest?: () => void;
 };
 
 export function formatPreviewBlocks(
@@ -55,6 +58,7 @@ export function TextboxToolsView({
   onSelectAction,
   onExecute,
   onClose,
+  onOpenPagingTest,
 }: TextboxToolsViewProps): React.JSX.Element {
   return (
     <View style={styles.screen}>
@@ -75,6 +79,15 @@ export function TextboxToolsView({
                 : 'No actions are available for the current selection.'}
             </Text>
           </View>
+
+          {onOpenPagingTest ? (
+            <TouchableOpacity
+              activeOpacity={0.75}
+              style={styles.closeButton}
+              onPress={onOpenPagingTest}>
+              <Text style={styles.closeButtonText}>Paging test</Text>
+            </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity
             activeOpacity={0.75}

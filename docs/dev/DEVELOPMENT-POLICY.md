@@ -74,6 +74,11 @@ The architecture as built is described in `design-overview.md`. These rules are 
 ## 4. UI and logging rules
 
 - **Target:** the Supernote NOTE app, developed and tested on the A5 X. Grayscale only: color never carries meaning.
+- **No scrolling.** Every screen is a bounded flex column in `src/ui/ScreenFrame.tsx` (header,
+  body, footer with the status line and one primary button). Long lists page with
+  `ui/PagedSection.tsx`, long text with `ui/PagedText.tsx`; arrows show only when there is more.
+  ESLint forbids `ScrollView`, `FlatList` and `SectionList`. Styles come from `ui/theme.ts`;
+  meaning is carried by weight, underline and strikethrough, never by colour.
 - **Destructive actions** go through a review screen or the direct-action dialog with an explicit
   confirmation; the result message names the backup.
 - **Labels** are short, English and the same everywhere (toolbar button, dialog title, status

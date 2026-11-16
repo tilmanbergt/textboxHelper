@@ -38,7 +38,7 @@ import which (`DEVELOPMENT-POLICY.md` §3).
 | `supernote/` | Everything that talks to the device: `sn-plugin-lib` calls (`noteElements.ts`, `noteTextInsertion.ts`, `markerStrokeRead.ts`, `exportNoteContext.ts`), the native measurement (`textboxMetrics.ts`), routing and permissions. | `domain/`, `utils/` |
 | `storage/` | File I/O: backups (`backupFile.ts`), JSON into EXPORT (`exportFile.ts`), the import text file (`importFile.ts`), DOCX (`docxExport.ts`). | the three above |
 | `actions/` | The flows behind the buttons: preview, backup, change. | everything above |
-| `ui/` | Shared building blocks of the screens (`pluginUiStyles.ts`). | everything above |
+| `ui/` | Shared building blocks of the screens: `ScreenFrame`, `PillButton`, `Segmented`, `Checkbox`, `CountTabs`, paging (`pagination.ts`, `PagedSection`, `PagedText`), `HelpOverlay`, `theme.ts`; `pluginUiStyles.ts` until every screen is moved (technical-design-calmer-screens.md). | everything above |
 | `screens/` | One file per screen or dialog. | everything |
 
 An action has three parts: what changes (`domain/`), reading and changing the note

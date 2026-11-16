@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-imports -- scrolls until the calmer-screens step replaces this screen */
 import React, {useEffect, useMemo, useState} from 'react';
 import {
   ScrollView,

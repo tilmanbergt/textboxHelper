@@ -26,6 +26,7 @@ import {
 } from './src/supernote/pluginRouting';
 
 import ExportScreen from './src/screens/ExportScreen';
+import PagingTestScreen from './src/screens/dev/PagingTestScreen';
 import {
   refreshExportNoteContext,
   type ExportNoteContext,
@@ -131,6 +132,8 @@ function App(): React.JSX.Element | null {
       const [exportNoteContext, setExportNoteContext] =
         useState<ExportNoteContext | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('routing');
+  // Temporary (calmer screens S1): the paging test screen over the lasso screen; removed in S3.
+  const [pagingTestOpen, setPagingTestOpen] = useState(false);
   const [currentAction, setCurrentAction] = useState<TextboxActionKind | null>(null);
   const [preview, setPreview] = useState<TextboxActionPreview | null>(null);
   const [markerPreview, setMarkerPreview] = useState<EditMarkerPreview | null>(null);
@@ -740,6 +743,9 @@ if (viewMode === 'exportDocx') {
 if (viewMode === 'routing') {
   return null;
 }
+  if (pagingTestOpen) {
+    return <PagingTestScreen onBack={() => setPagingTestOpen(false)} />;
+  }
   return (
     <TextboxToolsView
       preview={preview}
@@ -755,6 +761,7 @@ if (viewMode === 'routing') {
       onSelectAction={loadPreview}
       onExecute={executeCurrentAction}
       onClose={closePluginView}
+      onOpenPagingTest={() => setPagingTestOpen(true)}
     />
   );
 }
