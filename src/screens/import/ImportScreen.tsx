@@ -225,7 +225,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   left: {
-    width: 400,
+    width: 420,
     paddingHorizontal: SPACING.xl,
     paddingTop: SPACING.base,
     paddingBottom: SPACING.base,

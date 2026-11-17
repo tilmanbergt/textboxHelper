@@ -91,6 +91,6 @@ Releases are made from `main`, as GitHub pre-releases while the plugin is experi
    git tag -a v<x.y.z> -m "Release <x.y.z>"
    git push
    git push origin v<x.y.z>
-   gh release create v<x.y.z> build\textboxHelper-<x.y.z>.snplg --title "Textbox Helper <x.y.z>" --notes-file build\release-notes-<x.y.z>.md --prerelease
+   gh release create v<x.y.z> build\textboxHelper-<x.y.z>.snplg --title "Textbox Tools <x.y.z>" --notes-file build\release-notes-<x.y.z>.md --prerelease
    ```
 8. Open the release page: text and `.snplg` are there.

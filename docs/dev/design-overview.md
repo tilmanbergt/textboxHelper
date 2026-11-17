@@ -1,4 +1,4 @@
-# Textbox Helper - design overview
+# Textbox Tools - design overview
 
 > **About this document.** How the plugin is built and why: the flow from a button press to a
 > changed note, the layers, the features and where they live. Living document:

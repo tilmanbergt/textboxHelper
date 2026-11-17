@@ -1,6 +1,6 @@
 # Technical design: Calmer screens
 
-Status: **approved** (2026-11-16). Requirements (D1–D29, O1–O7, C1–C5, I1–I4) were decided in conversation and are kept in the claude.ai project document `claude/feature-calmer-screens.md`; the UI mockup is the design canvas "Textbox Tools Calmer Screens".
+Status: **done** (2026-11-17); see §9 As built. Requirements (D1–D29, O1–O7, C1–C5, I1–I4) were decided in conversation and are kept in the claude.ai project document `claude/feature-calmer-screens.md`; the UI mockup is the design canvas "Textbox Tools Calmer Screens".
 
 **Base:** `main` after the layers work (L1–L6, `b2b5c3b`) and the INBOX fix. The device folder is spelled `INBOX`. File names below are the post-layers ones (`technical-design-layers.md` §4.4). Branch `feature/calmer-screens`, merged `--no-ff` after the last device stop. Own release (minor version, "Changed" in the CHANGELOG plus the rename).
 
@@ -176,4 +176,51 @@ Each step ends with `npm run check` green and its own commit; help texts, CHANGE
 
 ## 9. As built
 
-(filled in during implementation)
+Built in four commits on `feature/calmer-screens` (S1, S2, S3, S4+S5 together) plus a fix commit
+after the device test and the S6 commit. 82 → 113 Jest tests. `App.tsx` 764 → 150 lines; the
+largest screen file has about 300 lines. No `ScrollView` is left; ESLint forbids it.
+
+Deviations from the design:
+
+- **Order.** S4 and S5 were one commit. `ui/pluginUiStyles.ts` and the old screens were deleted in
+  the step that replaced them, so S6 had no screens left to remove; the per-file ESLint exceptions
+  went with the files.
+- **S1 test screen.** The temporary paging test screen sat behind a "Paging test" button on the
+  old lasso screen (there was no Details yet) and was removed in S3 as planned. It was not tested
+  on the device; S2 and S3 were tested together instead. `onTextLayout` reports lines on the
+  device (T1), so `PagedText` pages by lines; the fallback was never needed.
+- **Direct actions** are `screens/direct/DirectActionScreen.tsx` (one component with its effect),
+  not a dialog plus a hook.
+- **Lasso screen preview.** One read of the lasso builds every action's result
+  (`afterBlocksByAction`), so switching actions doesn't read the lasso again. Before/After are
+  shown as one paged text with a muted "Textbox n" line per block, not as a `PagedSection`.
+- **Settings write failures** are logged, not shown in the status line (§3.9 said "shown once").
+  The settings stay in memory for the session.
+- **Import file selection** uses the Supernote file selector (decided during the design, §3.7);
+  there is no file list of our own. Confirmed on the device: opens in INBOX, only `.txt`, can't
+  leave INBOX (T5). The second import folder and the typed file name are gone; no file is chosen
+  by default.
+- **Import preview drawing.** The first build used a fixed line height and the full textbox
+  width, so the last line of most textboxes was cut off. Fixed by laying out the text like the
+  measurement (Android's natural line height, width minus the calibration's width adjustment)
+  and clipping only at the page edge. Preview speed with the page read on every change is fine
+  (T2).
+- **Progress redraw.** Status changes during an import came without a touch and weren't drawn.
+  `ScreenFrame` now requests an e-ink refresh when the status text or the primary label changes.
+- **Import stopping after its first page** happened once on the device and not on the retry with
+  the same file and note. Cause unknown; every `insertNotePage`/`insertElements` result is now
+  logged (`[NoteTextInsertion]`) and a failed insert names the textbox and page.
+- **Export** keeps "Export DOCX" as its primary button after an export (the note isn't changed,
+  so there is nothing to close over); the status names the file. The scan reports no progress, so
+  the list says "Scanning…" (T3).
+- **Rules screen.** The small Any / Yes / No switches were too narrow and showed "…"; their
+  columns are wider and their padding smaller.
+- **Calibration** is remembered between sessions (T4); values beyond ±200 px read as defaults.
+- **Permission request** text is English and names the plugin; the timeout from Kept GTD is
+  still open (backlog).
+- **Rename (S6).** Display name "Textbox Tools" in `PluginConfig.json`, the permission text,
+  README, CHANGELOG, CLAUDE/AGENTS/CONTRIBUTING and `docs/dev/`. Unchanged: `pluginID`,
+  `pluginKey` (`textboxHelper`), the repository, the `.snplg` file name, `MyStyle/TextboxHelper/`.
+
+Device checks still open at the merge: landscape, a second device (Manta or Nomad), and the
+exported DOCX compared with a 0.2.x export.

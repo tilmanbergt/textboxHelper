@@ -84,13 +84,13 @@ const styles = StyleSheet.create({
   },
   option: {
     minHeight: 40,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.sm,
     justifyContent: 'center',
     backgroundColor: COLORS.background,
   },
   optionSmall: {
     minHeight: 32,
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING.xs,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.background,

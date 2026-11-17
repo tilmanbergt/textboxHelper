@@ -1,12 +1,12 @@
-# Textbox Helper
+# Textbox Tools
 
-Textbox Helper is an experimental Supernote NOTE plugin for structured text editing inside notes.
+Textbox Tools is an experimental Supernote NOTE plugin for structured text editing inside notes.
 
 It targets the Android-based Supernote plugin runtime only. It does not support iOS.
 
 ## Status
 
-Textbox Helper is experimental and in beta.
+Textbox Tools is experimental and in beta.
 
 The plugin directly modifies NOTE page elements. Please test it on copied notes before using it on important notebooks.
 
@@ -68,7 +68,7 @@ calibration in `settings.json` in its own plugin folder.
 1. Download the latest `.snplg` file from GitHub Releases.
 2. Copy the `.snplg` file to the `MyStyle/` folder on your Supernote device.
 3. On the device, open Settings → Apps → Plugins.
-4. Install `Textbox Helper`.
+4. Install `Textbox Tools`.
 5. Open a NOTE file and use the plugin toolbar buttons.
 
 ## Project Structure

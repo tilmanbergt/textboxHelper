@@ -1,4 +1,4 @@
-# Textbox Helper development policy
+# Textbox Tools development policy
 
 > **About this document.** The one document that says what has to be true after every change and
 > before every release. It applies to everyone who changes the code - in practice mostly Claude,

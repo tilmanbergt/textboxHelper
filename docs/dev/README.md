@@ -1,4 +1,4 @@
-# Textbox Helper - developer notes
+# Textbox Tools - developer notes
 
 > **About this document.** How to build and check the plugin, a tour of the code, and the list of
 > developer documents. Living document: present tense, kept true in every change that moves a

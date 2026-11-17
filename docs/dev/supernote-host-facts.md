@@ -3,7 +3,7 @@
 > **About this document.** How the Supernote and its plugin host behave where Ratta's SDK
 > documentation (`sn-plugin-lib`, docs.supernote.com) says nothing, says it unclearly, or says
 > something else - facts found on the device or by tracing a bug. Each entry says what the host
-> does and where Textbox Helper deals with it. Present tense; when a firmware or library update
+> does and where Textbox Tools deals with it. Present tense; when a firmware or library update
 > changes a fact, update the entry.
 
 Library: `sn-plugin-lib` 0.2.3.
@@ -17,7 +17,7 @@ Library: `sn-plugin-lib` 0.2.3.
   `/data/user/0/com.ratta.supernote.pluginhost/files/plugins/<pluginID>/`. A write anywhere else
   in `plugins/` fails with "Plugin [<pluginID>] is not allowed to access other plugin's private
   dir: <path>" - this includes a `\`-joined path that only looks like it is inside.
-  In Textbox Helper: `src/domain/backupPaths.ts` builds the backup paths, tested in
+  In Textbox Tools: `src/domain/backupPaths.ts` builds the backup paths, tested in
   `__tests__/domain/backupPaths.test.ts`.
 - `PluginManager.getPluginDirPath()` is typed `string | null | undefined`; a missing value stops
   the action before anything is written.

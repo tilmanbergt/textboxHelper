@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     paddingTop: 26,
   },
   style: {
-    width: 132,
+    width: 168,
     gap: 2,
   },
   styleLabel: {
