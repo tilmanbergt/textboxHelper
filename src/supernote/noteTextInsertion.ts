@@ -112,7 +112,7 @@ export async function insertTextboxPages(params: {
   ----------------------------- */
   for (const [index, page] of pagesToCreate.entries()) {
     params.onProgress?.({
-      message: `Creating page ${index + 1} / ${pagesToCreate.length}...`,
+      message: `Creating page ${index + 1} of ${pagesToCreate.length}…`,
     });
 
     const result = await withTimeout(
@@ -122,10 +122,11 @@ export async function insertTextboxPages(params: {
         template: templateName,
       }),
       INSERT_PAGE_TIMEOUT_MS,
-      `Timeout creating page ${page.pageNumber}`,
+      `Timeout creating page ${page.pageNumber + 1}`,
     );
 
-    assertBooleanSuccess(result as any, `Failed page ${page.pageNumber}`);
+    console.log('[NoteTextInsertion] insertNotePage', JSON.stringify({page: page.pageNumber, result}));
+    assertBooleanSuccess(result as any, `Could not create page ${page.pageNumber + 1}.`);
   }
 
   /* -----------------------------
@@ -135,7 +136,7 @@ export async function insertTextboxPages(params: {
 
   for (const [index, instruction] of params.pages.entries()) {
     params.onProgress?.({
-      message: `Inserting textbox ${index + 1} / ${params.pages.length}...`,
+      message: `Inserting textbox ${index + 1} of ${params.pages.length} (page ${instruction.pageNumber + 1})…`,
     });
 
     let elements: Element[] = [];
@@ -150,7 +151,14 @@ export async function insertTextboxPages(params: {
         elements,
       );
 
-      assertBooleanSuccess(result as any, 'Failed textbox insert');
+      console.log(
+        '[NoteTextInsertion] insertElements',
+        JSON.stringify({index, page: instruction.pageNumber, chars: instruction.text.length, result}),
+      );
+      assertBooleanSuccess(
+        result as any,
+        `Could not insert textbox ${index + 1} of ${params.pages.length} on page ${instruction.pageNumber + 1}.`,
+      );
 
       insertedCount += 1;
     } finally {

@@ -10,7 +10,8 @@
  *   and shows its busy label, disabled.
  *
  * Header and footer have fixed minimum heights, so nothing in the body moves when the status or
- * the button label changes. A change of `screenKey` requests an e-ink refresh.
+ * the button label changes. A change of `screenKey`, the status text or the button label requests an
+ * e-ink refresh: progress arrives without a touch, and e-ink doesn't redraw by itself.
  */
 import React, {useEffect, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
@@ -66,9 +67,11 @@ export default function ScreenFrame({
 }: Props): React.JSX.Element {
   const [helpOpen, setHelpOpen] = useState(false);
 
+  // Status and button changes during a long run come without a touch, so they ask for a redraw.
+  const primaryLabel = primary ? (primary.busy ? primary.busyLabel ?? primary.label : primary.label) : '';
   useEffect(() => {
     requestEinkRefresh();
-  }, [screenKey, helpOpen]);
+  }, [screenKey, helpOpen, status?.text, primaryLabel]);
 
   return (
     <View style={styles.screen}>

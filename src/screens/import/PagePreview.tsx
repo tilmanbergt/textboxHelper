@@ -1,12 +1,22 @@
 /**
  * One planned import page drawn to scale (technical-design-calmer-screens.md §3.7): a box with the
  * note page's aspect ratio, each planned textbox at its rectangle, its text at its font size, all
- * scaled to the room the column has. The text is clipped to its rectangle; the real textboxes are
- * sized by the import's own measurement, this is a picture of the layout.
+ * scaled to the room the column has.
+ *
+ * The text is laid out the way the import measured it (supernote/textboxMetrics.ts): Android's
+ * natural line height (no fixed lineHeight, font padding on, like the native StaticLayout with
+ * spacing 1.0) at the measured width, the textbox width minus the calibration's width adjustment.
+ * So the drawn text needs the same height as the planned rectangle. It may run a few pixels past
+ * the rectangle (rounding, a font that differs from the textbox's); it is not clipped there, only
+ * at the page edge, so no line is cut off.
  */
 import React, {useState} from 'react';
 import {StyleSheet, Text, View, type LayoutChangeEvent} from 'react-native';
 import type {PlannedTextboxPage} from '../../domain/importPlan';
+import {
+  DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION,
+  getRequestedWidth,
+} from '../../domain/textboxLayout';
 import {COLORS} from '../../ui/theme';
 
 const MIN_FONT = 6;
@@ -51,8 +61,10 @@ export default function PagePreview({page, pageSize}: Props): React.JSX.Element 
                   styles.text,
                   chunk.bold && styles.bold,
                   {
+                    width:
+                      getRequestedWidth(chunk.rect.right - chunk.rect.left, DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION) *
+                      scale,
                     fontSize: Math.max(MIN_FONT, chunk.fontSize * scale),
-                    lineHeight: Math.max(MIN_FONT, chunk.fontSize * scale) * 1.25,
                   },
                 ]}>
                 {chunk.text}
@@ -78,7 +90,7 @@ const styles = StyleSheet.create({
   },
   chunk: {
     position: 'absolute',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   text: {
     color: COLORS.text,
