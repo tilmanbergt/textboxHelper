@@ -8,7 +8,7 @@ import {isPenEditDecoration} from '../domain/penEditTags';
  * numbered just before the snippet, one `getElement` each, until LOOK_BACK_WINDOW elements that
  * aren't Textbox Tools' badges or numbers were seen. Only the element's own rect is used (the host's recognize
  * rect, or a straight line's points): no stroke points are read. Never throws; an unreadable
- * number is skipped.
+ * number is skipped. `isComplete` ends the reads early, once the window holds a whole mark.
  */
 
 type Response<T> = {success?: boolean; result?: T} | null | undefined;
@@ -27,6 +27,7 @@ export async function readLookBackWindow(
   notePath: string,
   page: number,
   numbers: number[],
+  isComplete?: (window: WindowStroke[]) => boolean,
 ): Promise<{window: WindowStroke[]; elements: Map<string, Element>; read: number; ms: number}> {
   const start = Date.now();
   const window: WindowStroke[] = [];
@@ -59,6 +60,9 @@ export async function readLookBackWindow(
         window.push(stroke);
         elements.set(element.uuid, element);
         element = null;
+        if (isComplete?.(window)) {
+          break;
+        }
       }
     } catch (error) {
       console.warn('[PenEditPageRead] element not read', JSON.stringify({page, num, error: String(error)}));

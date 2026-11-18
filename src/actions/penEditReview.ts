@@ -413,3 +413,9 @@ export function penEditElementNums(ids: string[], entries: PenEditEntry[], pageE
   }
   return [...new Set(nums)];
 }
+
+/** A pen edit's stored strokes as flat x,y point lists, for drawing them; null when missing. */
+export async function loadPenEditStrokePoints(id: string): Promise<number[][] | null> {
+  const data = await readPenEditStrokes(id);
+  return data ? data.strokes.map(stroke => stroke.points).filter(points => points.length >= 2) : null;
+}

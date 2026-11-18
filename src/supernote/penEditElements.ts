@@ -30,6 +30,8 @@ export type TagElementsResult = {
   retried: boolean;
   saved: boolean;
   error: string | null;
+  /** Of insertMs: creating the elements (the last attempt). */
+  createMs: number;
   insertMs: number;
   saveMs: number;
 };
@@ -60,52 +62,67 @@ async function create(type: number): Promise<Element> {
   return created.result;
 }
 
+/**
+ * All elements of one tag, created at once: each `createElement` is a round trip to the host
+ * (the host needs it for every new element, so a template can't be copied), and sent together
+ * they overlap instead of queueing one after the other.
+ */
 async function buildElements(request: TagElementsRequest): Promise<Element[]> {
-  const built: Element[] = [];
-  try {
-    for (const badge of request.badges) {
-      const icon = await create(ELEMENT_TYPE_GEO);
-      built.push(icon);
-      icon.pageNum = request.page;
-      icon.layerNum = MAIN_LAYER;
-      icon.userData = penEditUserData(request.id, badge.role);
-      icon.geometry = {
-        ...(icon.geometry ?? {}),
-        ...ICON_PEN,
-        type: 'GEO_polygon',
-        points: badge.points,
-      } as Element['geometry'];
-    }
-
-    for (const number of request.numbers) {
-      const element = await create(TEXT_TYPE_NORMAL);
-      built.push(element);
-      element.pageNum = request.page;
-      element.layerNum = MAIN_LAYER;
-      element.userData = penEditUserData(request.id, number.role);
-      const textBox = element.textBox ?? new TextBox();
-      textBox.fontSize = PEN_EDIT_NUMBER_FONT_SIZE;
-      textBox.fontPath = NOTE_SYSTEM_FONT_PATH;
-      textBox.textContentFull = String(number.number);
-      textBox.textRect = number.rect;
-      textBox.textAlign = 0;
-      textBox.textBold = 1;
-      textBox.textItalics = 0;
-      textBox.textFrameWidthType = 0;
-      textBox.textFrameStyle = 0;
-      textBox.textEditable = 0;
-      textBox.textDigestData = null;
-      element.textBox = textBox;
-    }
-  } catch (error) {
+  const types = [
+    ...request.badges.map(() => ELEMENT_TYPE_GEO),
+    ...request.numbers.map(() => TEXT_TYPE_NORMAL),
+  ];
+  const results = await Promise.allSettled(types.map(type => create(type)));
+  const built = results
+    .filter((result): result is PromiseFulfilledResult<Element> => result.status === 'fulfilled')
+    .map(result => result.value);
+  const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+  if (failed) {
     recycle(built);
-    throw error;
+    throw failed.reason instanceof Error ? failed.reason : new Error(String(failed.reason));
   }
+
+  request.badges.forEach((badge, index) => {
+    const icon = built[index];
+    icon.pageNum = request.page;
+    icon.layerNum = MAIN_LAYER;
+    icon.userData = penEditUserData(request.id, badge.role);
+    icon.geometry = {
+      ...(icon.geometry ?? {}),
+      ...ICON_PEN,
+      type: 'GEO_polygon',
+      points: badge.points,
+    } as Element['geometry'];
+  });
+
+  request.numbers.forEach((number, index) => {
+    const element = built[request.badges.length + index];
+    element.pageNum = request.page;
+    element.layerNum = MAIN_LAYER;
+    element.userData = penEditUserData(request.id, number.role);
+    const textBox = element.textBox ?? new TextBox();
+    textBox.fontSize = PEN_EDIT_NUMBER_FONT_SIZE;
+    textBox.fontPath = NOTE_SYSTEM_FONT_PATH;
+    textBox.textContentFull = String(number.number);
+    textBox.textRect = number.rect;
+    textBox.textAlign = 0;
+    textBox.textBold = 1;
+    textBox.textItalics = 0;
+    textBox.textFrameWidthType = 0;
+    textBox.textFrameStyle = 0;
+    textBox.textEditable = 0;
+    textBox.textDigestData = null;
+    element.textBox = textBox;
+  });
   return built;
 }
 
+let lastCreateMs = 0;
+
 async function insertOnce(request: TagElementsRequest): Promise<string | null> {
+  const createStart = Date.now();
   const elements = await buildElements(request);
+  lastCreateMs = Date.now() - createStart;
   try {
     const response = (await PluginCommAPI.insertPageElements(elements, request.page, null)) as Response<boolean>;
     return response?.success ? null : 'insertPageElements: ' + errText(response, 'failed');
@@ -129,6 +146,7 @@ export async function insertTagElements(request: TagElementsRequest): Promise<Ta
   let retried = false;
   let error: string | null = null;
   const insertStart = Date.now();
+  lastCreateMs = 0;
   try {
     error = await insertOnce(request);
     if (error && error.includes(BUSY_ERROR)) {
@@ -149,7 +167,7 @@ export async function insertTagElements(request: TagElementsRequest): Promise<Ta
   } else {
     console.warn('[PenEditElements] not placed', JSON.stringify({id: request.id, error}));
   }
-  return {placed, retried, saved, error, insertMs, saveMs};
+  return {placed, retried, saved, error, createMs: lastCreateMs, insertMs, saveMs};
 }
 
 /**

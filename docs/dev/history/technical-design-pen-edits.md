@@ -238,3 +238,10 @@ the caret between paragraphs needs only reading order and could come first.
   never offered. Pen edits are resolved on a fresh page read (`penEditElementNums`) and marked
   `dropped`; their stored strokes and picture stay. Only strokes with a unique number that are
   still marker-like are deleted, never textboxes (`removeIgnoredItems`).
+- **Speed pass 1** (tag still took 4–5 s): the badges' `createElement` calls run at once
+  (`Promise.allSettled`; a template can't be copied, the host needs every new element created),
+  logged as `createMs`; the look-back stops as soon as the window holds a whole mark (its strike
+  is read after its loop or verticals). The save after inserting stays: skipping it proved risky.
+- **Stroke drawing**: the correction screen shows the host's picture and, beside it, the stored
+  strokes drawn as thin rotated views (`domain/strokeDrawing.ts`, `ui/StrokeDrawing.tsx`).
+  Stroke points are page pixels in this SDK version: no EMR conversion.

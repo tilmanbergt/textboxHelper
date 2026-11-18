@@ -126,10 +126,14 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     let lookBack = {read: 0, ms: 0};
     if (tagKind === 'replacement') {
       const lowest = Math.min(...snap.strokeNums);
-      const result = await readLookBackWindow(notePath, page, lookBackNumbers(lowest));
+      const taken = takenStrikeRects(index, notePath, page);
+      // Stops as soon as a mark is complete: its strike is read after its loop or verticals.
+      const result = await readLookBackWindow(notePath, page, lookBackNumbers(lowest), window =>
+        findReplaceMarkInWindow(window, taken) !== null,
+      );
       windowElements = result.elements;
       lookBack = {read: result.read, ms: result.ms};
-      found = findReplaceMarkInWindow(result.window, takenStrikeRects(index, notePath, page));
+      found = findReplaceMarkInWindow(result.window, taken);
       step('lookBack');
     }
 
@@ -218,6 +222,7 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
         hasPicture,
         pictureError: picture.error,
         saved: placed.saved,
+        createMs: placed.createMs,
         insertMs: placed.insertMs,
         saveMs: placed.saveMs,
         retried: placed.retried,
