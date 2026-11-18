@@ -18,18 +18,34 @@ import {
  * The pen-edit files in the plugin folder (technical-design-pen-edits.md §3.3):
  * `pen-edits/index.json` with every entry, and per entry `pen-edits/<id>/strokes.json` and
  * `picture.png`. Index changes run one at a time, each on a fresh read, and are written through
- * a temporary file, so a crash never leaves half an index.
+ * a temporary file, so a crash never leaves half an index. The plugin folder and the parsed index
+ * are kept in memory between taps; the index is read again only when its file changed (size or
+ * modification time), so a tag doesn't wait for a full read each time.
  */
 
 const STROKES_FILE = 'strokes.json';
 const PICTURE_FILE = 'picture.png';
 
+let knownPluginDir: string | null = null;
+
 async function pluginDir(): Promise<string> {
+  if (knownPluginDir) {
+    return knownPluginDir;
+  }
   const dir = await PluginManager.getPluginDirPath();
   if (!dir) {
     throw new Error('Could not find the plugin folder.');
   }
+  knownPluginDir = dir;
   return dir;
+}
+
+type CachedIndex = {path: string; index: PenEditIndex; mtime: number; size: number};
+let cachedIndex: CachedIndex | null = null;
+
+async function fileStamp(path: string): Promise<{mtime: number; size: number}> {
+  const stat = await RNFS.stat(path);
+  return {mtime: new Date(stat.mtime).getTime(), size: Number(stat.size)};
 }
 
 let queue: Promise<unknown> = Promise.resolve();
@@ -44,10 +60,24 @@ function serial<T>(job: () => Promise<T>): Promise<T> {
 /** Reads the index. A broken file is moved aside (and logged); the result is then empty. */
 async function readIndexUnqueued(dir: string): Promise<{index: PenEditIndex; warning: string | null}> {
   const path = buildPenEditIndexPath(dir);
-  const json = (await RNFS.exists(path)) ? await RNFS.readFile(path, 'utf8') : null;
+  if (!(await RNFS.exists(path))) {
+    cachedIndex = null;
+    return {index: parsePenEditIndex(null).index, warning: null};
+  }
+  const stamp = await fileStamp(path);
+  if (
+    cachedIndex &&
+    cachedIndex.path === path &&
+    cachedIndex.mtime === stamp.mtime &&
+    cachedIndex.size === stamp.size
+  ) {
+    return {index: cachedIndex.index, warning: null};
+  }
+  const json = await RNFS.readFile(path, 'utf8');
   const parsed = parsePenEditIndex(json);
   if (parsed.broken) {
     const aside = buildBrokenPenEditIndexPath(dir, new Date().toISOString());
+    cachedIndex = null;
     await RNFS.moveFile(path, aside);
     console.warn('[PenEditStore] unreadable index moved aside', aside);
     return {index: parsed.index, warning: 'The list of pen edits could not be read and was set aside.'};
@@ -55,6 +85,7 @@ async function readIndexUnqueued(dir: string): Promise<{index: PenEditIndex; war
   if (parsed.dropped > 0) {
     console.warn('[PenEditStore] unreadable entries dropped', parsed.dropped);
   }
+  cachedIndex = {path, index: parsed.index, ...stamp};
   return {index: parsed.index, warning: null};
 }
 
@@ -67,6 +98,11 @@ async function writeIndexUnqueued(dir: string, index: PenEditIndex): Promise<voi
     await RNFS.unlink(path);
   }
   await RNFS.moveFile(temp, path);
+  try {
+    cachedIndex = {path, index, ...(await fileStamp(path))};
+  } catch {
+    cachedIndex = null;
+  }
 }
 
 /** The current index; `warning` is set when a broken file had to be set aside. */
@@ -110,6 +146,14 @@ export async function savePenEditData(
   } catch (error) {
     console.warn('[PenEditStore] picture not kept', JSON.stringify({id: data.id, source, error: String(error)}));
     return {kept: false, error: String(error)};
+  }
+}
+
+/** Removes an entry's stored handwriting (a tag that didn't make it onto the page). */
+export async function deletePenEditData(id: string): Promise<void> {
+  const dir = buildPenEditEntryDir(await pluginDir(), id);
+  if (await RNFS.exists(dir)) {
+    await RNFS.unlink(dir);
   }
 }
 

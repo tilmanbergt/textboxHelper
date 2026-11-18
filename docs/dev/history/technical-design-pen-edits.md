@@ -245,3 +245,8 @@ the caret between paragraphs needs only reading order and could come first.
 - **Stroke drawing**: the correction screen shows the host's picture and, beside it, the stored
   strokes drawn as thin rotated views (`domain/strokeDrawing.ts`, `ui/StrokeDrawing.tsx`).
   Stroke points are page pixels in this SDK version: no EMR conversion.
+- **Speed pass 2** (device log: index read 0.47 s, storing 1.1–1.5 s after the badge): the index
+  is read during the lasso read; the plugin folder and the parsed index stay in memory, re-read
+  only when the file's size or modification time changed. Strokes and picture are written while
+  the strokes are tagged and the badges inserted; only the index entry waits for the badge. A tag
+  that fails removes its stored files again.

@@ -18,7 +18,13 @@ import {
   type PenEditKind,
 } from '../domain/penEditTags';
 import type {Rect} from '../domain/textboxModel';
-import {changePenEditIndex, readPenEditIndex, savePenEditData, temporaryPicturePath} from '../storage/penEditStore';
+import {
+  changePenEditIndex,
+  deletePenEditData,
+  readPenEditIndex,
+  savePenEditData,
+  temporaryPicturePath,
+} from '../storage/penEditStore';
 import {readLasso, type LassoSnapshot} from '../supernote/lassoRead';
 import {hideLassoBox} from '../supernote/noteElements';
 import {insertTagElements, tagUserStrokes, type TagBadge, type TagNumber} from '../supernote/penEditElements';
@@ -98,6 +104,15 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
   const id = newPenEditId(new Date());
   let snap: LassoSnapshot | null = null;
   let windowElements: Map<string, Element> | null = null;
+  // Plugin-file work runs while the host works: the index is read during the lasso read, and the
+  // strokes and picture are stored during tagging and inserting. Only the index entry waits for
+  // the badge to be on the page.
+  let storing: Promise<{kept: boolean; error: string | null; failure: unknown}> | null = null;
+  let stored = false;
+  const indexRead = readPenEditIndex().catch(error => {
+    console.warn('[PenEdit] early index read failed', String(error));
+    return null;
+  });
   try {
     snap = await readLasso({picturePath: await temporaryPicturePath(id), keepStrokeElements: true});
     step('lasso');
@@ -118,7 +133,12 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     }
     step('permissions');
 
-    const {index} = await readPenEditIndex();
+    // Settled into a value at once, so a failing write is never an unhandled rejection meanwhile.
+    storing = savePenEditData({version: 1, id, pageSize: snap.pageSize, strokes: snap.strokes}, snap.picture).then(
+      result => ({...result, failure: null}),
+      failure => ({kept: false, error: String(failure), failure: failure ?? 'write failed'}),
+    );
+    const {index} = (await indexRead) ?? (await readPenEditIndex());
     const number = nextPenEditNumber(activePenEditsOnPage(index, notePath, page).map(entry => entry.number));
     step('index');
 
@@ -181,7 +201,11 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
       return {kind: 'failed', detail: `Could not put the tag on the page (${placed.error ?? 'unknown error'}). Nothing was tagged; please try again.`};
     }
 
-    const picture = await savePenEditData({version: 1, id, pageSize: snap.pageSize, strokes: snap.strokes}, snap.picture);
+    const picture = await storing;
+    if (picture.failure) {
+      // Without its strokes the entry could never be recognized.
+      throw picture.failure instanceof Error ? picture.failure : new Error(String(picture.failure));
+    }
     const hasPicture = picture.kept;
     const entry: PenEditEntry = {
       id,
@@ -202,6 +226,7 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
       state: 'active',
     };
     await changePenEditIndex(current => upsertPenEdit(current, entry));
+    stored = true;
     step('stored');
 
     console.log(
@@ -239,6 +264,11 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     console.error('[PenEdit] tag failed', JSON.stringify({id, steps, error: String(error)}));
     return {kind: 'failed', detail: error instanceof Error ? error.message : 'The tag could not be saved.'};
   } finally {
+    if (storing && !stored) {
+      // Nothing was tagged: the stored handwriting would belong to no entry.
+      await storing;
+      await deletePenEditData(id).catch(error => console.warn('[PenEdit] stored data not removed', String(error)));
+    }
     running = false;
     snap?.strokeElements.forEach(element => {
       try {
