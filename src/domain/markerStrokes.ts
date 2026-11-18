@@ -23,9 +23,9 @@ export const MAX_MARKER_HEIGHT_RATIO = 0.55;
 
 const FALLBACK_MARKER_HEIGHT = 4;
 
-const REPLACE_MODIFIER_MIN_HEIGHT = 18;
+export const REPLACE_MODIFIER_MIN_HEIGHT = 18;
 
-const REPLACE_MODIFIER_PAIR_MAX_GAP = 56;
+export const REPLACE_MODIFIER_PAIR_MAX_GAP = 56;
 
 const REPLACE_MODIFIER_MAX_CENTER_DISTANCE = 48;
 
@@ -224,7 +224,7 @@ export function buildStrokeStatsFromRect(rect: Rect): StrokeStats | null {
   ]);
 }
 
-function isVerticalLikeStroke(strokeStats: StrokeStats): boolean {
+export function isVerticalLikeStroke(strokeStats: StrokeStats): boolean {
   const absoluteAngle = Math.abs(strokeStats.angleDeg);
   const distanceToVertical = Math.abs(90 - Math.min(absoluteAngle, Math.abs(180 - absoluteAngle)));
   return distanceToVertical <= 45 || strokeStats.height >= strokeStats.width;

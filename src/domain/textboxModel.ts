@@ -52,6 +52,8 @@ export type PageElementData = {
   link: FrameData | null;
   picture: {rect: Rect} | null;
   geometry: {type: string; points: Point[]} | null;
+  /** Free text a plugin can attach; Textbox Tools marks its own page elements with it. */
+  userData?: string | null;
 };
 
 /** A page element known to carry a text box. */

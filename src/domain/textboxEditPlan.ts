@@ -1,4 +1,5 @@
 import {CLIPBOARD_PREVIEW_LIMIT} from './backupPayload';
+import {isPenEditElement, looksLikePenEditNumber} from './penEditTags';
 import {plural} from './plural';
 import {
   cloneRect,
@@ -115,7 +116,21 @@ export function isNormalTextElement<T extends PageElementData>(
     element.type === TEXT_TYPE_NORMAL &&
     element.layerNum === MAIN_LAYER &&
     !!element.textBox?.textContentFull &&
-    !!element.textBox?.textRect
+    !!element.textBox?.textRect &&
+    !isPenEditNumberElement(element)
+  );
+}
+
+/**
+ * The small number textboxes pen edits put on the page (technical-design-pen-edits.md §3.2) are
+ * not text: every textbox tool, the edit markers and the export skip them. Recognized by their
+ * `userData`, and by their look in case the host dropped it.
+ */
+export function isPenEditNumberElement(element: PageElementData): boolean {
+  return (
+    isPenEditElement(element) ||
+    (element.type === TEXT_TYPE_NORMAL &&
+      looksLikePenEditNumber(element.textBox?.textContentFull, element.textBox?.fontSize))
   );
 }
 
