@@ -149,10 +149,42 @@ function width(rect: Rect | null): number {
 }
 
 /**
+ * Brings the stored entries in line with the page as it is now: an active entry of this page
+ * whose badge is gone (erased, or tagged by an earlier build) is dropped, so the next tag's number
+ * counts only what is on the page; an entry whose badge is on this page but stored elsewhere (the
+ * page moved) gets this page. Returns the new index when something changed.
+ */
+async function syncPenEditsWithPage(notePath: string, page: number, idsOnPage: Set<string>) {
+  const {index} = await readPenEditIndex();
+  const stale = index.entries.filter(
+    entry => entry.state === 'active' && entry.notePath === notePath && entry.page === page && !idsOnPage.has(entry.id),
+  );
+  const moved = index.entries.filter(
+    entry => entry.state === 'active' && idsOnPage.has(entry.id) && (entry.notePath !== notePath || entry.page !== page),
+  );
+  if (stale.length === 0 && moved.length === 0) {
+    return null;
+  }
+  console.log('[PenEditReview] synced with page', JSON.stringify({page, dropped: stale.length, moved: moved.length}));
+  return changePenEditIndex(current => {
+    let next = current;
+    stale.forEach(entry => {
+      next = updatePenEdit(next, entry.id, item => ({...item, state: 'dropped'}));
+    });
+    moved.forEach(entry => {
+      next = updatePenEdit(next, entry.id, item => ({...item, notePath, page}));
+    });
+    return next;
+  });
+}
+
+/**
  * The active pen edits whose badge is on the page. With a lasso, only those with a tagged part
  * (or their strike) in the lasso.
  */
 export async function loadPenEditContext(
+  notePath: string,
+  page: number,
   pageElements: Element[],
   lassoElements: Element[] | null,
 ): Promise<PenEditContext> {
@@ -163,18 +195,16 @@ export async function loadPenEditContext(
       idsOnPage.add(tag.id);
     }
   }
-  if (idsOnPage.size === 0) {
-    return EMPTY_PEN_EDIT_CONTEXT;
-  }
   let index;
-  let warning: string | null = null;
+  const warning: string | null = null;
   try {
-    const read = await readPenEditIndex();
-    index = read.index;
-    warning = read.warning;
+    index = (await syncPenEditsWithPage(notePath, page, idsOnPage)) ?? (await readPenEditIndex()).index;
   } catch (error) {
     console.warn('[PenEditReview] index not read', String(error));
-    return {...EMPTY_PEN_EDIT_CONTEXT, warning: 'The tagged replacements could not be read.'};
+    return idsOnPage.size === 0 ? EMPTY_PEN_EDIT_CONTEXT : {...EMPTY_PEN_EDIT_CONTEXT, warning: 'The tagged replacements could not be read.'};
+  }
+  if (idsOnPage.size === 0) {
+    return EMPTY_PEN_EDIT_CONTEXT;
   }
   const onPage = index.entries.filter(entry => entry.state === 'active' && idsOnPage.has(entry.id));
 

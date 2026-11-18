@@ -1,4 +1,4 @@
-import {buildStrokeStats} from '../../src/domain/markerStrokes';
+import {buildStrokeStats, isReplaceLoopRect} from '../../src/domain/markerStrokes';
 import {
   activePenEditsOnPage,
   parsePenEditIndex,
@@ -71,8 +71,12 @@ describe('pen edit numbers and icon', () => {
     expect(looksLikePenEditNumber('3.', 20)).toBe(false);
   });
 
-  it('puts the snippet badge top left inside the lasso, smaller for a tiny lasso', () => {
-    expect(snippetBadgeRect({left: 100, top: 200, right: 400, bottom: 300})).toEqual({left: 104, top: 204, right: 152, bottom: 252});
+  it('puts the snippet badge left of the snippet, centred on its height', () => {
+    expect(snippetBadgeRect({left: 400, top: 770, right: 650, bottom: 860})).toEqual({left: 344, top: 791, right: 392, bottom: 839});
+  });
+
+  it('puts the badge inside the lasso when there is no room on the left', () => {
+    expect(snippetBadgeRect({left: 30, top: 200, right: 400, bottom: 300})).toEqual({left: 34, top: 204, right: 82, bottom: 252});
     expect(snippetBadgeRect({left: 0, top: 0, right: 20, bottom: 10})).toEqual({left: 4, top: 0, right: 14, bottom: 10});
   });
 
@@ -95,10 +99,10 @@ describe('pen edit numbers and icon', () => {
     expect(markBadgeRect([{left: 1390, top: 100, right: 1400, bottom: 140}], strike, 1404).right).toBe(1404);
   });
 
-  it('roughly centres the digits in the badge', () => {
-    const badge = {left: 100, top: 100, right: 148, bottom: 148};
-    expect(badgeNumberRect(badge, 3).left).toBe(116);
-    expect(badgeNumberRect(badge, 12).left).toBe(108);
+  it('centres the digits, allowing for where NOTE draws a textbox\'s text', () => {
+    const badge = {left: 995, top: 111, right: 1043, bottom: 159};
+    expect(badgeNumberRect(badge, 6)).toMatchObject({left: 999, top: 119});
+    expect(badgeNumberRect(badge, 12).left).toBe(991);
   });
 });
 
@@ -353,5 +357,41 @@ describe('finding pen edits again by place', () => {
     ];
     expect(matchByRects(stored, items, shift).map(item => item.key)).toEqual(['a', 'b']);
     expect(matchByRects(stored, items).map(item => item.key)).toEqual([]);
+  });
+});
+
+describe('the loop after a strike', () => {
+  const strike = {left: 600, top: 808, right: 972, bottom: 820};
+
+  it('counts a small round loop right after the strike end', () => {
+    expect(isReplaceLoopRect(strike, {left: 975, top: 790, right: 1015, bottom: 832})).toBe(true);
+    expect(isReplaceLoopRect(strike, {left: 955, top: 795, right: 990, bottom: 830})).toBe(true);
+  });
+
+  it('ignores loops elsewhere, too big, too flat or too small', () => {
+    expect(isReplaceLoopRect(strike, {left: 700, top: 790, right: 740, bottom: 830})).toBe(false);
+    expect(isReplaceLoopRect(strike, {left: 975, top: 900, right: 1015, bottom: 940})).toBe(false);
+    expect(isReplaceLoopRect(strike, {left: 975, top: 760, right: 1135, bottom: 900})).toBe(false);
+    expect(isReplaceLoopRect(strike, {left: 975, top: 805, right: 1035, bottom: 815})).toBe(false);
+    expect(isReplaceLoopRect(strike, {left: 975, top: 810, right: 985, bottom: 818})).toBe(false);
+  });
+
+  it('pairs a strike with the loop drawn after it in the look-back', () => {
+    const stroke = (uuid: string, numInPage: number, rect: Rect): WindowStroke => ({
+      uuid,
+      numInPage,
+      isStraightLine: false,
+      stats: strokeStatsFromRect(rect)!,
+    });
+    const found = findReplaceMarkInWindow(
+      [stroke('strike', 10, strike), stroke('loop', 11, {left: 975, top: 790, right: 1015, bottom: 832})],
+      [],
+    );
+    expect(found?.strike.uuid).toBe('strike');
+    expect(found?.loop?.uuid).toBe('loop');
+    // A loop drawn before the strike is not its mark.
+    expect(
+      findReplaceMarkInWindow([stroke('strike', 10, strike), stroke('loop', 9, {left: 975, top: 790, right: 1015, bottom: 832})], []),
+    ).toBeNull();
   });
 });

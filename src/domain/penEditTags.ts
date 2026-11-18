@@ -84,6 +84,7 @@ export const PEN_EDIT_NUMBER_FONT_SIZE = 28;
 export const PEN_EDIT_NUMBER_MAX_FONT_SIZE = 30;
 export const BADGE_SIZE_PX = 48;
 const BADGE_INSET_PX = 4;
+
 /** Rough width of one digit at the number font size, to centre the number in its badge. */
 const DIGIT_WIDTH_PX = 16;
 
@@ -106,8 +107,19 @@ export function nextPenEditNumber(numbersInUse: number[]): number {
   return numbersInUse.reduce((highest, n) => (Number.isFinite(n) && n > highest ? n : highest), 0) + 1;
 }
 
-/** The snippet's badge: top left inside the lasso rect, smaller for a very small lasso. */
+const SNIPPET_BADGE_GAP_PX = 8;
+
+/**
+ * The snippet's badge: right to the left of the snippet, centred on its height. Without room on
+ * the left it goes top left inside the lasso rect.
+ */
 export function snippetBadgeRect(lasso: Rect, size = BADGE_SIZE_PX): Rect {
+  const centerY = (lasso.top + lasso.bottom) / 2;
+  const right = Math.round(lasso.left - SNIPPET_BADGE_GAP_PX);
+  if (right - size >= 0) {
+    const top = Math.max(0, Math.round(centerY - size / 2));
+    return {left: right - size, top, right, bottom: top + size};
+  }
   const width = Math.max(1, lasso.right - lasso.left);
   const height = Math.max(1, lasso.bottom - lasso.top);
   const s = Math.min(size, width, height);
@@ -133,13 +145,22 @@ export function markBadgeRect(verticals: Rect[], strike: Rect, pageWidth: number
   return {left, top, right: left + size, bottom: top + size};
 }
 
-/** The number textbox inside a badge, its digits roughly centred. */
+/**
+ * NOTE draws a textbox's text a little right of and above its rect's corner; measured on the A5 X
+ * from the first circled numbers (digit 12 px right of and 2 px above the circle's centre).
+ */
+const NUMBER_TEXT_OFFSET_X = 12;
+const NUMBER_TEXT_OFFSET_Y = 4;
+const NUMBER_BOX_HEIGHT = 40;
+
+/** The number textbox centred in a badge or in the loop the user drew. */
 export function badgeNumberRect(badge: Rect, number: number): Rect {
-  const width = badge.right - badge.left;
   const digits = String(number).length;
-  const left = Math.round(badge.left + Math.max(0, (width - digits * DIGIT_WIDTH_PX) / 2));
-  const top = Math.round(badge.top + 2);
-  return {left, top, right: left + Math.max(width, digits * DIGIT_WIDTH_PX + 8), bottom: badge.bottom};
+  const cx = (badge.left + badge.right) / 2;
+  const cy = (badge.top + badge.bottom) / 2;
+  const left = Math.max(0, Math.round(cx - (digits * DIGIT_WIDTH_PX) / 2 - NUMBER_TEXT_OFFSET_X));
+  const top = Math.max(0, Math.round(cy - NUMBER_BOX_HEIGHT / 2 + NUMBER_TEXT_OFFSET_Y));
+  return {left, top, right: left + digits * DIGIT_WIDTH_PX + 2 * NUMBER_TEXT_OFFSET_X + 8, bottom: top + NUMBER_BOX_HEIGHT};
 }
 
 /** A closed circle (24 points) filling `box`. */

@@ -294,3 +294,43 @@ export function findBestReplaceModifierPair<Analysis extends MarkerStrokeAnalysi
 
   return bestPair;
 }
+
+/** Size range of the small loop drawn after a strike to mark a replace (page pixels). */
+export const REPLACE_LOOP_MIN_SIZE = 16;
+export const REPLACE_LOOP_MAX_SIZE = 110;
+
+/**
+ * The second replace gesture (technical-design-pen-edits.md As built): a small, roughly round
+ * loop drawn right after the strike's end, at its height. Tested on rects only, so it works with
+ * the host's recognize rects as well as with stroke statistics.
+ */
+export function isReplaceLoopRect(strike: Rect, loop: Rect): boolean {
+  const width = rectWidth(loop);
+  const height = rectHeight(loop);
+  const size = Math.max(width, height);
+  if (
+    size < REPLACE_LOOP_MIN_SIZE ||
+    size > REPLACE_LOOP_MAX_SIZE ||
+    Math.min(width, height) < size * 0.45
+  ) {
+    return false;
+  }
+  const loopCenter = rectCenter(loop);
+  const strikeY = (strike.top + strike.bottom) / 2;
+  const nearEnd = loop.left >= strike.right - size * 0.6 && loop.left <= strike.right + size + 24;
+  const atHeight = Math.abs(loopCenter.y - strikeY) <= size / 2 + 20;
+  return nearEnd && atHeight;
+}
+
+/** The loop after a delete candidate's strike, if one of the strokes is such a loop. */
+export function findReplaceLoop<Analysis extends MarkerStrokeAnalysis>(
+  candidate: MarkerDeleteCandidate,
+  strokeAnalyses: Analysis[],
+): Analysis | null {
+  const loops = strokeAnalyses.filter(
+    analysis =>
+      analysis.marker.uuid !== candidate.markerUuid &&
+      isReplaceLoopRect(candidate.strokeStats.rect, analysis.strokeStats.rect),
+  );
+  return loops.sort((a, b) => a.strokeStats.rect.left - b.strokeStats.rect.left)[0] ?? null;
+}

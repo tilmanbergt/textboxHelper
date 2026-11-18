@@ -7,6 +7,7 @@ import {cloneRect} from '../domain/geometry';
 import {
   buildRecognizeRect,
   findBestReplaceModifierPair,
+  findReplaceLoop,
   isSupportedEditMarkerElement,
   orderTextboxMarkerCandidates,
 } from '../domain/markerStrokes';
@@ -188,6 +189,18 @@ export async function getEditMarkerPreview(
   return {...preview, fontWarning};
 }
 
+function replaceModifiers(
+  candidate: MarkerCandidate,
+  strokeAnalyses: MarkerStrokeAnalysis<Element>[],
+): MarkerStrokeAnalysis<Element>[] {
+  const pair = findBestReplaceModifierPair(candidate, strokeAnalyses);
+  if (pair.length === 2) {
+    return pair;
+  }
+  const loop = findReplaceLoop(candidate, strokeAnalyses);
+  return loop ? [loop] : [];
+}
+
 async function buildEditMarkerPreview(
   previewScope: EditMarkerPreviewScope,
 ): Promise<EditMarkerPreview> {
@@ -205,7 +218,12 @@ async function buildEditMarkerPreview(
     lassoElements = context.lassoElements;
     pageElements = context.pageElements;
     const effectiveSelection = context.effectiveSelection;
-    const pen = await loadPenEditContext(pageElements, previewScope === 'lasso' ? lassoElements : null);
+    const pen = await loadPenEditContext(
+      context.notePath,
+      context.page,
+      pageElements,
+      previewScope === 'lasso' ? lassoElements : null,
+    );
 
     // Tagged snippets' handwriting and Textbox Tools' own badges and numbers are never markers.
     const selectedMarkers = effectiveSelection.filter(
@@ -336,11 +354,12 @@ async function buildEditMarkerPreview(
       const replaceCandidates = textboxCandidates
         .map(candidate => ({
           candidate,
-          pair: findBestReplaceModifierPair(candidate, strokeAnalyses),
+          // Two short vertical lines across the strike, or a small loop right after it.
+          pair: replaceModifiers(candidate, strokeAnalyses),
         }))
         .filter(entry => {
           if (
-            entry.pair.length !== 2 ||
+            entry.pair.length === 0 ||
             entry.pair.some(pairEntry => usedModifierMarkerUuids.has(pairEntry.marker.uuid))
           ) {
             return false;

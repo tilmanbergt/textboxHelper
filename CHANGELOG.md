@@ -6,7 +6,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Added
 
-- Two new lasso toolbar buttons, "Replacement" and "Insertion": lasso handwritten new text and tap one to tag it, without converting it to text first. The tap is quick and opens no screen: a numbered badge appears at the text (a circle for a replacement, a diamond for an insertion), and for a replacement the same circled number appears over the replace mark written just before it. The tagged handwriting and mark are found again even after you move them with the lasso.
+- Two new lasso toolbar buttons, "Replacement" and "Insertion": lasso handwritten new text and tap one to tag it, without converting it to text first. The tap is quick and opens no screen: a circled number appears left of the text (a diamond for an insertion), and for a replacement the same number appears at the replace mark written just before it. A replace mark can now also be the delete line plus a small circle drawn right after its end; the number goes into that circle. The tagged handwriting and mark are found again even after you move them with the lasso.
 - The edit-marker review recognizes tagged text while you read, one at a time, the selected change first; until then a grey placeholder stands in the text. A picture of the handwriting shows below, with Correct (write the right text with the Supernote's handwriting pad), Skip for later and Recognize again. Apply changes everything that is ready, puts insertions in as new paragraphs, and removes the used marks and tagged handwriting; the rest stays for a later pass. Recognized text and your choices are kept, so the review can be closed and opened again.
 
 ### Changed

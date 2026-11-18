@@ -37,7 +37,7 @@ export const EDIT_MARKERS_HELP = `## Delete words
 Draw a horizontal line through the words you want to remove, with the pen or the straight-line tool. One line of text per marker.
 
 ## Replace words
-Draw the delete line, then two short vertical lines crossing it. Right after, write the new words anywhere on the page, lasso them and tap Replacement in the lasso toolbar. An icon and a number appear at the words, and the same number at the mark. The older way still works: a line in a textbox below the paragraph that starts with #.
+Draw the delete line, then a small circle right after its end (or two short vertical lines across it). Right after, write the new words anywhere on the page, lasso them and tap Replacement in the lasso toolbar. A circled number appears left of the words, and the same number in your circle at the mark. The older way still works: a line in a textbox below the paragraph that starts with #.
 
 ## Insert a paragraph
 Make room between two paragraphs, write the new text there, lasso it and tap Insertion.

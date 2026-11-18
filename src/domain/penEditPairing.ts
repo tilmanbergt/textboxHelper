@@ -6,6 +6,7 @@ import {
   REPLACE_MODIFIER_MIN_HEIGHT,
   REPLACE_MODIFIER_PAIR_MAX_GAP,
   buildStrokeStats,
+  isReplaceLoopRect,
   isVerticalLikeStroke,
 } from './markerStrokes';
 import type {PenEditMark} from './penEditModel';
@@ -106,13 +107,13 @@ function bestModifierPair(crossing: WindowStroke[]): WindowStroke[] | null {
   return best;
 }
 
-/** A replace mark found in the window: the strike and its two vertical lines. */
-export type WindowMark = {strike: WindowStroke; modifiers: WindowStroke[]};
+/** A replace mark found in the window: the strike and its two vertical lines, or its loop. */
+export type WindowMark = {strike: WindowStroke; modifiers: WindowStroke[]; loop: WindowStroke | null};
 
 /**
  * The newest replace mark in the window: a strike (long flat stroke or straight line) crossed by
- * two short vertical strokes. Strikes matching a `taken` rect are already paired with another
- * snippet.
+ * two short vertical strokes, or followed by a small loop at its end. Strikes matching a `taken`
+ * rect are already paired with another snippet.
  */
 export function findReplaceMarkInWindow(window: WindowStroke[], taken: Rect[]): WindowMark | null {
   const newestFirst = [...window].sort((a, b) => b.numInPage - a.numInPage);
@@ -120,10 +121,16 @@ export function findReplaceMarkInWindow(window: WindowStroke[], taken: Rect[]): 
     if (isTakenStrike(strike.stats.rect, taken) || !isStrikeLike(strike)) {
       continue;
     }
-    const crossing = newestFirst.filter(other => other.uuid !== strike.uuid && !other.isStraightLine && crossesStrike(strike, other));
-    const pair = bestModifierPair(crossing);
+    const others = newestFirst.filter(other => other.uuid !== strike.uuid && !other.isStraightLine);
+    const loop = others.find(
+      other => other.numInPage > strike.numInPage && isReplaceLoopRect(strike.stats.rect, other.stats.rect),
+    );
+    if (loop) {
+      return {strike, modifiers: [loop], loop};
+    }
+    const pair = bestModifierPair(others.filter(other => crossesStrike(strike, other)));
     if (pair) {
-      return {strike, modifiers: pair};
+      return {strike, modifiers: pair, loop: null};
     }
   }
   return null;

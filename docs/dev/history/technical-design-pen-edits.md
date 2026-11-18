@@ -219,3 +219,13 @@ the caret between paragraphs needs only reading order and could come first.
   badge is the same circle with the number inside (a diamond for an insertion).
 - **System font**: new number textboxes and insertions use NOTE's system font path
   (`/system/fonts/DroidSansFallbackFull.ttf`); see the host facts.
+- **Loop mark** (third device check: a ring over the verticals still covered the line above):
+  a replace mark may be the strike plus a small loop the user draws right after its end
+  (`isReplaceLoopRect`, rects only); the number goes into that loop, so nothing lands on the text
+  and one inserted element less. The two verticals still work (with the ring). The snippet's badge
+  sits left of the snippet, centred on its height. Numbers are centred with NOTE's text offset
+  (12 px right, about 2 px up, measured on the A5 X).
+- **Picture**: the host refused the app's cache folder too ("no picture from the host"); it is now
+  written into the plugin's own folder (`pen-edits/tmp/`), as Kept GTD does.
+- **Numbering per page**: the review drops active entries of the page whose badge is gone (they
+  had pushed the next number up), and moves entries whose badge is on another page.

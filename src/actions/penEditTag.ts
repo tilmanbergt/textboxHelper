@@ -99,7 +99,7 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
   let snap: LassoSnapshot | null = null;
   let windowElements: Map<string, Element> | null = null;
   try {
-    snap = await readLasso({picturePath: temporaryPicturePath(id), keepStrokeElements: true});
+    snap = await readLasso({picturePath: await temporaryPicturePath(id), keepStrokeElements: true});
     step('lasso');
     if (!snap.path || snap.page === null) {
       return {kind: 'failed', detail: 'Could not tell which note and page the lasso is on.'};
@@ -158,7 +158,10 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     const badge = snippetBadgeRect(lassoRect);
     const badges: TagBadge[] = [{role: 'snippet', points: snippetBadgePolygon(tagKind, badge)}];
     const numbers: TagNumber[] = [{role: 'snippetnum', rect: badgeNumberRect(badge, number), number}];
-    if (found) {
+    if (found?.loop) {
+      // The user drew the circle: the number goes inside it.
+      numbers.push({role: 'marknum', rect: badgeNumberRect(found.loop.stats.rect, number), number});
+    } else if (found) {
       const markBadge = markBadgeRect(
         found.modifiers.map(item => item.stats.rect),
         found.strike.stats.rect,
@@ -207,6 +210,7 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
         strokes: snap.strokes.length,
         strokeNums: [Math.min(...snap.strokeNums), Math.max(...snap.strokeNums)],
         paired: !!found,
+        markKind: found ? (found.loop ? 'loop' : 'verticals') : null,
         lookBack,
         strokesTagged: tagged.tagged,
         tagError: tagged.error,

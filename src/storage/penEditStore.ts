@@ -133,7 +133,17 @@ export async function penEditPictureUri(id: string): Promise<string> {
   return `file://${buildPenEditEntryDir(await pluginDir(), id)}/${PICTURE_FILE}`;
 }
 
-/** A temporary path for the lasso picture, in the app's cache folder (as Kept GTD's temp folder). */
-export function temporaryPicturePath(id: string): string {
-  return `${RNFS.CachesDirectoryPath}/pen-edit-${id}.png`;
+/**
+ * Where the host writes the lasso picture: the plugin's own folder (`pen-edits/tmp/`), the one
+ * place the host may write for a plugin; the app's cache folder was refused ("no picture").
+ */
+export async function temporaryPicturePath(id: string): Promise<string | undefined> {
+  try {
+    const dir = `${buildPenEditDir(await pluginDir())}/tmp`;
+    await RNFS.mkdir(dir);
+    return `${dir}/${id}.png`;
+  } catch (error) {
+    console.warn('[PenEditStore] no folder for the picture', String(error));
+    return undefined;
+  }
 }
