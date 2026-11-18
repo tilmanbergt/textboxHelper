@@ -1,5 +1,6 @@
 import type {Element} from 'sn-plugin-lib';
-import {buildRecognizeRect} from '../domain/markerStrokes';
+import {buildRecognizeRect, isSupportedEditMarkerElement} from '../domain/markerStrokes';
+import {matchByRects, rectShift, rectsMatch, shiftRect} from '../domain/penEditMatching';
 import type {InsertionDraft, PenEditView, PenTextState} from '../domain/markerTypes';
 import {
   updatePenEdit,
@@ -8,7 +9,7 @@ import {
   type PenEditStrokeData,
 } from '../domain/penEditModel';
 import {placeInsertion} from '../domain/penEditInsertion';
-import {parsePenEditUserData} from '../domain/penEditTags';
+import {boundsOfPoints, isPenEditDecoration, parsePenEditUserData} from '../domain/penEditTags';
 import {normalizeRecognizedText} from '../domain/penEditText';
 import {sortTextElements} from '../domain/textboxEditPlan';
 import type {Rect, TextElementData} from '../domain/textboxModel';
@@ -28,9 +29,12 @@ import {recognizeStrokes} from '../supernote/strokeRecognition';
 
 export type PenEditContext = {
   entries: PenEditEntry[];
-  /** Snippet strokes and our own elements: never marker candidates. */
-  excludedUuids: Set<string>;
-  byStrike: Map<string, PenEditEntry>;
+  /** True for the pen edits' badges, numbers and snippet strokes: never marker candidates. */
+  isExcluded: (element: Element) => boolean;
+  /** The pen edit whose replace mark has this strike, if any. */
+  strikeOwner: (element: Element) => PenEditEntry | undefined;
+  /** Each entry's snippet on the page now (its strokes' bounds, or where it was tagged, shifted). */
+  snippetRects: Map<string, Rect>;
   states: Record<string, PenTextState>;
   views: PenEditView[];
   warning: string | null;
@@ -38,8 +42,9 @@ export type PenEditContext = {
 
 export const EMPTY_PEN_EDIT_CONTEXT: PenEditContext = {
   entries: [],
-  excludedUuids: new Set(),
-  byStrike: new Map(),
+  isExcluded: element => isPenEditDecoration(element),
+  strikeOwner: () => undefined,
+  snippetRects: new Map(),
   states: {},
   views: [],
   warning: null,
@@ -54,23 +59,108 @@ export function stateOf(entry: PenEditEntry): PenTextState {
   };
 }
 
+/** An element's rect: the host's recognize rect, or a straight line's or polygon's points. */
+export function elementRect(element: Element): Rect | null {
+  return buildRecognizeRect(element.recognizeResult) ?? boundsOfPoints(element.geometry?.points ?? []);
+}
+
+/** A pen edit as found on the page now. */
+export type ResolvedPenEdit = {
+  badge: Element | null;
+  /** The badges and numbers of this entry. */
+  decorations: Element[];
+  strokes: Element[];
+  strike: Element | null;
+  /** The strike and its verticals, when they carry the tag. */
+  markElements: Element[];
+  shift: {dx: number; dy: number};
+};
+
+function unionRects(rects: Rect[]): Rect | null {
+  return rects.reduce<Rect | null>(
+    (all, rect) =>
+      all
+        ? {
+            left: Math.min(all.left, rect.left),
+            top: Math.min(all.top, rect.top),
+            right: Math.max(all.right, rect.right),
+            bottom: Math.max(all.bottom, rect.bottom),
+          }
+        : {...rect},
+    null,
+  );
+}
+
 /**
- * The active pen edits whose tag icon is on the page. With a lasso, only those whose icon or
- * paired strike is in the lasso.
+ * Finds an entry's parts among `elements`: by their `userData` first, by place as a fallback (the
+ * snippet's strokes shifted like its badge; the strike where it was).
+ */
+export function resolvePenEdit(entry: PenEditEntry, elements: Element[]): ResolvedPenEdit {
+  let badge: Element | null = null;
+  const decorations: Element[] = [];
+  const taggedStrokes: Element[] = [];
+  const markElements: Element[] = [];
+  const untagged: Array<{element: Element; rect: Rect | null}> = [];
+  for (const element of elements) {
+    const tag = parsePenEditUserData(element.userData);
+    if (!tag) {
+      if (isSupportedEditMarkerElement(element)) {
+        untagged.push({element, rect: elementRect(element)});
+      }
+      continue;
+    }
+    if (tag.id !== entry.id) {
+      continue;
+    }
+    if (tag.role === 'snippet') {
+      badge = element;
+      decorations.push(element);
+    } else if (tag.role === 'stroke') {
+      taggedStrokes.push(element);
+    } else if (tag.role === 'mark') {
+      markElements.push(element);
+    } else {
+      decorations.push(element);
+    }
+  }
+  const shift = rectShift(entry.iconRect, badge ? elementRect(badge) : null);
+  const strokes =
+    taggedStrokes.length > 0
+      ? taggedStrokes
+      : matchByRects(entry.strokeRects, untagged, shift).map(item => item.element);
+  let strike: Element | null = null;
+  if (entry.mark) {
+    const strikeRect = entry.mark.strikeRect;
+    const candidates =
+      markElements.length > 0
+        ? markElements.map(element => ({element, rect: elementRect(element)}))
+        : untagged;
+    strike = matchByRects([strikeRect], candidates)[0]?.element ?? null;
+    if (!strike && markElements.length > 0) {
+      // Tagged but moved: the widest tagged stroke is the strike.
+      strike = [...markElements].sort((a, b) => width(elementRect(b)) - width(elementRect(a)))[0];
+    }
+  }
+  return {badge, decorations, strokes, strike, markElements, shift};
+}
+
+function width(rect: Rect | null): number {
+  return rect ? rect.right - rect.left : 0;
+}
+
+/**
+ * The active pen edits whose badge is on the page. With a lasso, only those with a tagged part
+ * (or their strike) in the lasso.
  */
 export async function loadPenEditContext(
   pageElements: Element[],
   lassoElements: Element[] | null,
 ): Promise<PenEditContext> {
   const idsOnPage = new Set<string>();
-  const excludedUuids = new Set<string>();
   for (const element of pageElements) {
     const tag = parsePenEditUserData(element.userData);
-    if (tag) {
-      excludedUuids.add(element.uuid);
-      if (tag.role === 'snippet') {
-        idsOnPage.add(tag.id);
-      }
+    if (tag?.role === 'snippet') {
+      idsOnPage.add(tag.id);
     }
   }
   if (idsOnPage.size === 0) {
@@ -84,25 +174,76 @@ export async function loadPenEditContext(
     warning = read.warning;
   } catch (error) {
     console.warn('[PenEditReview] index not read', String(error));
-    return {...EMPTY_PEN_EDIT_CONTEXT, excludedUuids, warning: 'The tagged replacements could not be read.'};
+    return {...EMPTY_PEN_EDIT_CONTEXT, warning: 'The tagged replacements could not be read.'};
   }
-  const lassoUuids = lassoElements ? new Set(lassoElements.map(element => element.uuid)) : null;
-  const lassoIds = new Set(
-    (lassoElements ?? []).map(element => parsePenEditUserData(element.userData)?.id).filter((id): id is string => !!id),
-  );
   const onPage = index.entries.filter(entry => entry.state === 'active' && idsOnPage.has(entry.id));
-  // Every tagged snippet's strokes stay out of the markers, also outside the lasso.
-  onPage.forEach(entry => entry.strokeUuids.forEach(uuid => excludedUuids.add(uuid)));
-  const entries = onPage
-    .filter(entry => !lassoUuids || lassoIds.has(entry.id) || (entry.mark && lassoUuids.has(entry.mark.strikeUuid)))
-    .sort((a, b) => a.number - b.number);
-  const byStrike = new Map<string, PenEditEntry>();
+
+  // Every tagged snippet's strokes stay out of the markers, also outside the lasso. Element uuids
+  // differ between the page read and the lasso read, so the fallback compares places.
+  const excludedRects: Rect[] = [];
+  const snippetRects = new Map<string, Rect>();
+  const strikeRects = new Map<string, Rect>();
+  for (const entry of onPage) {
+    const resolved = resolvePenEdit(entry, pageElements);
+    const rects = resolved.strokes.map(elementRect).filter((rect): rect is Rect => rect !== null);
+    excludedRects.push(...rects);
+    snippetRects.set(entry.id, unionRects(rects) ?? shiftRect(entry.rect, resolved.shift.dx, resolved.shift.dy));
+    const strikeRect = resolved.strike ? elementRect(resolved.strike) : null;
+    if (entry.mark && strikeRect) {
+      strikeRects.set(entry.id, strikeRect);
+    }
+  }
+  const byId = new Map(onPage.map(entry => [entry.id, entry]));
+
+  const isExcluded = (element: Element): boolean => {
+    const tag = parsePenEditUserData(element.userData);
+    if (tag) {
+      return tag.role !== 'mark';
+    }
+    const rect = elementRect(element);
+    return !!rect && excludedRects.some(other => rectsMatch(rect, other));
+  };
+  const strikeOwner = (element: Element): PenEditEntry | undefined => {
+    const tag = parsePenEditUserData(element.userData);
+    if (tag?.role === 'mark' && strikeRects.has(tag.id)) {
+      return byId.get(tag.id);
+    }
+    const rect = elementRect(element);
+    if (!rect) {
+      return undefined;
+    }
+    for (const [id, strikeRect] of strikeRects) {
+      if (rectsMatch(rect, strikeRect)) {
+        return byId.get(id);
+      }
+    }
+    return undefined;
+  };
+
+  const lassoIds = new Set<string>();
+  const lassoRects: Rect[] = [];
+  for (const element of lassoElements ?? []) {
+    const tag = parsePenEditUserData(element.userData);
+    if (tag) {
+      lassoIds.add(tag.id);
+    }
+    const rect = elementRect(element);
+    if (rect) {
+      lassoRects.push(rect);
+    }
+  }
+  const inLasso = (entry: PenEditEntry): boolean => {
+    if (!lassoElements || lassoIds.has(entry.id)) {
+      return true;
+    }
+    const strikeRect = strikeRects.get(entry.id);
+    return !!strikeRect && lassoRects.some(rect => rectsMatch(rect, strikeRect));
+  };
+
+  const entries = onPage.filter(inLasso).sort((a, b) => a.number - b.number);
   const states: Record<string, PenTextState> = {};
   const views: PenEditView[] = [];
   for (const entry of entries) {
-    if (entry.mark?.kind === 'replace') {
-      byStrike.set(entry.mark.strikeUuid, entry);
-    }
     states[entry.id] = stateOf(entry);
     views.push({
       id: entry.id,
@@ -111,37 +252,13 @@ export async function loadPenEditContext(
       pictureUri: entry.hasPicture ? await penEditPictureUri(entry.id) : null,
     });
   }
-  return {entries, excludedUuids, byStrike, states, views, warning};
-}
-
-/** The snippet's current place: its strokes' rects on the page, else where it was tagged. */
-export function snippetRect(entry: PenEditEntry, pageElements: Element[]): Rect {
-  const strokeUuids = new Set(entry.strokeUuids);
-  let rect: Rect | null = null;
-  for (const element of pageElements) {
-    if (!strokeUuids.has(element.uuid)) {
-      continue;
-    }
-    const own = buildRecognizeRect(element.recognizeResult);
-    if (!own) {
-      continue;
-    }
-    rect = rect
-      ? {
-          left: Math.min(rect.left, own.left),
-          top: Math.min(rect.top, own.top),
-          right: Math.max(rect.right, own.right),
-          bottom: Math.max(rect.bottom, own.bottom),
-        }
-      : own;
-  }
-  return rect ?? entry.rect;
+  return {entries, isExcluded, strikeOwner, snippetRects, states, views, warning};
 }
 
 /** Where each insertion goes; one without a textbox in its column comes back as unplaced. */
 export function placeInsertions(
   entries: PenEditEntry[],
-  pageElements: Element[],
+  snippetRects: Map<string, Rect>,
   pageTextboxes: TextElementData[],
 ): {drafts: InsertionDraft[]; unplaced: PenEditEntry[]} {
   const ordered = sortTextElements(pageTextboxes);
@@ -151,7 +268,7 @@ export function placeInsertions(
     if (entry.kind !== 'insertion') {
       continue;
     }
-    const placement = placeInsertion(snippetRect(entry, pageElements), ordered);
+    const placement = placeInsertion(snippetRects.get(entry.id) ?? entry.rect, ordered);
     if (!placement) {
       unplaced.push(entry);
       continue;
@@ -241,20 +358,19 @@ export async function markPenEditsApplied(ids: string[]): Promise<void> {
   });
 }
 
-/** The element numbers to remove for applied pen edits: their strokes, icon and numbers. */
+/** The element numbers to remove for applied pen edits: their strokes, badges and numbers. */
 export function penEditElementNums(ids: string[], entries: PenEditEntry[], pageElements: Element[]): number[] {
-  const idSet = new Set(ids);
-  const strokeUuids = new Set(entries.filter(entry => idSet.has(entry.id)).flatMap(entry => entry.strokeUuids));
-  const nums: number[] = [];
   const counts = new Map<number, number>();
   pageElements.forEach(element => counts.set(element.numInPage, (counts.get(element.numInPage) ?? 0) + 1));
-  for (const element of pageElements) {
-    const tag = parsePenEditUserData(element.userData);
-    const ours = (tag && idSet.has(tag.id)) || strokeUuids.has(element.uuid);
-    // Kept GTD's rule: remove by number only when the number is unique on the page.
-    if (ours && counts.get(element.numInPage) === 1) {
-      nums.push(element.numInPage);
+  const nums: number[] = [];
+  for (const entry of entries.filter(item => ids.includes(item.id))) {
+    const resolved = resolvePenEdit(entry, pageElements);
+    for (const element of [...resolved.decorations, ...resolved.strokes]) {
+      // Kept GTD's rule: remove by number only when the number is unique on the page.
+      if (counts.get(element.numInPage) === 1) {
+        nums.push(element.numInPage);
+      }
     }
   }
-  return nums;
+  return [...new Set(nums)];
 }

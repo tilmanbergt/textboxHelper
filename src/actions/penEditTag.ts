@@ -1,32 +1,34 @@
+import {PluginCommAPI, type Element} from 'sn-plugin-lib';
 import {
-  upsertPenEdit,
   activePenEditsOnPage,
-  takenStrikeUuids,
+  takenStrikeRects,
+  upsertPenEdit,
   WAITING_RECOGNITION,
   type PenEditEntry,
-  type PenEditMark,
 } from '../domain/penEditModel';
-import {findReplaceMarkInWindow, lookBackNumbers, type WindowStroke} from '../domain/penEditPairing';
+import {findReplaceMarkInWindow, lookBackNumbers, storedMark, type WindowMark} from '../domain/penEditPairing';
 import {
-  markNumberRect,
+  badgeNumberRect,
+  circlePolygon,
+  markBadgeRect,
   newPenEditId,
   nextPenEditNumber,
-  snippetNumberRect,
-  tagIconRect,
+  snippetBadgePolygon,
+  snippetBadgeRect,
   type PenEditKind,
 } from '../domain/penEditTags';
 import type {Rect} from '../domain/textboxModel';
 import {changePenEditIndex, readPenEditIndex, savePenEditData, temporaryPicturePath} from '../storage/penEditStore';
-import {readLasso} from '../supernote/lassoRead';
+import {readLasso, type LassoSnapshot} from '../supernote/lassoRead';
 import {hideLassoBox} from '../supernote/noteElements';
-import {insertTagElements, type TagNumber} from '../supernote/penEditElements';
-import {readLookBackWindow} from '../supernote/penEditPageRead';
+import {insertTagElements, tagUserStrokes, type TagBadge, type TagNumber} from '../supernote/penEditElements';
+import {readLookBackWindow, recycleWindow} from '../supernote/penEditPageRead';
 import {ensurePermissions} from '../supernote/permissions';
 
 /**
  * The "Replacement" and "Insertion" lasso buttons (technical-design-pen-edits.md §3.4): store the
  * lassoed handwriting, pair a replacement with the replace mark written just before it, put the
- * tag icon and numbers on the page. No recognition here, and no plugin screen unless something
+ * badges and numbers on the page, and write the tag onto the user's strokes. No recognition here, and no plugin screen unless something
  * went wrong: the outcome is kept here for App's small result screen.
  */
 
@@ -61,7 +63,7 @@ export function outcomeNeedsScreen(result: PenEditTagOutcome): boolean {
   return result.kind !== 'tagged' && result.kind !== 'busy';
 }
 
-function boundsOfPoints(points: number[][]): Rect | null {
+function boundsOfFlatPoints(points: number[][]): Rect | null {
   let left = Infinity;
   let top = Infinity;
   let right = -Infinity;
@@ -75,10 +77,6 @@ function boundsOfPoints(points: number[][]): Rect | null {
     }
   }
   return Number.isFinite(left) ? {left, top, right, bottom} : null;
-}
-
-function windowItem(window: WindowStroke[], uuid: string | undefined): WindowStroke | undefined {
-  return uuid ? window.find(item => item.uuid === uuid) : undefined;
 }
 
 let running = false;
@@ -98,8 +96,10 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     last = now;
   };
   const id = newPenEditId(new Date());
+  let snap: LassoSnapshot | null = null;
+  let windowElements: Map<string, Element> | null = null;
   try {
-    const snap = await readLasso({picturePath: temporaryPicturePath(id)});
+    snap = await readLasso({picturePath: temporaryPicturePath(id), keepStrokeElements: true});
     step('lasso');
     if (!snap.path || snap.page === null) {
       return {kind: 'failed', detail: 'Could not tell which note and page the lasso is on.'};
@@ -122,35 +122,55 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     const number = nextPenEditNumber(activePenEditsOnPage(index, notePath, page).map(entry => entry.number));
     step('index');
 
-    let mark: PenEditMark | null = null;
-    let strike: WindowStroke | undefined;
-    let lookBackWindow: WindowStroke[] = [];
+    let found: WindowMark | null = null;
     let lookBack = {read: 0, ms: 0};
     if (tagKind === 'replacement') {
       const lowest = Math.min(...snap.strokeNums);
       const result = await readLookBackWindow(notePath, page, lookBackNumbers(lowest));
+      windowElements = result.elements;
       lookBack = {read: result.read, ms: result.ms};
-      lookBackWindow = result.window;
-      mark = findReplaceMarkInWindow(result.window, takenStrikeUuids(index));
-      strike = mark ? windowItem(result.window, mark.strikeUuid) : undefined;
+      found = findReplaceMarkInWindow(result.window, takenStrikeRects(index, notePath, page));
       step('lookBack');
     }
 
-    const lassoRect = snap.rect ?? boundsOfPoints(snap.strokes.map(stroke => stroke.points));
+    const lassoRect = snap.rect ?? boundsOfFlatPoints(snap.strokes.map(stroke => stroke.points));
     if (!lassoRect) {
       return {kind: 'failed', detail: 'Could not tell where the lassoed handwriting is.'};
     }
-    const iconRect = tagIconRect(lassoRect);
-    const numbers: TagNumber[] = [{role: 'snippetnum', rect: snippetNumberRect(iconRect), number}];
-    const rightVertical = mark ? windowItem(lookBackWindow, mark.modifierUuids[mark.modifierUuids.length - 1]) : undefined;
-    const markAnchor = rightVertical?.stats.rect ?? strike?.stats.rect;
-    if (markAnchor) {
-      numbers.push({role: 'marknum', rect: markNumberRect(markAnchor, snap.pageSize?.width ?? 0), number});
+
+    // The tag goes onto the user's strokes before anything is inserted: inserting renumbers the
+    // page, and the elements read so far belong to this moment.
+    const strokesToTag: Array<{element: Element; role: 'stroke' | 'mark'}> = snap.strokeElements.map(element => ({
+      element,
+      role: 'stroke' as const,
+    }));
+    if (found && windowElements) {
+      for (const item of [found.strike, ...found.modifiers]) {
+        const element = windowElements.get(item.uuid);
+        if (element) {
+          strokesToTag.push({element, role: 'mark'});
+        }
+      }
     }
-    const placed = await insertTagElements({page, id, kind: tagKind, iconRect, numbers});
+    const tagged = await tagUserStrokes(page, id, strokesToTag);
+    step('tagStrokes');
+
+    const badge = snippetBadgeRect(lassoRect);
+    const badges: TagBadge[] = [{role: 'snippet', points: snippetBadgePolygon(tagKind, badge)}];
+    const numbers: TagNumber[] = [{role: 'snippetnum', rect: badgeNumberRect(badge, number), number}];
+    if (found) {
+      const markBadge = markBadgeRect(
+        found.modifiers.map(item => item.stats.rect),
+        found.strike.stats.rect,
+        snap.pageSize?.width ?? 0,
+      );
+      badges.push({role: 'markring', points: circlePolygon(markBadge)});
+      numbers.push({role: 'marknum', rect: badgeNumberRect(markBadge, number), number});
+    }
+    const placed = await insertTagElements({page, id, badges, numbers});
     step('elements');
     if (!placed.placed) {
-      // Without its icon the entry would never be found on the page again: store nothing.
+      // Without its badge the entry would never be found on the page again: store nothing.
       return {kind: 'failed', detail: `Could not put the tag on the page (${placed.error ?? 'unknown error'}). Nothing was tagged; please try again.`};
     }
 
@@ -164,8 +184,10 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
       number,
       createdAt: new Date().toISOString(),
       rect: lassoRect,
-      strokeUuids: snap.strokeUuids,
-      mark,
+      strokeRects: snap.strokeRects,
+      iconRect: badge,
+      strokesTagged: tagged.tagged,
+      mark: found ? storedMark(found) : null,
       hasPicture,
       recognition: WAITING_RECOGNITION,
       correctedText: null,
@@ -184,8 +206,11 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
         number,
         strokes: snap.strokes.length,
         strokeNums: [Math.min(...snap.strokeNums), Math.max(...snap.strokeNums)],
-        paired: !!mark,
+        paired: !!found,
         lookBack,
+        strokesTagged: tagged.tagged,
+        tagError: tagged.error,
+        tagMs: tagged.ms,
         hasPicture,
         pictureError: picture.error,
         saved: placed.saved,
@@ -197,7 +222,7 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
         totalMs: Date.now() - start,
       }),
     );
-    if (tagKind === 'replacement' && !mark) {
+    if (tagKind === 'replacement' && !found) {
       return {kind: 'noMark', number};
     }
     return {kind: 'tagged', tagKind, number};
@@ -206,5 +231,15 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     return {kind: 'failed', detail: error instanceof Error ? error.message : 'The tag could not be saved.'};
   } finally {
     running = false;
+    snap?.strokeElements.forEach(element => {
+      try {
+        PluginCommAPI.recycleElement(element.uuid);
+      } catch {
+        // silent: a failed recycle only keeps a cached element a little longer
+      }
+    });
+    if (windowElements) {
+      recycleWindow(windowElements);
+    }
   }
 }

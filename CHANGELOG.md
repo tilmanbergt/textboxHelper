@@ -6,7 +6,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Added
 
-- Two new lasso toolbar buttons, "Replacement" and "Insertion": lasso handwritten new text and tap one to tag it, without converting it to text first. The tap is quick and opens no screen: a small icon and a number appear at the text, and for a replacement the same number appears over the replace mark written just before it.
+- Two new lasso toolbar buttons, "Replacement" and "Insertion": lasso handwritten new text and tap one to tag it, without converting it to text first. The tap is quick and opens no screen: a numbered badge appears at the text (a circle for a replacement, a diamond for an insertion), and for a replacement the same circled number appears over the replace mark written just before it. The tagged handwriting and mark are found again even after you move them with the lasso.
 - The edit-marker review recognizes tagged text while you read, one at a time, the selected change first; until then a grey placeholder stands in the text. A picture of the handwriting shows below, with Correct (write the right text with the Supernote's handwriting pad), Skip for later and Recognize again. Apply changes everything that is ready, puts insertions in as new paragraphs, and removes the used marks and tagged handwriting; the rest stays for a later pass. Recognized text and your choices are kept, so the review can be closed and opened again.
 
 ### Changed
@@ -20,6 +20,8 @@ All notable changes to Textbox Tools are listed here, newest first.
 - Edit Markers has a new, calmer review screen that never scrolls. The changes are listed on the left (with an "Ignored" tab for markers that couldn't be used); the right side shows one changed textbox at a time with the removed words struck through and replacements in bold. Tap a change to see it in its textbox. After Apply the screen stays open with the result and the backup's file name. Calibration and Save Diagnostics moved to "Details"; the marker help is behind "?". A font warning shows in the status line when word positions were measured in a standard font.
 
 ### Fixed
+
+- Imported textboxes are now written in NOTE's system font and sized for it, so their line spacing no longer changes when you edit one, and the last line is no longer cut off. Edit markers in textboxes without a font are measured in the same font, so the right words are struck.
 
 - Import Text File looks for the file in the Supernote's INBOX folder under the folder's exact name. It used "Inbox", and opening a file there could fail with "Permission denied".
 

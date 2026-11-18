@@ -1,5 +1,6 @@
 import {PluginCommAPI, PluginFileAPI, type Element} from 'sn-plugin-lib';
 import type {PageSize, StoredStroke} from '../domain/penEditModel';
+import {buildRecognizeRect} from '../domain/markerStrokes';
 import {ELEMENT_TYPE_STROKE, MAIN_LAYER, type Rect} from '../domain/textboxModel';
 import {readAccessorRange} from './markerStrokeRead';
 
@@ -19,8 +20,14 @@ export type LassoSnapshot = {
   /** Path of the picture written, or null. */
   picture: string | null;
   strokes: StoredStroke[];
-  strokeUuids: string[];
+  /** Each stroke's recognize rect (or its points' bounds), in the order of `strokes`. */
+  strokeRects: Rect[];
   strokeNums: number[];
+  /**
+   * The stroke elements themselves, kept only with `keepStrokeElements` (to write the tag onto
+   * them); the caller recycles them.
+   */
+  strokeElements: Element[];
   elementCount: number;
   errors: string[];
   timingsMs: Record<string, number>;
@@ -78,7 +85,26 @@ export async function saveLassoPicture(target: string): Promise<string | null> {
   }
 }
 
-export async function readLasso(options: {picturePath?: string} = {}): Promise<LassoSnapshot> {
+function pointBounds(flat: number[]): Rect | null {
+  if (flat.length < 2) {
+    return null;
+  }
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (let index = 0; index + 1 < flat.length; index += 2) {
+    left = Math.min(left, flat[index]);
+    right = Math.max(right, flat[index]);
+    top = Math.min(top, flat[index + 1]);
+    bottom = Math.max(bottom, flat[index + 1]);
+  }
+  return {left, top, right, bottom};
+}
+
+export async function readLasso(
+  options: {picturePath?: string; keepStrokeElements?: boolean} = {},
+): Promise<LassoSnapshot> {
   const timings: Record<string, number> = {};
   const errors: string[] = [];
   const snap: LassoSnapshot = {
@@ -88,8 +114,9 @@ export async function readLasso(options: {picturePath?: string} = {}): Promise<L
     pageSize: null,
     picture: null,
     strokes: [],
-    strokeUuids: [],
+    strokeRects: [],
     strokeNums: [],
+    strokeElements: [],
     elementCount: 0,
     errors,
     timingsMs: timings,
@@ -146,8 +173,11 @@ export async function readLasso(options: {picturePath?: string} = {}): Promise<L
         const stroke = await readStroke(element);
         if (stroke && stroke.points.length > 0) {
           snap.strokes.push(stroke);
-          snap.strokeUuids.push(element.uuid);
+          snap.strokeRects.push(buildRecognizeRect(element.recognizeResult) ?? pointBounds(stroke.points) ?? {left: 0, top: 0, right: 0, bottom: 0});
           snap.strokeNums.push(element.numInPage);
+          if (options.keepStrokeElements) {
+            snap.strokeElements.push(element);
+          }
         }
       } catch (error) {
         errors.push('stroke: ' + String(error));
@@ -157,7 +187,11 @@ export async function readLasso(options: {picturePath?: string} = {}): Promise<L
   } catch (error) {
     errors.push(String(error));
   } finally {
+    const kept = new Set(snap.strokeElements);
     for (const element of elements) {
+      if (kept.has(element)) {
+        continue;
+      }
       try {
         PluginCommAPI.recycleElement(element.uuid);
       } catch {

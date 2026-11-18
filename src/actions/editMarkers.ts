@@ -1,5 +1,6 @@
 import type {Element, TextBox} from 'sn-plugin-lib';
 import {createEditMarkerBackupPayload} from '../domain/backupPayload';
+import {NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
 import {assembleMarkerPreview} from '../domain/markerAssembly';
 import {plural} from '../domain/plural';
 import {cloneRect} from '../domain/geometry';
@@ -206,9 +207,9 @@ async function buildEditMarkerPreview(
     const effectiveSelection = context.effectiveSelection;
     const pen = await loadPenEditContext(pageElements, previewScope === 'lasso' ? lassoElements : null);
 
-    // Tagged snippets' handwriting and Textbox Tools' own icons are never markers.
+    // Tagged snippets' handwriting and Textbox Tools' own badges and numbers are never markers.
     const selectedMarkers = effectiveSelection.filter(
-      element => isSupportedEditMarkerElement(element) && !pen.excludedUuids.has(element.uuid),
+      element => isSupportedEditMarkerElement(element) && !pen.isExcluded(element),
     );
     const selectedTextboxes = sortTextElements(effectiveSelection.filter(isNormalTextElement));
     logEditMarker('previewContext', {
@@ -354,7 +355,7 @@ async function buildEditMarkerPreview(
       // A replace mark with a tagged snippet takes its text from the snippet; the others look for
       // typed "#" lines as before.
       const typedReplaceCandidates = replaceCandidates.filter(entry => {
-        const penEdit = pen.byStrike.get(entry.candidate.markerUuid);
+        const penEdit = pen.strikeOwner(entry.candidate.marker);
         if (!penEdit) {
           return true;
         }
@@ -506,7 +507,7 @@ async function buildEditMarkerPreview(
           penEditId: entry.id,
         });
       });
-    const placed = placeInsertions(pen.entries, pageElements, pageTextboxes);
+    const placed = placeInsertions(pen.entries, pen.snippetRects, pageTextboxes);
     placed.unplaced.forEach(entry => {
       ignoredMarkers.push({
         markerUuid: entry.id,
@@ -659,11 +660,13 @@ export async function applyEditMarkerPreview(
     for (const insertion of plan.insertions) {
       reportProgress(options, 'Inserting new paragraphs...', false);
       const fontSize = insertion.style.fontSize || DEFAULT_FONT_SIZE;
+      // A neighbour without a font gets NOTE's system font, as NOTE itself writes it.
+      const style = {...insertion.style, fontPath: insertion.style.fontPath || NOTE_SYSTEM_FONT_PATH};
       const height = await estimateTextboxHeight(
         insertion.text,
         insertion.width,
         fontSize,
-        insertion.style.fontPath || undefined,
+        style.fontPath,
         currentEditMarkerCalibration,
       );
       const rect = {
@@ -672,7 +675,7 @@ export async function applyEditMarkerPreview(
         right: insertion.left + insertion.width,
         bottom: insertion.top + height,
       };
-      await insertTextboxElement(buildTextInsert(insertion.style, insertion.text, rect));
+      await insertTextboxElement(buildTextInsert(style, insertion.text, rect));
       const overlap = insertion.belowTop === null ? 0 : Math.max(0, Math.round(rect.bottom - insertion.belowTop));
       if (overlap > 0) {
         overlaps.push(`${overlap} px`);

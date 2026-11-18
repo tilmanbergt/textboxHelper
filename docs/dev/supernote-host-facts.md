@@ -44,6 +44,16 @@ Library: `sn-plugin-lib` 0.2.3.
   `page`), not on the element itself. Title style 0 removes a heading; 1-4 are the heading
   styles.
 
+- **Element uuids are not identities.** The same untouched textbox comes back with a different
+  `uuid` from one read to the next, and the lasso's elements have other uuids than the page's.
+  They are handles of the SDK's element cache (`recycleElement`). What stays with an element is
+  its `userData`: pen edits write it onto their badges and numbers and onto the user's tagged
+  strokes, and find them by it.
+- **Element numbers change.** Inserting elements and saving can renumber a page (a tag's number
+  textbox got a lower `numInPage` than strokes written before it), and NOTE replaces a textbox the
+  user edits (it comes back with a new number). A number is only valid until the next insert,
+  edit or save; nothing stores one.
+
 ## 4. Text measurement
 
 - **Textbox fonts** are reported as a file path in `textBox.fontPath`, in one of three places:
@@ -62,6 +72,11 @@ Library: `sn-plugin-lib` 0.2.3.
   (`src/domain/fontPaths.ts`); its `typefaceStatus` says which one loaded. Without a font,
   Android's default typeface lays the text out about 12 % narrower and with a different line
   height than the NOTE app, and every flow that measured that way shows a warning.
+- **"System font" is `/system/fonts/DroidSansFallbackFull.ttf`.** A textbox the user sets to the
+  system font (or edits) gets this `fontPath` and about 48 px per line at size 36. A textbox
+  written without a `fontPath` (older imports) is drawn in a narrower font with tighter lines,
+  until the user edits it. New textboxes from the plugin get the system font's path, and a
+  textbox without one is measured in it (`NOTE_SYSTEM_FONT_PATH`).
 - The NOTE app wraps textbox text a little earlier than an Android `StaticLayout` of the same
   width. `supernote/textboxMetrics.ts` measures with a width reduced by 30 px
   (`widthAdjustment`), calibrated on the device.

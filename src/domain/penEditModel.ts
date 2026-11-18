@@ -33,7 +33,7 @@ export type PenEditStrokeData = {
  * What a pen edit is paired with. A tagged union so later mark kinds (the caret of
  * technical-design-pen-edits.md §8) need no change to stored entries.
  */
-export type PenEditMark = {kind: 'replace'; strikeUuid: string; modifierUuids: string[]};
+export type PenEditMark = {kind: 'replace'; strikeRect: Rect; modifierRects: Rect[]};
 
 export type RecognitionStatus = 'waiting' | 'done' | 'empty' | 'failed';
 
@@ -58,7 +58,15 @@ export type PenEditEntry = {
   createdAt: string;
   /** The lasso rect at tag time, page pixels. */
   rect: Rect;
-  strokeUuids: string[];
+  /**
+   * Where the snippet's strokes and the tag icon were at tag time (the strokes' recognize rects).
+   * Element uuids change with every read, so these and the `userData` written onto the strokes
+   * are how the snippet is found again; a move is followed through the icon's shift.
+   */
+  strokeRects: Rect[];
+  iconRect: Rect;
+  /** True when the snippet strokes and the mark carry this entry's `userData`. */
+  strokesTagged: boolean;
   mark: PenEditMark | null;
   /** True when the picture was saved next to the strokes. */
   hasPicture: boolean;
@@ -80,7 +88,6 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const isString = (value: unknown): value is string => typeof value === 'string';
 const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
-const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every(isString);
 
 function parseRect(value: unknown): Rect | null {
   if (!isRecord(value)) {
@@ -92,11 +99,16 @@ function parseRect(value: unknown): Rect | null {
     : null;
 }
 
+function parseRects(value: unknown): Rect[] {
+  return Array.isArray(value) ? value.map(parseRect).filter((rect): rect is Rect => rect !== null) : [];
+}
+
 function parseMark(value: unknown): PenEditMark | null {
-  if (!isRecord(value) || value.kind !== 'replace' || !isString(value.strikeUuid)) {
+  if (!isRecord(value) || value.kind !== 'replace') {
     return null;
   }
-  return {kind: 'replace', strikeUuid: value.strikeUuid, modifierUuids: isStringArray(value.modifierUuids) ? value.modifierUuids : []};
+  const strikeRect = parseRect(value.strikeRect);
+  return strikeRect ? {kind: 'replace', strikeRect, modifierRects: parseRects(value.modifierRects)} : null;
 }
 
 function parseRecognition(value: unknown): PenEditRecognition {
@@ -140,7 +152,9 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     number: value.number,
     createdAt: isString(value.createdAt) ? value.createdAt : '',
     rect,
-    strokeUuids: isStringArray(value.strokeUuids) ? value.strokeUuids : [],
+    strokeRects: parseRects(value.strokeRects),
+    iconRect: parseRect(value.iconRect) ?? rect,
+    strokesTagged: value.strokesTagged === true,
     mark: parseMark(value.mark),
     hasPicture: value.hasPicture === true,
     recognition: parseRecognition(value.recognition),
@@ -209,15 +223,11 @@ export function activePenEditsOnPage(index: PenEditIndex, notePath: string, page
   return index.entries.filter(entry => entry.state === 'active' && entry.notePath === notePath && entry.page === page);
 }
 
-/** Strike uuids already paired with an active replacement: a strike pairs with one snippet only. */
-export function takenStrikeUuids(index: PenEditIndex): Set<string> {
-  const taken = new Set<string>();
-  for (const entry of index.entries) {
-    if (entry.state === 'active' && entry.mark?.kind === 'replace') {
-      taken.add(entry.mark.strikeUuid);
-    }
-  }
-  return taken;
+/** Strike rects of the active replacements on a page: a strike pairs with one snippet only. */
+export function takenStrikeRects(index: PenEditIndex, notePath: string, page: number): Rect[] {
+  return activePenEditsOnPage(index, notePath, page)
+    .map(entry => (entry.mark?.kind === 'replace' ? entry.mark.strikeRect : null))
+    .filter((rect): rect is Rect => rect !== null);
 }
 
 /** The text a pen edit puts into the note: the correction if there is one, else the recognition. */

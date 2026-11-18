@@ -11,10 +11,14 @@ import type {Point, Rect} from './textboxModel';
 
 export type PenEditKind = 'replacement' | 'insertion';
 
-/** What one of our page elements is for. */
-export type PenEditRole = 'snippet' | 'marknum' | 'snippetnum';
+/**
+ * What a tagged page element is: the badge at the snippet (its shape is the entry's anchor on the
+ * page) and its number, the badge at the mark and its number, and the user's own strokes the tag
+ * marked: the snippet's handwriting and the replace mark.
+ */
+export type PenEditRole = 'snippet' | 'snippetnum' | 'markring' | 'marknum' | 'stroke' | 'mark';
 
-const ROLES: readonly PenEditRole[] = ['snippet', 'marknum', 'snippetnum'];
+const ROLES: readonly PenEditRole[] = ['snippet', 'snippetnum', 'markring', 'marknum', 'stroke', 'mark'];
 
 export const PEN_EDIT_USERDATA_PREFIX = 'tbh:pe:';
 
@@ -59,23 +63,29 @@ export function parsePenEditUserData(value: unknown): {id: string; role: PenEdit
   return {id, role};
 }
 
-/** True for every page element Textbox Tools placed for a pen edit. */
+/** True for every page element that carries a pen-edit tag, including the user's tagged strokes. */
 export function isPenEditElement(element: {userData?: unknown}): boolean {
   return parsePenEditUserData(element.userData) !== null;
 }
 
-// ---------------------------------------------------------------------------
-// Numbers
+/** True for the badges and numbers Textbox Tools placed itself (not the user's strokes). */
+export function isPenEditDecoration(element: {userData?: unknown}): boolean {
+  const role = parsePenEditUserData(element.userData)?.role;
+  return role === 'snippet' || role === 'snippetnum' || role === 'markring' || role === 'marknum';
+}
 
-/** Font size of the number textboxes: readable next to body text, but clearly a mark. */
+// ---------------------------------------------------------------------------
+// Badges: a number inside a circle (replacement, at the snippet and at the mark) or a diamond
+// (insertion)
+
+/** Font size of the numbers: readable next to body text, but clearly a mark. */
 export const PEN_EDIT_NUMBER_FONT_SIZE = 28;
 /** A one- or two-digit textbox at or below this size counts as a pen-edit number. */
 export const PEN_EDIT_NUMBER_MAX_FONT_SIZE = 30;
-const NUMBER_BOX_WIDTH = 48;
-const NUMBER_BOX_HEIGHT = 40;
-const NUMBER_GAP = 6;
-/** How far the mark's number reaches down over the top end of the vertical line. */
-const MARK_NUMBER_OVERLAP = 10;
+export const BADGE_SIZE_PX = 48;
+const BADGE_INSET_PX = 4;
+/** Rough width of one digit at the number font size, to centre the number in its badge. */
+const DIGIT_WIDTH_PX = 16;
 
 /**
  * Second guard next to `userData`: a textbox holding only a one- or two-digit number in a small
@@ -96,74 +106,82 @@ export function nextPenEditNumber(numbersInUse: number[]): number {
   return numbersInUse.reduce((highest, n) => (Number.isFinite(n) && n > highest ? n : highest), 0) + 1;
 }
 
-/** The number next to the snippet: right of the tag icon. */
-export function snippetNumberRect(iconRect: Rect): Rect {
-  const left = Math.round(iconRect.right + NUMBER_GAP);
-  const top = Math.round(iconRect.top - NUMBER_GAP);
-  return {left, top, right: left + NUMBER_BOX_WIDTH, bottom: top + NUMBER_BOX_HEIGHT};
-}
-
-/**
- * The number at the replace mark: like a superscript on the right vertical line, its bottom just
- * over the line's top end, so it sits next to the mark rather than on the following words. Kept
- * on the page.
- */
-export function markNumberRect(rightVertical: Rect, pageWidth: number): Rect {
-  let left = Math.round(rightVertical.right + 2);
-  if (pageWidth > 0 && left + NUMBER_BOX_WIDTH > pageWidth) {
-    left = Math.max(0, Math.round(rightVertical.left - 2 - NUMBER_BOX_WIDTH));
-  }
-  const top = Math.max(0, Math.round(rightVertical.top + MARK_NUMBER_OVERLAP - NUMBER_BOX_HEIGHT));
-  return {left, top, right: left + NUMBER_BOX_WIDTH, bottom: top + NUMBER_BOX_HEIGHT};
-}
-
-// ---------------------------------------------------------------------------
-// Tag icon
-
-export const TAG_ICON_SIZE_PX = 28;
-const TAG_ICON_INSET_PX = 4;
-
-/** A square of TAG_ICON_SIZE_PX in the top-left corner inside the lasso rect, clamped when small. */
-export function tagIconRect(lasso: Rect, size = TAG_ICON_SIZE_PX): Rect {
+/** The snippet's badge: top left inside the lasso rect, smaller for a very small lasso. */
+export function snippetBadgeRect(lasso: Rect, size = BADGE_SIZE_PX): Rect {
   const width = Math.max(1, lasso.right - lasso.left);
   const height = Math.max(1, lasso.bottom - lasso.top);
   const s = Math.min(size, width, height);
-  const left = lasso.left + Math.min(TAG_ICON_INSET_PX, Math.max(0, width - s));
-  const top = lasso.top + Math.min(TAG_ICON_INSET_PX, Math.max(0, height - s));
+  const left = lasso.left + Math.min(BADGE_INSET_PX, Math.max(0, width - s));
+  const top = lasso.top + Math.min(BADGE_INSET_PX, Math.max(0, height - s));
   return {left: Math.round(left), top: Math.round(top), right: Math.round(left + s), bottom: Math.round(top + s)};
 }
 
 /**
- * The icon as a closed polygon filling `box`: a diamond for a replacement, a plus for an insertion.
+ * The mark's badge: centred over the two vertical lines (over the strike when there are none),
+ * its bottom touching their tops, kept on the page.
  */
-export function tagIconPolygon(kind: PenEditKind, box: Rect): Point[] {
-  const w = box.right - box.left;
-  const h = box.bottom - box.top;
-  const cx = Math.round(box.left + w / 2);
-  const cy = Math.round(box.top + h / 2);
-  if (kind === 'replacement') {
-    return [
-      {x: cx, y: box.top},
-      {x: box.right, y: cy},
-      {x: cx, y: box.bottom},
-      {x: box.left, y: cy},
-      {x: cx, y: box.top},
-    ];
+export function markBadgeRect(verticals: Rect[], strike: Rect, pageWidth: number, size = BADGE_SIZE_PX): Rect {
+  const anchors = verticals.length > 0 ? verticals : [strike];
+  const cx = anchors.reduce((sum, rect) => sum + (rect.left + rect.right) / 2, 0) / anchors.length;
+  const bottom = Math.min(...anchors.map(rect => rect.top));
+  let left = Math.round(cx - size / 2);
+  if (pageWidth > 0) {
+    left = Math.min(left, pageWidth - size);
   }
-  const arm = Math.max(2, Math.round(Math.min(w, h) * 0.17));
+  left = Math.max(0, left);
+  const top = Math.max(0, Math.round(bottom - size));
+  return {left, top, right: left + size, bottom: top + size};
+}
+
+/** The number textbox inside a badge, its digits roughly centred. */
+export function badgeNumberRect(badge: Rect, number: number): Rect {
+  const width = badge.right - badge.left;
+  const digits = String(number).length;
+  const left = Math.round(badge.left + Math.max(0, (width - digits * DIGIT_WIDTH_PX) / 2));
+  const top = Math.round(badge.top + 2);
+  return {left, top, right: left + Math.max(width, digits * DIGIT_WIDTH_PX + 8), bottom: badge.bottom};
+}
+
+/** A closed circle (24 points) filling `box`. */
+export function circlePolygon(box: Rect): Point[] {
+  const cx = (box.left + box.right) / 2;
+  const cy = (box.top + box.bottom) / 2;
+  const r = Math.min(box.right - box.left, box.bottom - box.top) / 2;
+  const points: Point[] = [];
+  for (let i = 0; i <= 24; i += 1) {
+    const angle = (i / 24) * 2 * Math.PI;
+    points.push({x: Math.round(cx + r * Math.cos(angle)), y: Math.round(cy + r * Math.sin(angle))});
+  }
+  return points;
+}
+
+/** A closed diamond filling `box`. */
+export function diamondPolygon(box: Rect): Point[] {
+  const cx = Math.round((box.left + box.right) / 2);
+  const cy = Math.round((box.top + box.bottom) / 2);
   return [
-    {x: cx - arm, y: box.top},
-    {x: cx + arm, y: box.top},
-    {x: cx + arm, y: cy - arm},
-    {x: box.right, y: cy - arm},
-    {x: box.right, y: cy + arm},
-    {x: cx + arm, y: cy + arm},
-    {x: cx + arm, y: box.bottom},
-    {x: cx - arm, y: box.bottom},
-    {x: cx - arm, y: cy + arm},
-    {x: box.left, y: cy + arm},
-    {x: box.left, y: cy - arm},
-    {x: cx - arm, y: cy - arm},
-    {x: cx - arm, y: box.top},
+    {x: cx, y: box.top},
+    {x: box.right, y: cy},
+    {x: cx, y: box.bottom},
+    {x: box.left, y: cy},
+    {x: cx, y: box.top},
   ];
+}
+
+/** The snippet badge's outline: a circle for a replacement, a diamond for an insertion. */
+export function snippetBadgePolygon(kind: PenEditKind, box: Rect): Point[] {
+  return kind === 'replacement' ? circlePolygon(box) : diamondPolygon(box);
+}
+
+/** Bounds of a polygon's points (a badge's current place on the page). */
+export function boundsOfPoints(points: Point[]): Rect | null {
+  if (points.length === 0) {
+    return null;
+  }
+  return {
+    left: Math.min(...points.map(p => p.x)),
+    top: Math.min(...points.map(p => p.y)),
+    right: Math.max(...points.map(p => p.x)),
+    bottom: Math.max(...points.map(p => p.y)),
+  };
 }

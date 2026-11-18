@@ -1,16 +1,11 @@
 import {PluginCommAPI, PluginNoteAPI, TextBox, type Element} from 'sn-plugin-lib';
-import {
-  PEN_EDIT_NUMBER_FONT_SIZE,
-  penEditUserData,
-  tagIconPolygon,
-  type PenEditKind,
-  type PenEditRole,
-} from '../domain/penEditTags';
-import {ELEMENT_TYPE_GEO, MAIN_LAYER, TEXT_TYPE_NORMAL, type Rect} from '../domain/textboxModel';
+import {NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
+import {PEN_EDIT_NUMBER_FONT_SIZE, penEditUserData, type PenEditRole} from '../domain/penEditTags';
+import {ELEMENT_TYPE_GEO, MAIN_LAYER, TEXT_TYPE_NORMAL, type Point, type Rect} from '../domain/textboxModel';
 
 /**
- * The page elements a pen-edit tag adds (technical-design-pen-edits.md §3.2): the tag icon (a
- * geometry polygon) and the small number textboxes, all carrying `userData`. The rules follow
+ * The page elements a pen-edit tag adds (technical-design-pen-edits.md §3.2): the badges (geometry
+ * polygons: a circle or a diamond) and the number textboxes inside them, all carrying `userData`. The rules follow
  * Kept GTD's supernote/markIcons.ts: `insertPageElements` (insertGeometry can't carry userData),
  * one retry after error 105, then save the note (unsaved inserts were lost when the note closed).
  * Never throws.
@@ -21,12 +16,12 @@ const BUSY_ERROR = '105';
 const RETRY_DELAY_MS = 500;
 
 export type TagNumber = {role: Extract<PenEditRole, 'marknum' | 'snippetnum'>; rect: Rect; number: number};
+export type TagBadge = {role: Extract<PenEditRole, 'snippet' | 'markring'>; points: Point[]};
 
 export type TagElementsRequest = {
   page: number;
   id: string;
-  kind: PenEditKind;
-  iconRect: Rect;
+  badges: TagBadge[];
   numbers: TagNumber[];
 };
 
@@ -68,17 +63,19 @@ async function create(type: number): Promise<Element> {
 async function buildElements(request: TagElementsRequest): Promise<Element[]> {
   const built: Element[] = [];
   try {
-    const icon = await create(ELEMENT_TYPE_GEO);
-    built.push(icon);
-    icon.pageNum = request.page;
-    icon.layerNum = MAIN_LAYER;
-    icon.userData = penEditUserData(request.id, 'snippet');
-    icon.geometry = {
-      ...(icon.geometry ?? {}),
-      ...ICON_PEN,
-      type: 'GEO_polygon',
-      points: tagIconPolygon(request.kind, request.iconRect),
-    } as Element['geometry'];
+    for (const badge of request.badges) {
+      const icon = await create(ELEMENT_TYPE_GEO);
+      built.push(icon);
+      icon.pageNum = request.page;
+      icon.layerNum = MAIN_LAYER;
+      icon.userData = penEditUserData(request.id, badge.role);
+      icon.geometry = {
+        ...(icon.geometry ?? {}),
+        ...ICON_PEN,
+        type: 'GEO_polygon',
+        points: badge.points,
+      } as Element['geometry'];
+    }
 
     for (const number of request.numbers) {
       const element = await create(TEXT_TYPE_NORMAL);
@@ -88,7 +85,7 @@ async function buildElements(request: TagElementsRequest): Promise<Element[]> {
       element.userData = penEditUserData(request.id, number.role);
       const textBox = element.textBox ?? new TextBox();
       textBox.fontSize = PEN_EDIT_NUMBER_FONT_SIZE;
-      textBox.fontPath = null;
+      textBox.fontPath = NOTE_SYSTEM_FONT_PATH;
       textBox.textContentFull = String(number.number);
       textBox.textRect = number.rect;
       textBox.textAlign = 0;
@@ -127,7 +124,7 @@ async function saveCurrentNote(): Promise<boolean> {
   }
 }
 
-/** Puts the tag icon and the numbers onto `page` of the open note, then saves it. */
+/** Puts the badges and the numbers onto `page` of the open note, then saves it. */
 export async function insertTagElements(request: TagElementsRequest): Promise<TagElementsResult> {
   let retried = false;
   let error: string | null = null;
@@ -153,4 +150,34 @@ export async function insertTagElements(request: TagElementsRequest): Promise<Ta
     console.warn('[PenEditElements] not placed', JSON.stringify({id: request.id, error}));
   }
   return {placed, retried, saved, error, insertMs, saveMs};
+}
+
+/**
+ * Writes the tag onto the user's own strokes: the snippet's handwriting and the replace mark.
+ * Element uuids don't survive a read, so this `userData` is how the review finds them again.
+ * Never throws; `tagged` is false when the host refused (the review then matches by place).
+ */
+export async function tagUserStrokes(
+  page: number,
+  id: string,
+  strokes: Array<{element: Element; role: Extract<PenEditRole, 'stroke' | 'mark'>}>,
+): Promise<{tagged: boolean; error: string | null; ms: number}> {
+  const start = Date.now();
+  if (strokes.length === 0) {
+    return {tagged: true, error: null, ms: 0};
+  }
+  try {
+    strokes.forEach(({element, role}) => {
+      element.userData = penEditUserData(id, role);
+    });
+    const response = (await PluginCommAPI.modifyPageElements(
+      strokes.map(item => item.element),
+      page,
+      null,
+    )) as Response<number[]>;
+    const error = response?.success ? null : 'modifyPageElements: ' + errText(response, 'failed');
+    return {tagged: error === null, error, ms: Date.now() - start};
+  } catch (caught) {
+    return {tagged: false, error: caught instanceof Error ? caught.message : String(caught), ms: Date.now() - start};
+  }
 }

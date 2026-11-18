@@ -4,7 +4,7 @@ import {
   parsePenEditIndex,
   penEditText,
   serializePenEditIndex,
-  takenStrikeUuids,
+  takenStrikeRects,
   updatePenEdit,
   upsertPenEdit,
   WAITING_RECOGNITION,
@@ -13,17 +13,21 @@ import {
 import {findReplaceMarkInWindow, lookBackNumbers, strokeStatsFromRect, type WindowStroke} from '../../src/domain/penEditPairing';
 import {overlapWithBelow, placeInsertion} from '../../src/domain/penEditInsertion';
 import {
+  badgeNumberRect,
+  boundsOfPoints,
+  circlePolygon,
+  isPenEditDecoration,
   isPenEditElement,
   looksLikePenEditNumber,
-  markNumberRect,
+  markBadgeRect,
   newPenEditId,
   nextPenEditNumber,
   parsePenEditUserData,
   penEditUserData,
-  snippetNumberRect,
-  tagIconPolygon,
-  tagIconRect,
+  snippetBadgePolygon,
+  snippetBadgeRect,
 } from '../../src/domain/penEditTags';
+import {matchByRects, rectShift, rectsMatch} from '../../src/domain/penEditMatching';
 import {normalizeRecognizedText} from '../../src/domain/penEditText';
 import {isNormalTextElement} from '../../src/domain/textboxEditPlan';
 import type {PageElementData, Rect, TextElementData} from '../../src/domain/textboxModel';
@@ -36,7 +40,7 @@ describe('pen edit ids and userData', () => {
   });
 
   it('round-trips userData for every role', () => {
-    for (const role of ['snippet', 'marknum', 'snippetnum'] as const) {
+    for (const role of ['snippet', 'snippetnum', 'markring', 'marknum', 'stroke', 'mark'] as const) {
       expect(parsePenEditUserData(penEditUserData(ID, role))).toEqual({id: ID, role});
     }
   });
@@ -48,6 +52,8 @@ describe('pen edit ids and userData', () => {
     expect(parsePenEditUserData(null)).toBeNull();
     expect(isPenEditElement({userData: penEditUserData(ID, 'snippet')})).toBe(true);
     expect(isPenEditElement({userData: ''})).toBe(false);
+    expect(isPenEditDecoration({userData: penEditUserData(ID, 'markring')})).toBe(true);
+    expect(isPenEditDecoration({userData: penEditUserData(ID, 'stroke')})).toBe(false);
   });
 });
 
@@ -65,30 +71,34 @@ describe('pen edit numbers and icon', () => {
     expect(looksLikePenEditNumber('3.', 20)).toBe(false);
   });
 
-  it('puts the icon top left inside the lasso, smaller for a tiny lasso', () => {
-    expect(tagIconRect({left: 100, top: 200, right: 400, bottom: 300})).toEqual({left: 104, top: 204, right: 132, bottom: 232});
-    expect(tagIconRect({left: 0, top: 0, right: 20, bottom: 10})).toEqual({left: 4, top: 0, right: 14, bottom: 10});
+  it('puts the snippet badge top left inside the lasso, smaller for a tiny lasso', () => {
+    expect(snippetBadgeRect({left: 100, top: 200, right: 400, bottom: 300})).toEqual({left: 104, top: 204, right: 152, bottom: 252});
+    expect(snippetBadgeRect({left: 0, top: 0, right: 20, bottom: 10})).toEqual({left: 4, top: 0, right: 14, bottom: 10});
   });
 
-  it('closes both icon polygons', () => {
-    const box = {left: 0, top: 0, right: 28, bottom: 28};
-    for (const kind of ['replacement', 'insertion'] as const) {
-      const points = tagIconPolygon(kind, box);
+  it('closes the badge outlines and keeps them in their box', () => {
+    const box = {left: 0, top: 0, right: 48, bottom: 48};
+    for (const points of [circlePolygon(box), snippetBadgePolygon('insertion', box)]) {
       expect(points[0]).toEqual(points[points.length - 1]);
-      points.forEach(p => {
-        expect(p.x).toBeGreaterThanOrEqual(0);
-        expect(p.x).toBeLessThanOrEqual(28);
-      });
+      expect(boundsOfPoints(points)).toEqual(box);
     }
   });
 
-  it('places the numbers next to the icon and over the top of the right vertical line', () => {
-    expect(snippetNumberRect({left: 104, top: 204, right: 132, bottom: 232})).toEqual({left: 138, top: 198, right: 186, bottom: 238});
-    const vertical = {left: 440, top: 145, right: 458, bottom: 224};
-    expect(markNumberRect(vertical, 1404)).toEqual({left: 460, top: 115, right: 508, bottom: 155});
-    const atEdge = markNumberRect({left: 1380, top: 400, right: 1398, bottom: 440}, 1404);
-    expect(atEdge.right).toBeLessThanOrEqual(1380);
-    expect(markNumberRect({left: 100, top: 5, right: 110, bottom: 40}, 1404).top).toBe(0);
+  it('centres the mark badge over the vertical lines, its bottom on their tops', () => {
+    const verticals = [
+      {left: 463, top: 189, right: 475, bottom: 234},
+      {left: 478, top: 186, right: 492, bottom: 249},
+    ];
+    const strike = {left: 390, top: 208, right: 564, bottom: 219};
+    expect(markBadgeRect(verticals, strike, 1404)).toEqual({left: 453, top: 138, right: 501, bottom: 186});
+    expect(markBadgeRect([], strike, 1404)).toEqual({left: 453, top: 160, right: 501, bottom: 208});
+    expect(markBadgeRect([{left: 1390, top: 100, right: 1400, bottom: 140}], strike, 1404).right).toBe(1404);
+  });
+
+  it('roughly centres the digits in the badge', () => {
+    const badge = {left: 100, top: 100, right: 148, bottom: 148};
+    expect(badgeNumberRect(badge, 3).left).toBe(116);
+    expect(badgeNumberRect(badge, 12).left).toBe(108);
   });
 });
 
@@ -133,8 +143,10 @@ const entry = (overrides: Partial<PenEditEntry> = {}): PenEditEntry => ({
   number: 1,
   createdAt: '2026-11-18T13:55:01.000Z',
   rect: {left: 1, top: 2, right: 3, bottom: 4},
-  strokeUuids: ['s1', 's2'],
-  mark: {kind: 'replace', strikeUuid: 'k1', modifierUuids: ['v1', 'v2']},
+  strokeRects: [{left: 1, top: 2, right: 3, bottom: 4}],
+  iconRect: {left: 1, top: 2, right: 49, bottom: 50},
+  strokesTagged: true,
+  mark: {kind: 'replace', strikeRect: {left: 10, top: 20, right: 200, bottom: 30}, modifierRects: []},
   hasPicture: true,
   recognition: WAITING_RECOGNITION,
   correctedText: null,
@@ -183,7 +195,7 @@ describe('pen edit index', () => {
     index = updatePenEdit(index, ID, e => ({...e, state: 'applied'}));
     expect(activePenEditsOnPage(index, entry().notePath, 2)).toHaveLength(0);
     expect(activePenEditsOnPage(index, entry().notePath, 3)).toHaveLength(1);
-    expect([...takenStrikeUuids(index)]).toEqual(['k1']);
+    expect(takenStrikeRects(index, entry().notePath, 3)).toEqual([{left: 10, top: 20, right: 200, bottom: 30}]);
   });
 
   it('takes the correction over the recognition', () => {
@@ -211,26 +223,28 @@ describe('look-back pairing', () => {
 
   it('finds a strike with two crossing verticals', () => {
     const window = [strike('k', 7), vertical('v1', 8, 400), vertical('v2', 9, 430)];
-    expect(findReplaceMarkInWindow(window, new Set())).toEqual({kind: 'replace', strikeUuid: 'k', modifierUuids: ['v1', 'v2']});
+    expect(findReplaceMarkInWindow(window, [])).toMatchObject({strike: {uuid: 'k'}, modifiers: [{uuid: 'v1'}, {uuid: 'v2'}]});
   });
 
   it('accepts a straight-line strike', () => {
     const window = [strike('k', 7, true), vertical('v1', 8, 400), vertical('v2', 9, 430)];
-    expect(findReplaceMarkInWindow(window, new Set())?.strikeUuid).toBe('k');
+    expect(findReplaceMarkInWindow(window, [])?.strike.uuid).toBe('k');
   });
 
   it('takes the newest mark and skips strikes already paired', () => {
     const older = [strike('old', 2), vertical('o1', 3, 400), vertical('o2', 4, 430)];
     const newer = [strike('new', 5), vertical('n1', 6, 400), vertical('n2', 7, 430)];
-    expect(findReplaceMarkInWindow([...older, ...newer], new Set())?.strikeUuid).toBe('new');
-    expect(findReplaceMarkInWindow([...older, ...newer], new Set(['new']))?.strikeUuid).toBe('old');
+    expect(findReplaceMarkInWindow([...older, ...newer], [])?.strike.uuid).toBe('new');
+    // The newer strike lies where an earlier tag already paired one.
+    const newerAt = newer[0].stats.rect;
+    expect(findReplaceMarkInWindow(newer, [newerAt])).toBeNull();
   });
 
   it('needs two verticals that cross the strike and are close together', () => {
-    expect(findReplaceMarkInWindow([strike('k', 7), vertical('v1', 8, 400)], new Set())).toBeNull();
+    expect(findReplaceMarkInWindow([strike('k', 7), vertical('v1', 8, 400)], [])).toBeNull();
     const notCrossing = stroke('v2', 9, [[430, 540], [432, 580]]);
-    expect(findReplaceMarkInWindow([strike('k', 7), vertical('v1', 8, 400), notCrossing], new Set())).toBeNull();
-    expect(findReplaceMarkInWindow([strike('k', 7), vertical('v1', 8, 320), vertical('v2', 9, 500)], new Set())).toBeNull();
+    expect(findReplaceMarkInWindow([strike('k', 7), vertical('v1', 8, 400), notCrossing], [])).toBeNull();
+    expect(findReplaceMarkInWindow([strike('k', 7), vertical('v1', 8, 320), vertical('v2', 9, 500)], [])).toBeNull();
   });
 
   it('pairs from recognize rects alone (the device test page)', () => {
@@ -246,12 +260,12 @@ describe('look-back pairing', () => {
       fromRect('v2', 31, {left: 800, top: 786, right: 817, bottom: 827}),
       fromRect('n', 25, {left: 594, top: 1279, right: 605, bottom: 1286}),
     ];
-    expect(findReplaceMarkInWindow(window, new Set())).toEqual({kind: 'replace', strikeUuid: 'strike', modifierUuids: ['v1', 'v2']});
+    expect(findReplaceMarkInWindow(window, [])).toMatchObject({strike: {uuid: 'strike'}, modifiers: [{uuid: 'v1'}, {uuid: 'v2'}]});
   });
 
   it('ignores a plain delete stroke and handwriting', () => {
     const word = stroke('w', 6, [[300, 480], [310, 520], [320, 480], [330, 520]]);
-    expect(findReplaceMarkInWindow([strike('k', 7), word], new Set())).toBeNull();
+    expect(findReplaceMarkInWindow([strike('k', 7), word], [])).toBeNull();
   });
 });
 
@@ -315,5 +329,29 @@ describe('placeInsertion', () => {
     expect(overlapWithBelow(430, 120, second)).toBe(0);
     expect(overlapWithBelow(430, 210, second)).toBe(40);
     expect(overlapWithBelow(430, 210, null)).toBe(0);
+  });
+});
+
+describe('finding pen edits again by place', () => {
+  it('matches rects within the tolerance', () => {
+    expect(rectsMatch({left: 0, top: 0, right: 10, bottom: 10}, {left: 6, top: -6, right: 16, bottom: 4})).toBe(true);
+    expect(rectsMatch({left: 0, top: 0, right: 10, bottom: 10}, {left: 9, top: 0, right: 19, bottom: 10})).toBe(false);
+  });
+
+  it('follows a snippet moved with its badge, each stroke once', () => {
+    const shift = rectShift({left: 100, top: 100, right: 148, bottom: 148}, {left: 130, top: 400, right: 178, bottom: 448});
+    expect(shift).toEqual({dx: 30, dy: 300});
+    const items = [
+      {key: 'a', rect: {left: 130, top: 410, right: 160, bottom: 450}},
+      {key: 'b', rect: {left: 165, top: 412, right: 200, bottom: 452}},
+      {key: 'far', rect: {left: 600, top: 410, right: 630, bottom: 450}},
+      {key: 'none', rect: null},
+    ];
+    const stored = [
+      {left: 100, top: 110, right: 130, bottom: 150},
+      {left: 135, top: 112, right: 170, bottom: 152},
+    ];
+    expect(matchByRects(stored, items, shift).map(item => item.key)).toEqual(['a', 'b']);
+    expect(matchByRects(stored, items).map(item => item.key)).toEqual([]);
   });
 });

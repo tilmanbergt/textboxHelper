@@ -207,3 +207,15 @@ the caret between paragraphs needs only reading order and could come first.
   system's input method.
 - **Unpaired replacements** and insertions without a textbox in their column show under Ignored
   with their number.
+- **Uuids are not identities** (second device check): the strike's and the snippet strokes' uuids
+  from the tag were never seen again in the review, and an untouched textbox's uuid changed
+  between reads. Entries now keep the strokes', the badge's and the mark's rects, and the tag
+  writes `userData` onto the snippet strokes (`stroke`) and the strike and verticals (`mark`) with
+  `modifyPageElements`, before inserting anything. The review finds them by `userData`, else by
+  place (the snippet shifted like its badge, the strike where it was); the tag log line says
+  whether the strokes took the tag (`strokesTagged`).
+- **Badges** (second device check: the bare number was still hard to see): a circled number over
+  the replace mark, centred over the vertical lines with its bottom on their tops; the snippet's
+  badge is the same circle with the number inside (a diamond for an insertion).
+- **System font**: new number textboxes and insertions use NOTE's system font path
+  (`/system/fonts/DroidSansFallbackFull.ttf`); see the host facts.

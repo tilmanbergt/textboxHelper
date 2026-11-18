@@ -9,6 +9,7 @@ import {
   isVerticalLikeStroke,
 } from './markerStrokes';
 import type {PenEditMark} from './penEditModel';
+import {isTakenStrike} from './penEditMatching';
 import type {StrokeStats} from './markerTypes';
 
 /**
@@ -105,21 +106,34 @@ function bestModifierPair(crossing: WindowStroke[]): WindowStroke[] | null {
   return best;
 }
 
+/** A replace mark found in the window: the strike and its two vertical lines. */
+export type WindowMark = {strike: WindowStroke; modifiers: WindowStroke[]};
+
 /**
  * The newest replace mark in the window: a strike (long flat stroke or straight line) crossed by
- * two short vertical strokes. Strikes in `taken` are already paired with another snippet.
+ * two short vertical strokes. Strikes matching a `taken` rect are already paired with another
+ * snippet.
  */
-export function findReplaceMarkInWindow(window: WindowStroke[], taken: ReadonlySet<string>): PenEditMark | null {
+export function findReplaceMarkInWindow(window: WindowStroke[], taken: Rect[]): WindowMark | null {
   const newestFirst = [...window].sort((a, b) => b.numInPage - a.numInPage);
   for (const strike of newestFirst) {
-    if (taken.has(strike.uuid) || !isStrikeLike(strike)) {
+    if (isTakenStrike(strike.stats.rect, taken) || !isStrikeLike(strike)) {
       continue;
     }
     const crossing = newestFirst.filter(other => other.uuid !== strike.uuid && !other.isStraightLine && crossesStrike(strike, other));
     const pair = bestModifierPair(crossing);
     if (pair) {
-      return {kind: 'replace', strikeUuid: strike.uuid, modifierUuids: pair.map(stroke => stroke.uuid)};
+      return {strike, modifiers: pair};
     }
   }
   return null;
+}
+
+/** The mark as stored: where its strike and verticals were. */
+export function storedMark(mark: WindowMark): PenEditMark {
+  return {
+    kind: 'replace',
+    strikeRect: {...mark.strike.stats.rect},
+    modifierRects: mark.modifiers.map(modifier => ({...modifier.stats.rect})),
+  };
 }

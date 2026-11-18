@@ -1,5 +1,5 @@
 import {paginateTextboxBlocksIntoPages, type TextboxBlockPage} from '../domain/blockPagination';
-import {appendFontWarning} from '../domain/fontPaths';
+import {appendFontWarning, NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
 import {
   parseTextboxImportBlocks,
   summarizeTextboxImportBlocks,
@@ -130,6 +130,7 @@ async function buildImportPlan(params: {
     const blockPages: TextboxBlockPage[] = await paginateTextboxBlocksIntoPages({
       blocks,
       maxRect,
+      fontPath: NOTE_SYSTEM_FONT_PATH,
       addExplicitEmptyLineHeight: false,
       measureHeight: measureTextboxHeight,
     });
@@ -142,6 +143,7 @@ async function buildImportPlan(params: {
       text: params.text,
       maxRect,
       fontSize: params.settings.fontSize,
+      fontPath: NOTE_SYSTEM_FONT_PATH,
       addExplicitEmptyLineHeight: false,
       measureHeight: measureTextboxHeight,
     });
@@ -149,6 +151,7 @@ async function buildImportPlan(params: {
     pages = wrapContinuousChunks({
       chunks,
       fontSize: params.settings.fontSize,
+      fontPath: NOTE_SYSTEM_FONT_PATH,
     });
 
     blockSummary = emptyBlockSummaryForContinuousMode(params.text);
