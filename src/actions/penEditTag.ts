@@ -105,7 +105,7 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
   let snap: LassoSnapshot | null = null;
   let windowElements: Map<string, Element> | null = null;
   // Plugin-file work runs while the host works: the index is read during the lasso read, and the
-  // strokes and picture are stored during tagging and inserting. Only the index entry waits for
+  // strokes and picture are stored during inserting. Only the index entry waits for
   // the badge to be on the page.
   let storing: Promise<{kept: boolean; error: string | null; failure: unknown}> | null = null;
   let stored = false;
@@ -133,11 +133,6 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     }
     step('permissions');
 
-    // Settled into a value at once, so a failing write is never an unhandled rejection meanwhile.
-    storing = savePenEditData({version: 1, id, pageSize: snap.pageSize, strokes: snap.strokes}, snap.picture).then(
-      result => ({...result, failure: null}),
-      failure => ({kept: false, error: String(failure), failure: failure ?? 'write failed'}),
-    );
     const {index} = (await indexRead) ?? (await readPenEditIndex());
     const number = nextPenEditNumber(activePenEditsOnPage(index, notePath, page).map(entry => entry.number));
     step('index');
@@ -178,6 +173,14 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     }
     const tagged = await tagUserStrokes(page, id, strokesToTag);
     step('tagStrokes');
+
+    // Started only now: nothing of ours runs while NOTE tags the strokes (NOTE died twice during
+    // that call while the files were being written); the files overlap the insert instead.
+    // Settled into a value at once, so a failing write is never an unhandled rejection meanwhile.
+    storing = savePenEditData({version: 1, id, pageSize: snap.pageSize, strokes: snap.strokes}, snap.picture).then(
+      result => ({...result, failure: null}),
+      failure => ({kept: false, error: String(failure), failure: failure ?? 'write failed'}),
+    );
 
     const badge = snippetBadgeRect(lassoRect);
     const badges: TagBadge[] = [{role: 'snippet', points: snippetBadgePolygon(tagKind, badge)}];

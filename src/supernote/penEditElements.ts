@@ -63,23 +63,23 @@ async function create(type: number): Promise<Element> {
 }
 
 /**
- * All elements of one tag, created at once: each `createElement` is a round trip to the host
- * (the host needs it for every new element, so a template can't be copied), and sent together
- * they overlap instead of queueing one after the other.
+ * All elements of one tag, created one after the other: the host needs `createElement` for every
+ * new element, so a template can't be copied. Created at once they saved under 0.1 s on the
+ * device, too little to risk concurrent host calls.
  */
 async function buildElements(request: TagElementsRequest): Promise<Element[]> {
   const types = [
     ...request.badges.map(() => ELEMENT_TYPE_GEO),
     ...request.numbers.map(() => TEXT_TYPE_NORMAL),
   ];
-  const results = await Promise.allSettled(types.map(type => create(type)));
-  const built = results
-    .filter((result): result is PromiseFulfilledResult<Element> => result.status === 'fulfilled')
-    .map(result => result.value);
-  const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-  if (failed) {
+  const built: Element[] = [];
+  try {
+    for (const type of types) {
+      built.push(await create(type));
+    }
+  } catch (error) {
     recycle(built);
-    throw failed.reason instanceof Error ? failed.reason : new Error(String(failed.reason));
+    throw error;
   }
 
   request.badges.forEach((badge, index) => {
