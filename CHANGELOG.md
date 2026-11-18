@@ -10,7 +10,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 - The edit-marker review recognizes tagged text while you read, one at a time, the selected change first; until then a grey placeholder stands in the text. A picture of the handwriting shows below, with Correct (write the right text with the Supernote's handwriting pad), Skip for later and Recognize again. Apply changes everything that is ready, puts insertions in as new paragraphs, and removes the used marks and tagged handwriting; the rest stays for a later pass. Recognized text and your choices are kept, so the review can be closed and opened again.
 - The circle of a replace mark may also sit just above the line, anywhere along the struck words.
 - Correcting a replacement or insertion shows two pictures side by side: the one taken when tagging, and the handwriting drawn from the stored strokes that recognition reads.
-- Tagging is faster: the circles and numbers are prepared at once, the search for the replace mark stops as soon as it has found it, and the plugin's own files are read and written while the Supernote works on the page instead of afterwards.
+- Tagging is faster: the circles and numbers are prepared at once, the search for the replace mark stops as soon as it has found it, and the plugin's own files are read and written while the Supernote works on the page instead of afterwards. A short pause after the lasso closes keeps the Supernote's note app from crashing when the tag follows too quickly.
 - The Ignored tab of the edit-marker review can remove unused marks and tagged text from the page, one at a time or all at once (tap twice to confirm). Strokes away from any textbox are never offered, so your own handwriting stays.
 
 ### Changed

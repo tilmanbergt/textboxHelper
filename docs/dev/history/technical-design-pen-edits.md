@@ -250,8 +250,12 @@ the caret between paragraphs needs only reading order and could come first.
   only when the file's size or modification time changed. Strokes and picture are written while
   the strokes are tagged and the badges inserted; only the index entry waits for the badge. A tag
   that fails removes its stored files again.
-- **NOTE crash during stroke tagging** (device, twice after speed pass 2): NOTE's process died
-  while answering `modifyPageElements` (DeadObjectException after 4 s, memory pressure critical
-  right after); the cause inside NOTE isn't logged. As a precaution nothing of ours runs during
-  that call any more: the strokes and picture are written only afterwards, overlapping the
-  insert; the elements are created one after the other again (in parallel saved < 0.1 s).
+- **NOTE crash after closing the lasso** (device, twice after speed pass 2): the full logcat
+  shows native crashes in NOTE itself: once `stoi: no conversion` on NOTE's main thread while it
+  redrew the page, once a SIGSEGV in NOTE's binder thread converting our strokes, both a few
+  hundred ms after `setLassoBoxState` closed the lasso while our `modifyPageElements` arrived.
+  Closing the lasso makes NOTE reload the layer (~0.3 s); speed pass 2 removed the ~1 s of plugin
+  work that used to sit between the two. The first page change now waits until 0.9 s after the
+  lasso closed (`LASSO_SETTLE_MS`); the plugin-file writes run during that wait. The elements are
+  created one after the other again (in parallel saved < 0.1 s). Host fact: don't change the page
+  right after closing the lasso.

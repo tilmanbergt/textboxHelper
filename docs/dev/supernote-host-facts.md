@@ -83,3 +83,8 @@ Library: `sn-plugin-lib` 0.2.3.
 - The NOTE app draws every explicit empty line in a textbox taller than a `StaticLayout` does.
   `estimateTextboxHeight` in `supernote/textboxMetrics.ts` adds an extra step per empty line
   (`getExtraLineStep`).
+- **Don't change the page right after closing the lasso.** `setLassoBoxState` (closing the
+  lasso) makes NOTE reload and redraw the page layer, about 0.3 s on the A5 X2. A
+  `modifyPageElements` sent within that time crashed NOTE natively twice (`stoi: no conversion`
+  on its main thread, a SIGSEGV in its binder thread); NOTE closes and the DOC app comes to the
+  front. The pen-edit tag waits until 0.9 s after closing the lasso (`LASSO_SETTLE_MS`).

@@ -87,6 +87,14 @@ function boundsOfFlatPoints(points: number[][]): Rect | null {
 
 let running = false;
 
+/**
+ * How long after closing the lasso the first page change waits. NOTE's reload after the lasso
+ * closes took about 0.3 s on the A5 X2; builds that waited about 1 s there never crashed.
+ */
+export const LASSO_SETTLE_MS = 900;
+
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
 export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcome> {
   if (running) {
     console.warn('[PenEdit] tag already running - press ignored');
@@ -126,12 +134,19 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     const page = snap.page;
 
     await hideLassoBox('[PenEdit]');
+    const lassoHiddenAt = Date.now();
     step('lassoGone');
 
     if (!(await ensurePermissions())) {
       return {kind: 'failed', detail: 'Missing permission: allow file read and write access for this plugin.'};
     }
     step('permissions');
+
+    // Settled into a value at once, so a failing write is never an unhandled rejection meanwhile.
+    storing = savePenEditData({version: 1, id, pageSize: snap.pageSize, strokes: snap.strokes}, snap.picture).then(
+      result => ({...result, failure: null}),
+      failure => ({kept: false, error: String(failure), failure: failure ?? 'write failed'}),
+    );
 
     const {index} = (await indexRead) ?? (await readPenEditIndex());
     const number = nextPenEditNumber(activePenEditsOnPage(index, notePath, page).map(entry => entry.number));
@@ -171,16 +186,16 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
         }
       }
     }
+    // Closing the lasso makes NOTE reload and redraw the page. A page change sent while it does
+    // that crashed NOTE twice (a native crash in NOTE, once in the redraw, once in the change):
+    // the first change waits until the redraw is surely over.
+    const settle = LASSO_SETTLE_MS - (Date.now() - lassoHiddenAt);
+    if (settle > 0) {
+      await sleep(settle);
+    }
+    step('settle');
     const tagged = await tagUserStrokes(page, id, strokesToTag);
     step('tagStrokes');
-
-    // Started only now: nothing of ours runs while NOTE tags the strokes (NOTE died twice during
-    // that call while the files were being written); the files overlap the insert instead.
-    // Settled into a value at once, so a failing write is never an unhandled rejection meanwhile.
-    storing = savePenEditData({version: 1, id, pageSize: snap.pageSize, strokes: snap.strokes}, snap.picture).then(
-      result => ({...result, failure: null}),
-      failure => ({kept: false, error: String(failure), failure: failure ?? 'write failed'}),
-    );
 
     const badge = snippetBadgeRect(lassoRect);
     const badges: TagBadge[] = [{role: 'snippet', points: snippetBadgePolygon(tagKind, badge)}];
