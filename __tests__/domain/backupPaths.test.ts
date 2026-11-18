@@ -1,4 +1,10 @@
-import {buildBackupDir, buildBackupPath} from '../../src/domain/backupPaths';
+import {
+  buildBackupDir,
+  buildBackupPath,
+  buildBrokenPenEditIndexPath,
+  buildPenEditEntryDir,
+  buildPenEditIndexPath,
+} from '../../src/domain/backupPaths';
 
 const PLUGIN_DIR = '/data/user/0/com.ratta.supernote.pluginhost/files/plugins/wkx45auazdre2crs';
 
@@ -18,5 +24,15 @@ describe('backup paths', () => {
 
   it('does not double the separator when the plugin folder ends with "/"', () => {
     expect(buildBackupDir(`${PLUGIN_DIR}/`)).toBe(`${PLUGIN_DIR}/textbox-action-backups`);
+  });
+});
+
+describe('pen edit paths', () => {
+  it('lives in the plugin folder, joined with "/"', () => {
+    expect(buildPenEditIndexPath('/data/plugin/')).toBe('/data/plugin/pen-edits/index.json');
+    expect(buildPenEditEntryDir('/data/plugin', 'pe-1')).toBe('/data/plugin/pen-edits/pe-1');
+    expect(buildBrokenPenEditIndexPath('/p', '2026-11-18T13:55:01.000Z')).toBe(
+      '/p/pen-edits/index.broken-2026-11-18T13-55-01-000Z.json',
+    );
   });
 });

@@ -59,8 +59,6 @@ export type PenEditEntry = {
   /** The lasso rect at tag time, page pixels. */
   rect: Rect;
   strokeUuids: string[];
-  iconUuid: string | null;
-  numberUuids: string[];
   mark: PenEditMark | null;
   /** True when the picture was saved next to the strokes. */
   hasPicture: boolean;
@@ -143,8 +141,6 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     createdAt: isString(value.createdAt) ? value.createdAt : '',
     rect,
     strokeUuids: isStringArray(value.strokeUuids) ? value.strokeUuids : [],
-    iconUuid: isString(value.iconUuid) ? value.iconUuid : null,
-    numberUuids: isStringArray(value.numberUuids) ? value.numberUuids : [],
     mark: parseMark(value.mark),
     hasPicture: value.hasPicture === true,
     recognition: parseRecognition(value.recognition),

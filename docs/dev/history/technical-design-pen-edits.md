@@ -72,7 +72,8 @@ mark has no tagged snippet).
 - Ignored everywhere: `isNormalTextElement` skips them (by `userData`, and by look: one or two
   digits at font size ≤ 24), so textbox tools and edit markers follow; the export scan skips them
   too.
-- Icon and numbers of one tap go in one `insertPageElements` call, then one save.
+- Icon and numbers of one tap go in one `insertPageElements` call, then one save. They are found
+  again by `userData`, not by uuid (an inserted element's uuid isn't known without a page read).
 
 ### 3.3 Storage (`storage/penEditStore.ts`, model `domain/penEditModel.ts`)
 
@@ -82,8 +83,7 @@ mark has no tagged snippet).
 <plugin folder>/pen-edits/<id>/picture.png    the lasso picture
 ```
 
-- Entry: id, kind, notePath, page, number, createdAt, lasso rect, stroke uuids, icon uuid, number
-  uuids, `mark` (`{kind: 'replace', strikeUuid, modifierUuids}` or null; a tagged union so §8's
+- Entry: id, kind, notePath, page, number, createdAt, lasso rect, stroke uuids, `mark` (`{kind: 'replace', strikeUuid, modifierUuids}` or null; a tagged union so §8's
   caret needs no migration), hasPicture, recognition `{status, text, error, ms}`, correctedText,
   review (`open | accepted | skipped`), state (`active | applied | dropped`).
 - One serial write queue; every write reads the file fresh and writes through a temp file.

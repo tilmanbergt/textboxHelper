@@ -134,8 +134,6 @@ const entry = (overrides: Partial<PenEditEntry> = {}): PenEditEntry => ({
   createdAt: '2026-11-18T13:55:01.000Z',
   rect: {left: 1, top: 2, right: 3, bottom: 4},
   strokeUuids: ['s1', 's2'],
-  iconUuid: null,
-  numberUuids: [],
   mark: {kind: 'replace', strikeUuid: 'k1', modifierUuids: ['v1', 'v2']},
   hasPicture: true,
   recognition: WAITING_RECOGNITION,
