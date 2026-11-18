@@ -44,6 +44,8 @@ export type EditMarkerBackupPayload = {
   selectedMarkerCount: number;
   recognizedOperationCount: number;
   texts: BackupText[];
+  /** The applied pen edits and their handwriting, so deleted snippets can be restored. */
+  penEdits?: {entries: unknown[]; strokes: unknown[]};
 };
 
 export type BackupPayload = TextboxBackupPayload | EditMarkerBackupPayload;

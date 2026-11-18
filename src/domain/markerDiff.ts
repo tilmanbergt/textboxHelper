@@ -1,7 +1,7 @@
 /**
  * The edit-marker review's view of one textbox (technical-design-calmer-screens.md §3.4): the
  * original text with every removed range struck through and, for a replace, the replacement in
- * bold right after it.
+ * bold right after it. A pen edit whose text isn't there yet shows a muted placeholder instead.
  *
  * Built on the original text and the same sorted, de-duplicated ranges the apply step uses
  * (`getUniqueTextMutationRanges`), so what is struck through is exactly what will be removed.
@@ -22,7 +22,7 @@ export function buildDiffSegments(originalText: string, ranges: TextMutationRang
     push(segments, originalText.slice(start, end), 'removed');
     if (range.kind === 'replace' && range.replacementText) {
       const gap = end > start ? ' ' : '';
-      push(segments, `${gap}${range.replacementText}`, 'inserted');
+      push(segments, `${gap}${range.replacementText}`, range.pending ? 'muted' : 'inserted');
     }
     cursor = Math.max(cursor, end);
   }

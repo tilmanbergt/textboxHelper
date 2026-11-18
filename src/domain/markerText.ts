@@ -356,6 +356,10 @@ export function createEmptyPreview(
     ignoredMarkers: [],
     canApply: false,
     applyPlan: null,
+    base: null,
+    penEdits: [],
+    pendingCount: 0,
+    skippedCount: 0,
   };
 }
 

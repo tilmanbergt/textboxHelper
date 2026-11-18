@@ -1,6 +1,6 @@
 # Technical design: pen edits — "Replacement" and "Insertion"
 
-Status: in progress on `feature/pen-edits` (P1–P3 built). Built on the calmer-screens code
+Status: built on `feature/pen-edits` (P1–P6); device check of P4–P6 open. See As built. Built on the calmer-screens code
 (`screens/markers/…`, `domain/markerDiff.ts`, `PagedText`).
 
 Reused from Kept GTD (`supernote/lassoRead.ts`, `supernote/strokeRecognition.ts`,
@@ -181,3 +181,29 @@ An insertion is placed where a V-shaped caret was drawn just before the text: a 
 a second shape test; `mark` gains `{kind: 'caret', …}`; one "Text" button could then replace both.
 The caret inside a textbox needs the review's word positions (same font caveat as delete marks);
 the caret between paragraphs needs only reading order and could come first.
+
+## As built
+
+- **Numbers** sit like a superscript over the top end of the right vertical line (first device
+  check: after the strike they covered the next word and were missed); font 28, bold. A textbox
+  of one or two digits at font ≤ 30 counts as a pen-edit number.
+- **Element numbers change**: the host renumbers a page's elements when the plugin inserts and
+  saves (a tag's number got a lower `numInPage` than its snippet's strokes). Numbers are used only
+  during the tag; entries keep uuids. The look-back reads until 8 elements that aren't ours (at
+  most 14) and uses each element's recognize rect, not its stroke points.
+- **Picture**: written to the app's cache folder, then copied into `pen-edits/<id>/`. The first
+  build wrote it to the document folder and never kept it.
+- **Tag time** on the A5 X was about 3.1–3.6 s, most of it inserting the icon and numbers and
+  saving the note (1.7–2.1 s together; the log now splits insert and save).
+- **Preview split** (`domain/markerAssembly.ts`): the analysis runs once and keeps operation
+  drafts; the preview is assembled from them and the pen edits' current text, so a finished
+  recognition, a skip or a correction updates the review without measuring again. Textbox heights
+  are measured when applying.
+- **Recognition order**: the selected change first, then every other pen edit in list order, one at
+  a time, only while the review is open and nothing is being applied; cancelled when it closes.
+- **Insertions** are listed after the textbox changes; the new textbox goes in after the deletes
+  (inserting renumbers). An overlap with the next paragraph is named in the result.
+- **Correct** is a plain `TextInput` under the picture; the Supernote's handwriting pad is the
+  system's input method.
+- **Unpaired replacements** and insertions without a textbox in their column show under Ignored
+  with their number.

@@ -1,10 +1,11 @@
 /**
- * State and flows of the edit-marker review (technical-design-calmer-screens.md §3.4): reads the
- * markers once when the screen opens, re-reads after a calibration change, applies the whole
- * preview, and keeps the status line. After a successful apply the screen stays open with the
+ * State and flows of the edit-marker review (technical-design-calmer-screens.md §3.4,
+ * technical-design-pen-edits.md §3.6): reads the markers once when the screen opens, re-reads
+ * after a calibration change, recognizes the pen edits while the screen is open, keeps skips and
+ * corrections, applies the ready changes, and keeps the status line. After a successful apply the screen stays open with the
  * result; the preview is read again so the page's new state shows.
  */
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
 import {
   applyEditMarkerPreview,
   getEditMarkerCalibration,
@@ -13,14 +14,18 @@ import {
   saveEditMarkerDiagnostics,
   setEditMarkerCalibration,
 } from '../../actions/editMarkers';
+import {resetRecognition, setPenEditCorrection, setPenEditReview} from '../../actions/penEditReview';
+import {assembleMarkerPreview} from '../../domain/markerAssembly';
 import type {
   EditMarkerCalibration,
   EditMarkerPreview,
   EditMarkerPreviewScope,
+  PenTextState,
 } from '../../domain/markerTypes';
 import {fileNameOf, userMessage} from '../../domain/userMessage';
 import {updateSettings} from '../../storage/settingsFile';
 import type {FrameStatus} from '../../ui/ScreenFrame';
+import {usePenRecognitionQueue} from './usePenRecognitionQueue';
 
 export interface EditMarkerReview {
   preview: EditMarkerPreview | null;
@@ -34,10 +39,18 @@ export interface EditMarkerReview {
   refresh: () => void;
   saveDiagnostics: () => void;
   apply: () => void;
+  /** Recognize the selected pen edit first. */
+  setSelectedPenEdit: (id: string | null) => void;
+  setSkipped: (id: string, skipped: boolean) => void;
+  recognizeAgain: (id: string) => void;
+  correct: (id: string, text: string | null) => void;
+  penStates: Record<string, PenTextState>;
 }
 
 export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerReview {
-  const [preview, setPreview] = useState<EditMarkerPreview | null>(null);
+  const [analysis, setAnalysis] = useState<EditMarkerPreview | null>(null);
+  const [penStates, setPenStates] = useState<Record<string, PenTextState>>({});
+  const [selectedPenId, setSelectedPenId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [applied, setApplied] = useState(false);
@@ -52,13 +65,14 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
       }
       try {
         const next = await getEditMarkerPreview(scope);
-        setPreview(next);
+        setAnalysis(next);
+        setPenStates(next.base?.penStates ?? {});
         if (!keepStatus) {
           setStatus(next.fontWarning ? {text: next.fontWarning} : null);
         }
       } catch (error) {
         console.warn('[EditMarkerReview] preview failed', String(error));
-        setPreview(null);
+        setAnalysis(null);
         setStatus({
           kind: 'error',
           text: userMessage(
@@ -76,6 +90,63 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Re-assembled whenever a pen edit's text arrives or changes; no new measuring.
+  const preview = useMemo(
+    () => (analysis?.base ? assembleMarkerPreview(analysis.base, penStates, analysis.fontWarning) : analysis),
+    [analysis, penStates],
+  );
+
+  const updatePenState = useCallback((id: string, state: PenTextState) => {
+    setPenStates(current => ({...current, [id]: state}));
+  }, []);
+
+  const penOrder = useMemo(() => (analysis?.penEdits ?? []).map(view => view.id), [analysis]);
+  usePenRecognitionQueue(penOrder, selectedPenId, penStates, analysis?.base?.page ?? null, busy || loading, updatePenState);
+
+  const store = useCallback((id: string, write: () => Promise<void>, state: PenTextState) => {
+    updatePenState(id, state);
+    write().catch(error => {
+      console.warn('[EditMarkerReview] pen edit not stored', String(error));
+      setStatus({kind: 'error', text: 'The change to this pen edit could not be stored; it applies only now.'});
+    });
+  }, [updatePenState]);
+
+  const setSkipped = useCallback(
+    (id: string, skipped: boolean) => {
+      const current = penStates[id];
+      if (current) {
+        const review = skipped ? 'skipped' : 'open';
+        store(id, () => setPenEditReview(id, review), {...current, review});
+      }
+    },
+    [penStates, store],
+  );
+
+  const recognizeAgain = useCallback(
+    (id: string) => {
+      const current = penStates[id];
+      if (current) {
+        store(id, () => resetRecognition(id), {...current, status: 'waiting', text: '', correctedText: null});
+        setPenEditCorrection(id, null).catch(() => undefined);
+      }
+    },
+    [penStates, store],
+  );
+
+  const correct = useCallback(
+    (id: string, text: string | null) => {
+      const current = penStates[id];
+      if (current) {
+        const correctedText = text === null ? null : text.trim();
+        store(id, () => setPenEditCorrection(id, correctedText), {...current, correctedText, review: 'open'});
+        if (current.review === 'skipped') {
+          setPenEditReview(id, 'open').catch(() => undefined);
+        }
+      }
+    },
+    [penStates, store],
+  );
 
   // Calibration is kept between sessions so it can be tuned over time (settings file).
   const remember = (next: EditMarkerCalibration) => {
@@ -153,5 +224,10 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
     refresh,
     saveDiagnostics,
     apply,
+    setSelectedPenEdit: setSelectedPenId,
+    setSkipped,
+    recognizeAgain,
+    correct,
+    penStates,
   };
 }

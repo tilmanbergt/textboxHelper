@@ -1,7 +1,8 @@
 import type {PageWordCandidate} from './hitTesting';
 import type {TextboxMeasurementCalibration} from './textboxLayout';
 import type {TextSegment} from './textPages';
-import type {PageElementData, Rect, TextElementData} from './textboxModel';
+import type {PenEditReview, RecognitionStatus} from './penEditModel';
+import type {PageElementData, Rect, TextElementData, TextboxData} from './textboxModel';
 
 /**
  * Types of the edit-marker recognition: what the preview shows, the plan that is applied, and the
@@ -12,6 +13,15 @@ import type {PageElementData, Rect, TextElementData} from './textboxModel';
 
 export type EditMarkerOperationKind = 'delete' | 'replace';
 
+/** What a change in the review does; an insertion comes only from a pen edit. */
+export type ReviewOperationKind = EditMarkerOperationKind | 'insert';
+
+/**
+ * Where a pen edit's text stands in the review (technical-design-pen-edits.md §3.6): recognizing
+ * (or waiting for it), ready to apply, skipped for later, or recognized without usable text.
+ */
+export type PenOperationStatus = 'recognizing' | 'ready' | 'skipped' | 'failed' | 'empty';
+
 export type EditMarkerHighlightRange = {
   start: number;
   end: number;
@@ -19,7 +29,7 @@ export type EditMarkerHighlightRange = {
 
 export type RecognizedEditOperation = {
   id: string;
-  kind: EditMarkerOperationKind;
+  kind: ReviewOperationKind;
   markerUuid: string;
   markerNumInPage: number;
   consumedMarkerNums: number[];
@@ -32,6 +42,10 @@ export type RecognizedEditOperation = {
   replacementText?: string;
   /** Where the operation's first range starts in the textbox's original text (review jumps there). */
   textStart: number;
+  /** Set for a change whose new text comes from a tagged snippet. */
+  penEditId?: string;
+  penEditNumber?: number;
+  penStatus?: PenOperationStatus;
 };
 
 export type IgnoredEditMarker = {
@@ -39,6 +53,9 @@ export type IgnoredEditMarker = {
   markerNumInPage: number;
   summary: string;
   reason: string;
+  /** Set when the ignored item is a tagged snippet, not a marker stroke. */
+  penEditNumber?: number;
+  penEditId?: string;
 };
 
 export type EditMarkerTextboxPreview = {
@@ -46,6 +63,8 @@ export type EditMarkerTextboxPreview = {
   numInPage: number;
   segments: TextSegment[];
   changeCount: number;
+  /** Header for a textbox that doesn't exist yet (an insertion). */
+  title?: string;
 };
 
 export type EditMarkerPreview = {
@@ -62,6 +81,78 @@ export type EditMarkerPreview = {
   ignoredMarkers: IgnoredEditMarker[];
   canApply: boolean;
   applyPlan: EditMarkerApplyPlan | null;
+  /** The analysis the preview is assembled from; re-assembled when a pen edit's text changes. */
+  base: MarkerPreviewBase | null;
+  /** The pen edits in this review, in list order. */
+  penEdits: PenEditView[];
+  /** Pen edits still waiting for text, and those skipped for later. */
+  pendingCount: number;
+  skippedCount: number;
+};
+
+/** A pen edit's text as the review knows it. */
+export type PenTextState = {
+  status: RecognitionStatus | 'recognizing';
+  text: string;
+  correctedText: string | null;
+  review: PenEditReview;
+};
+
+/** A tagged snippet as the review shows it. */
+export type PenEditView = {
+  id: string;
+  kind: 'replacement' | 'insertion';
+  number: number;
+  pictureUri: string | null;
+};
+
+/** A recognized change before its pen-edit text is known: the operation and its text range. */
+export type OperationDraft = {
+  operation: RecognizedEditOperation;
+  range: TextMutationRange;
+};
+
+/** An affected textbox as read for the preview (a TextMutationPlan without the new text). */
+export type MarkerTextboxBase = Omit<TextMutationPlan, 'nextText' | 'nextTextRect'>;
+
+/** An insertion: a new textbox at the snippet's place, styled like its neighbour. */
+export type InsertionDraft = {
+  penEditId: string;
+  number: number;
+  left: number;
+  top: number;
+  width: number;
+  style: TextboxData;
+  aboveNumInPage: number | null;
+  belowNumInPage: number | null;
+  belowTop: number | null;
+};
+
+/** Everything the review needs that doesn't change while pen edits are recognized or corrected. */
+export type MarkerPreviewBase = {
+  notePath: string;
+  page: number;
+  selectedMarkerCount: number;
+  selectedTextboxCount: number;
+  drafts: OperationDraft[];
+  ignored: IgnoredEditMarker[];
+  textboxes: MarkerTextboxBase[];
+  replacementSourceTextboxNums: number[];
+  insertions: InsertionDraft[];
+  penEdits: PenEditView[];
+  /** The pen edits' text as stored when the page was read. */
+  penStates: Record<string, PenTextState>;
+};
+
+/** A ready insertion as applied. */
+export type InsertionPlan = {
+  penEditId: string;
+  text: string;
+  left: number;
+  top: number;
+  width: number;
+  style: TextboxData;
+  belowTop: number | null;
 };
 
 export type EditMarkerPreviewScope = 'lasso' | 'page';
@@ -106,6 +197,9 @@ export type EditMarkerApplyPlan = {
   recognizedMarkerNums: number[];
   replacementSourceTextboxNums: number[];
   textMutations: TextMutationPlan[];
+  /** Pen edits applied with this plan (their snippets, icons and numbers are removed). */
+  penEditIds: string[];
+  insertions: InsertionPlan[];
 };
 
 /**
@@ -150,6 +244,8 @@ export type TextMutationRange = {
   start: number;
   end: number;
   replacementText?: string;
+  /** Shown only: a placeholder for a pen edit's text that isn't there yet. */
+  pending?: boolean;
 };
 
 export type WordCandidate = PageWordCandidate;

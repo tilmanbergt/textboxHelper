@@ -37,10 +37,13 @@ export const EDIT_MARKERS_HELP = `## Delete words
 Draw a horizontal line through the words you want to remove, with the pen or the straight-line tool. One line of text per marker.
 
 ## Replace words
-Draw the delete line, then two short vertical lines crossing it. Below the paragraph, write the replacement as a line in a textbox that starts with #, for example "# corrected phrase". Several replacements are matched in reading order.
+Draw the delete line, then two short vertical lines crossing it. Right after, write the new words anywhere on the page, lasso them and tap Replacement in the lasso toolbar. An icon and a number appear at the words, and the same number at the mark. The older way still works: a line in a textbox below the paragraph that starts with #.
+
+## Insert a paragraph
+Make room between two paragraphs, write the new text there, lasso it and tap Insertion.
 
 ## Review and apply
-The review shows each changed textbox with the removed words struck through and replacements in bold. Apply changes all of them at once; a backup of the page is written first. Only recognized markers are removed from the page.
+The review recognizes the tagged handwriting while you read; until then a grey placeholder stands in the text, with a picture of the handwriting below. Correct fixes the text (write with the Supernote's handwriting pad), Skip for later leaves it on the page for another pass. Apply changes everything that is ready; a backup of the page is written first. Only used markers and tagged handwriting are removed from the page.
 
 ## From where
 The note button reads every marker on the page. The lasso toolbar button reads only the lassoed markers and textboxes.
