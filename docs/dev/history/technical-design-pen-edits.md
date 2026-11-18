@@ -292,3 +292,6 @@ the caret between paragraphs needs only reading order and could come first.
   after the other whose ends meet within 24 px are joined at that point and tested as one
   (`analyzeTwoStrokeCaret`); both are tagged `mark` and the caret rect is their union. A < or >
   may sit up to 100 px beside the text and a little above or below its line (0.6 line heights).
+- **Word-edge snap 1.25 characters** (device: with the line fix, both carets landed one character
+  into the word they were aimed at, "d|ullness", "s|ound"): a tip within 1.25 characters of a word
+  edge snaps to it; text goes inside a word only when the tip is clearly inside.

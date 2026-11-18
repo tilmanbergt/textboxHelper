@@ -133,6 +133,8 @@ describe('locateCaret', () => {
   it('snaps a tip close to a word edge to that edge', () => {
     expect(locateCaret({x: 225, y: 112}, 'down', [box])).toMatchObject({offset: 6, mode: 'betweenWords'});
     expect(locateCaret({x: 316, y: 112}, 'down', [box])).toMatchObject({offset: 11, mode: 'betweenWords'});
+    // Device case: a tip about one character into the word still means its start.
+    expect(locateCaret({x: 239, y: 112}, 'down', [box])).toMatchObject({offset: 6, mode: 'betweenWords'});
   });
 
   it('puts the text after the last word when the tip is past the line end', () => {
