@@ -128,16 +128,32 @@ export const WORD_EDGE_SNAP_CHARS = 0.6;
 /** Horizontal slack around a textbox for a caret drawn just left or right of the text. */
 const COLUMN_SLACK_PX = 24;
 
-function lineScore(tip: Point, direction: CaretDirection, line: {top: number; bottom: number}): number | null {
+/** Slack around a line's band and a textbox's rect, in pixels. */
+const LINE_SLACK_PX = 4;
+
+/**
+ * How well a line fits the tip, lower is better; null for a line the tip isn't near. A tip
+ * inside a line belongs to that line (carets are drawn on the text: a V's tip near the baseline,
+ * a ∧'s near the top of the letters). A tip in the textbox but between two lines goes to the
+ * nearer one; when both are as near, a V points to the line below, a ∧ to the line above.
+ */
+function lineScore(
+  tip: Point,
+  direction: CaretDirection,
+  line: {top: number; bottom: number},
+  insideTextbox: boolean,
+): number | null {
   const lineHeight = Math.max(1, line.bottom - line.top);
-  // A V's tip lands on the line's upper part or just above it; a ∧'s on its lower part or below.
-  const target = direction === 'down' ? line.top + lineHeight * 0.3 : line.bottom - lineHeight * 0.3;
-  const reachAbove = direction === 'down' ? lineHeight * 0.8 : lineHeight * 0.3;
-  const reachBelow = direction === 'down' ? lineHeight * 0.3 : lineHeight * 0.8;
-  if (tip.y < target - reachAbove || tip.y > target + reachBelow) {
+  if (tip.y >= line.top - LINE_SLACK_PX && tip.y <= line.bottom + LINE_SLACK_PX) {
+    return Math.abs(tip.y - (line.top + line.bottom) / 2) / lineHeight;
+  }
+  if (!insideTextbox) {
     return null;
   }
-  return Math.abs(tip.y - target);
+  const below = line.top > tip.y;
+  const gap = below ? line.top - tip.y : tip.y - line.bottom;
+  const pointedAt = (direction === 'down') === below;
+  return 1 + gap / lineHeight + (pointedAt ? 0 : 0.01);
 }
 
 function offsetOnLine(
@@ -190,8 +206,13 @@ export function locateCaret(tip: Point, direction: CaretDirection, textboxes: Ca
   );
   let best: {textbox: CaretTextbox; line: CaretTextbox['lines'][number]; score: number} | null = null;
   for (const textbox of column) {
+    const insideTextbox =
+      tip.y >= textbox.rect.top - LINE_SLACK_PX &&
+      tip.y <= textbox.rect.bottom + LINE_SLACK_PX &&
+      tip.x >= textbox.rect.left - COLUMN_SLACK_PX &&
+      tip.x <= textbox.rect.right + COLUMN_SLACK_PX;
     for (const line of textbox.lines) {
-      const score = lineScore(tip, direction, line);
+      const score = lineScore(tip, direction, line, insideTextbox);
       if (score !== null && (!best || score < best.score)) {
         best = {textbox, line, score};
       }

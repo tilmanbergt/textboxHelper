@@ -280,3 +280,9 @@ the caret between paragraphs needs only reading order and could come first.
     column down (`planReflow`); textboxes never move up. Handwriting below doesn't move.
   - An insertion without a caret (or tagged before this build) goes to Ignored. The old
     placement (`penEditInsertion.ts`) is gone.
+- **Caret line fix** (device: a V on line 1 and a ∧ on line 3 both landed on line 2): carets are
+  drawn on the text, a V's tip near the baseline, a ∧'s near the top of the letters. The first
+  rule only accepted a V's tip in a line's upper part and a ∧'s in its lower part, so each went
+  to the neighbouring line. Now a tip inside a line's band (±4 px) belongs to that line; a tip in
+  a textbox between two lines goes to the nearer one (a V prefers the line below, a ∧ the line
+  above when equally near); outside the textboxes it is the space between paragraphs.

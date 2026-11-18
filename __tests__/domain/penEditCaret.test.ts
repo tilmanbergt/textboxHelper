@@ -85,9 +85,29 @@ describe('locateCaret', () => {
     expect(locateCaret({x: 210, y: 112}, 'down', [box, nextBox])).toEqual({kind: 'text', uuid: 'a', numInPage: 4, offset: 5, mode: 'betweenWords'});
   });
 
-  it('places a ∧ under the line inside a word', () => {
+  it('places a ∧ drawn on the line inside a word', () => {
     // "brave": 5 chars over 100 px; x = 260 is 2 chars in.
-    expect(locateCaret({x: 260, y: 150}, 'up', [box, nextBox])).toEqual({kind: 'text', uuid: 'a', numInPage: 4, offset: 8, mode: 'inWord'});
+    expect(locateCaret({x: 260, y: 104}, 'up', [box, nextBox])).toEqual({kind: 'text', uuid: 'a', numInPage: 4, offset: 8, mode: 'inWord'});
+  });
+
+  it('keeps a tip inside a line on that line, whatever the direction', () => {
+    // Device case: a V drawn on the line, its tip near the baseline of line 0.
+    expect(locateCaret({x: 210, y: 145}, 'down', [box])).toMatchObject({offset: 5});
+    // Device case: a ∧ drawn on line 2, its tip near the top of the letters.
+    expect(locateCaret({x: 190, y: 200}, 'up', [box])).toMatchObject({offset: 23, mode: 'betweenWords'});
+  });
+
+  it('between two lines of a textbox, as near to both: a V takes the line below, a ∧ the line above', () => {
+    const spaced: CaretTextbox = {
+      ...box,
+      rect: {left: 100, top: 100, right: 700, bottom: 196},
+      lines: [
+        {index: 0, start: 0, end: 18, top: 100, bottom: 140},
+        {index: 2, start: 19, end: 28, top: 156, bottom: 196},
+      ],
+    };
+    expect(locateCaret({x: 190, y: 148}, 'down', [spaced])).toMatchObject({offset: 23});
+    expect(locateCaret({x: 210, y: 148}, 'up', [spaced])).toMatchObject({offset: 5});
   });
 
   it('snaps a tip close to a word edge to that edge', () => {
