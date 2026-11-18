@@ -1,5 +1,6 @@
 import {
   analyzeCaret,
+  analyzeTwoStrokeCaret,
   caretInsertionText,
   caretNumberCenter,
   gapParagraphPlacement,
@@ -37,6 +38,25 @@ describe('analyzeCaret', () => {
     const shape = analyzeCaret(stroke({x: 100, y: 140}, {x: 118, y: 100}, {x: 140, y: 140}));
     expect(shape?.direction).toBe('up');
     expect(shape?.tip.y).toBe(100);
+  });
+
+  it('finds a < and a > drawn beside the text (device case: < after a paragraph end)', () => {
+    const less = analyzeCaret(stroke({x: 1220, y: 633}, {x: 1132, y: 665}, {x: 1229, y: 698}));
+    expect(less?.direction).toBe('left');
+    expect(less?.tip).toEqual({x: 1132, y: 665});
+    expect(analyzeCaret(stroke({x: 100, y: 100}, {x: 160, y: 125}, {x: 100, y: 150}))?.direction).toBe('right');
+  });
+
+  it('joins a caret drawn as two strokes (device case: < from two lines)', () => {
+    const upper = leg({x: 1099, y: 1382}, {x: 1204, y: 1359});
+    const lower = leg({x: 1095, y: 1382}, {x: 1214, y: 1412});
+    const shape = analyzeTwoStrokeCaret(upper, lower);
+    expect(shape?.direction).toBe('left');
+    expect(shape?.tip.x).toBeLessThanOrEqual(1099);
+    // Either drawing order and direction of the legs.
+    expect(analyzeTwoStrokeCaret([...lower].reverse(), upper)?.direction).toBe('left');
+    // Two lines whose ends don't meet are no caret.
+    expect(analyzeTwoStrokeCaret(upper, leg({x: 1150, y: 1450}, {x: 1250, y: 1480}))).toBeNull();
   });
 
   it('puts the number between the ends of the legs', () => {
@@ -117,6 +137,11 @@ describe('locateCaret', () => {
 
   it('puts the text after the last word when the tip is past the line end', () => {
     expect(locateCaret({x: 520, y: 112}, 'down', [box])).toMatchObject({offset: 17, mode: 'betweenWords'});
+  });
+
+  it('takes a sideways caret just below the last line to that line, at its end', () => {
+    // Device case: a < right of "permission." a few pixels below the paragraph.
+    expect(locateCaret({x: 760, y: 252}, 'left', [box, nextBox])).toMatchObject({uuid: 'a', offset: 28, mode: 'betweenWords'});
   });
 
   it('finds a blank line between paragraphs of one textbox', () => {

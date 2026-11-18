@@ -157,7 +157,7 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     step('index');
 
     let found: WindowMark | null = null;
-    let caret: {stroke: WindowStroke; shape: CaretShape} | null = null;
+    let caret: {strokes: WindowStroke[]; rect: Rect; shape: CaretShape} | null = null;
     let lookBack = {read: 0, ms: 0};
     if (tagKind === 'replacement') {
       const lowest = Math.min(...snap.strokeNums);
@@ -193,9 +193,11 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
       role: 'stroke' as const,
     }));
     if (caret && windowElements) {
-      const element = windowElements.get(caret.stroke.uuid);
-      if (element) {
-        strokesToTag.push({element, role: 'mark'});
+      for (const stroke of caret.strokes) {
+        const element = windowElements.get(stroke.uuid);
+        if (element) {
+          strokesToTag.push({element, role: 'mark'});
+        }
       }
     }
     if (found && windowElements) {
@@ -263,7 +265,7 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
       iconRect: badge,
       strokesTagged: tagged.tagged,
       mark: caret
-        ? {kind: 'caret', caretRect: {...caret.stroke.stats.rect}, tip: {...caret.shape.tip}, direction: caret.shape.direction}
+        ? {kind: 'caret', caretRect: {...caret.rect}, tip: {...caret.shape.tip}, direction: caret.shape.direction}
         : found
           ? storedMark(found)
           : null,

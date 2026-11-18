@@ -1,14 +1,15 @@
 import type {Rect} from './textboxModel';
 
 /**
- * The insertion caret (technical-design-pen-edits.md §8, As built): a V drawn on or above a line
- * (tip pointing down) or a ∧ drawn under it (tip pointing up). The tip marks the place in the
+ * The insertion caret (technical-design-pen-edits.md §8, As built): a V or ∧ drawn on a line, or
+ * a < or > drawn beside the text, in one stroke or as two strokes meeting at the tip. The tip marks the place in the
  * text; a caret in the space between two paragraphs makes a new paragraph there. Pure: shape tests
  * work on stroke points, placement on measured line and word boxes in page pixels.
  */
 
 export type Point = {x: number; y: number};
-export type CaretDirection = 'down' | 'up';
+/** Where the tip points: a V down, a ∧ up, a < left, a > right. */
+export type CaretDirection = 'down' | 'up' | 'left' | 'right';
 export type CaretShape = {tip: Point; direction: CaretDirection; rect: Rect; ends: [Point, Point]};
 
 export const CARET_MIN_SIZE = 14;
@@ -50,7 +51,7 @@ export function isCaretSizedRect(rect: Rect): boolean {
   const width = rect.right - rect.left;
   const height = rect.bottom - rect.top;
   const size = Math.max(width, height);
-  return size >= CARET_MIN_SIZE && size <= CARET_MAX_SIZE && height >= width * 0.3 && width >= height * 0.25;
+  return size >= CARET_MIN_SIZE && size <= CARET_MAX_SIZE && height >= width * 0.25 && width >= height * 0.25;
 }
 
 /**
@@ -62,35 +63,73 @@ export function analyzeCaret(points: Point[]): CaretShape | null {
   if (!rect || points.length < 3 || !isCaretSizedRect(rect)) {
     return null;
   }
-  const width = rect.right - rect.left;
-  const height = rect.bottom - rect.top;
-  for (const direction of ['down', 'up'] as const) {
-    let tipIndex = 0;
-    points.forEach((point, index) => {
-      const better = direction === 'down' ? point.y > points[tipIndex].y : point.y < points[tipIndex].y;
-      if (better) {
-        tipIndex = index;
-      }
-    });
-    const tip = points[tipIndex];
-    const first = points[0];
-    const last = points[points.length - 1];
-    const inMiddle = tipIndex >= points.length * 0.15 && tipIndex <= points.length * 0.85;
-    const endsAway =
-      direction === 'down'
-        ? first.y <= tip.y - height * 0.5 && last.y <= tip.y - height * 0.5
-        : first.y >= tip.y + height * 0.5 && last.y >= tip.y + height * 0.5;
-    const bothSides =
-      (first.x - tip.x) * (last.x - tip.x) < 0 &&
-      Math.min(Math.abs(first.x - tip.x), Math.abs(last.x - tip.x)) >= width * 0.15;
-    const straight =
-      pathLength(points, 0, tipIndex) <= distance(first, tip) * LEG_STRAIGHTNESS + 6 &&
-      pathLength(points, tipIndex, points.length - 1) <= distance(tip, last) * LEG_STRAIGHTNESS + 6;
-    if (inMiddle && endsAway && bothSides && straight) {
-      return {tip: {...tip}, direction, rect, ends: [{...first}, {...last}]};
+  for (const direction of ['down', 'up', 'left', 'right'] as const) {
+    const shape = caretInDirection(points, rect, direction);
+    if (shape) {
+      return shape;
     }
   }
   return null;
+}
+
+function caretInDirection(points: Point[], rect: Rect, direction: CaretDirection): CaretShape | null {
+  const vertical = direction === 'down' || direction === 'up';
+  // `along`: the axis the tip points along; `across`: the axis the legs spread over.
+  const along = (point: Point) => (vertical ? point.y : point.x);
+  const across = (point: Point) => (vertical ? point.x : point.y);
+  const sign = direction === 'down' || direction === 'right' ? 1 : -1;
+  const depth = vertical ? rect.bottom - rect.top : rect.right - rect.left;
+  const spread = vertical ? rect.right - rect.left : rect.bottom - rect.top;
+
+  let tipIndex = 0;
+  points.forEach((point, index) => {
+    if (sign * along(point) > sign * along(points[tipIndex])) {
+      tipIndex = index;
+    }
+  });
+  const tip = points[tipIndex];
+  const first = points[0];
+  const last = points[points.length - 1];
+  const inMiddle = tipIndex >= points.length * 0.15 && tipIndex <= points.length * 0.85;
+  const endsAway =
+    sign * (along(tip) - along(first)) >= depth * 0.5 && sign * (along(tip) - along(last)) >= depth * 0.5;
+  const bothSides =
+    (across(first) - across(tip)) * (across(last) - across(tip)) < 0 &&
+    Math.min(Math.abs(across(first) - across(tip)), Math.abs(across(last) - across(tip))) >= spread * 0.15;
+  const straight =
+    pathLength(points, 0, tipIndex) <= distance(first, tip) * LEG_STRAIGHTNESS + 6 &&
+    pathLength(points, tipIndex, points.length - 1) <= distance(tip, last) * LEG_STRAIGHTNESS + 6;
+  if (inMiddle && endsAway && bothSides && straight) {
+    return {tip: {...tip}, direction, rect, ends: [{...first}, {...last}]};
+  }
+  return null;
+}
+
+/** How close (pixels) the two legs of a two-stroke caret must start or end to make one tip. */
+export const TWO_STROKE_JOIN_PX = 24;
+
+/**
+ * A caret drawn as two strokes, one per leg: joined where their ends meet (the tip), then tested
+ * like a one-stroke caret. Null when no ends meet or the joined shape is no caret.
+ */
+export function analyzeTwoStrokeCaret(first: Point[], second: Point[]): CaretShape | null {
+  if (first.length < 2 || second.length < 2) {
+    return null;
+  }
+  const ends = (points: Point[]) => [points[0], points[points.length - 1]];
+  let best: {gap: number; a: Point[]; b: Point[]} | null = null;
+  for (const [aIndex, aEnd] of ends(first).entries()) {
+    for (const [bIndex, bEnd] of ends(second).entries()) {
+      const gap = distance(aEnd, bEnd);
+      if (gap <= TWO_STROKE_JOIN_PX && (!best || gap < best.gap)) {
+        // Leg a runs towards the tip, leg b away from it.
+        const a = aIndex === 1 ? first : [...first].reverse();
+        const b = bIndex === 0 ? second : [...second].reverse();
+        best = {gap, a, b};
+      }
+    }
+  }
+  return best ? analyzeCaret([...best.a, ...best.b]) : null;
 }
 
 /**
@@ -127,6 +166,8 @@ export type CaretTarget =
 export const WORD_EDGE_SNAP_CHARS = 0.6;
 /** Horizontal slack around a textbox for a caret drawn just left or right of the text. */
 const COLUMN_SLACK_PX = 24;
+/** The same for a < or > in the margin. */
+const SIDEWAYS_SLACK_PX = 100;
 
 /** Slack around a line's band and a textbox's rect, in pixels. */
 const LINE_SLACK_PX = 4;
@@ -147,11 +188,15 @@ function lineScore(
   if (tip.y >= line.top - LINE_SLACK_PX && tip.y <= line.bottom + LINE_SLACK_PX) {
     return Math.abs(tip.y - (line.top + line.bottom) / 2) / lineHeight;
   }
+  const below = line.top > tip.y;
+  const gap = below ? line.top - tip.y : tip.y - line.bottom;
+  if (direction === 'left' || direction === 'right') {
+    // A sideways caret points along its line: it may sit a little above or below it.
+    return gap <= lineHeight * 0.6 ? 1 + gap / lineHeight : null;
+  }
   if (!insideTextbox) {
     return null;
   }
-  const below = line.top > tip.y;
-  const gap = below ? line.top - tip.y : tip.y - line.bottom;
   const pointedAt = (direction === 'down') === below;
   return 1 + gap / lineHeight + (pointedAt ? 0 : 0.01);
 }
@@ -201,8 +246,10 @@ function offsetOnLine(
  * two paragraphs. Null when the tip is near no text at all.
  */
 export function locateCaret(tip: Point, direction: CaretDirection, textboxes: CaretTextbox[]): CaretTarget | null {
+  // A sideways caret may sit in the margin beside the text, pointing at the line's start or end.
+  const slack = direction === 'left' || direction === 'right' ? SIDEWAYS_SLACK_PX : COLUMN_SLACK_PX;
   const column = textboxes.filter(
-    textbox => tip.x >= textbox.rect.left - COLUMN_SLACK_PX && tip.x <= textbox.rect.right + COLUMN_SLACK_PX,
+    textbox => tip.x >= textbox.rect.left - slack && tip.x <= textbox.rect.right + slack,
   );
   let best: {textbox: CaretTextbox; line: CaretTextbox['lines'][number]; score: number} | null = null;
   for (const textbox of column) {

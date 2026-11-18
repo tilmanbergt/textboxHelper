@@ -8,7 +8,7 @@ import {
   type PenEditReview,
   type PenEditStrokeData,
 } from '../domain/penEditModel';
-import {locateCaret, type CaretInsertMode, type CaretTextbox} from '../domain/penEditCaret';
+import {locateCaret, type CaretDirection, type CaretInsertMode, type CaretTextbox} from '../domain/penEditCaret';
 import {boundsOfPoints, isPenEditDecoration, parsePenEditUserData} from '../domain/penEditTags';
 import {normalizeRecognizedText} from '../domain/penEditText';
 import type {TextboxMeasurementCalibration} from '../domain/textboxLayout';
@@ -37,7 +37,7 @@ export type PenEditContext = {
   /** Each entry's snippet on the page now (its strokes' bounds, or where it was tagged, shifted). */
   snippetRects: Map<string, Rect>;
   /** Each insertion's caret as it is on the page now: its tip moved with the caret. */
-  carets: Map<string, {tip: {x: number; y: number}; direction: 'down' | 'up'}>;
+  carets: Map<string, {tip: {x: number; y: number}; direction: CaretDirection}>;
   states: Record<string, PenTextState>;
   views: PenEditView[];
   warning: string | null;
@@ -227,10 +227,19 @@ export async function loadPenEditContext(
     if (entry.mark?.kind === 'replace' && markRect) {
       strikeRects.set(entry.id, markRect);
     }
-    if (entry.mark?.kind === 'caret' && markRect) {
-      // A caret is never a delete marker; its tip moves with it.
-      excludedRects.push(markRect);
-      const {dx, dy} = rectShift(entry.mark.caretRect, markRect);
+    const caretRect =
+      entry.mark?.kind === 'caret'
+        ? unionRects(resolved.markElements.map(elementRect).filter((rect): rect is Rect => rect !== null))
+        : null;
+    if (entry.mark?.kind === 'caret' && caretRect) {
+      // A caret (one stroke or two) is never a delete marker; its tip moves with it.
+      resolved.markElements.forEach(element => {
+        const rect = elementRect(element);
+        if (rect) {
+          excludedRects.push(rect);
+        }
+      });
+      const {dx, dy} = rectShift(entry.mark.caretRect, caretRect);
       carets.set(entry.id, {tip: {x: entry.mark.tip.x + dx, y: entry.mark.tip.y + dy}, direction: entry.mark.direction});
     }
   }
@@ -327,13 +336,13 @@ export async function placeCaretInsertions<T extends TextElementData>(
         reason:
           entry.mark?.kind === 'caret'
             ? 'Its caret is no longer on the page.'
-            : 'No caret was found just before it when it was tagged: draw a V (or ∧) where it goes and tag it again.',
+            : 'No caret was found just before it when it was tagged: draw a caret (V, ∧, < or >) where it goes and tag it again.',
       });
       continue;
     }
     const near = pageTextboxes.filter(textbox => {
       const rect = textbox.textBox.textRect;
-      return caret.tip.x >= rect.left - 40 && caret.tip.x <= rect.right + 40 && caret.tip.y >= rect.top - 400 && caret.tip.y <= rect.bottom + 400;
+      return caret.tip.x >= rect.left - 120 && caret.tip.x <= rect.right + 120 && caret.tip.y >= rect.top - 400 && caret.tip.y <= rect.bottom + 400;
     });
     const boxes: CaretTextbox[] = [];
     for (const textbox of near) {

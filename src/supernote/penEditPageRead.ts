@@ -1,7 +1,13 @@
 import {PluginCommAPI, PluginFileAPI, type Element} from 'sn-plugin-lib';
 import {buildRecognizeRect, buildStrokeStats, isStraightLineGeometryElement, isSupportedEditMarkerElement} from '../domain/markerStrokes';
 import {LOOK_BACK_WINDOW, strokeStatsFromRect, type WindowStroke} from '../domain/penEditPairing';
-import {analyzeCaret, isCaretSizedRect, type CaretShape} from '../domain/penEditCaret';
+import {
+  analyzeCaret,
+  analyzeTwoStrokeCaret,
+  isCaretSizedRect,
+  type CaretShape,
+  type Point,
+} from '../domain/penEditCaret';
 import {isTakenStrike} from '../domain/penEditMatching';
 import {isPenEditDecoration} from '../domain/penEditTags';
 import type {Rect} from '../domain/textboxModel';
@@ -93,34 +99,72 @@ export function recycleWindow(elements: Map<string, Element>): void {
 }
 
 /**
- * The caret of an insertion among the window's strokes, newest first: a caret-sized stroke whose
- * points form a V or a ∧ (`analyzeCaret`), not already paired. Only the few candidates' points are
+ * The caret of an insertion among the window's strokes, newest first: one stroke shaped like a
+ * V, ∧, < or > (`analyzeCaret`), or two strokes drawn one after the other whose ends meet at the
+ * tip (`analyzeTwoStrokeCaret`), not already paired. Only caret-sized candidates have their points
  * read. Never throws.
  */
 export async function findCaretInWindow(
   window: WindowStroke[],
   elements: Map<string, Element>,
   taken: Rect[],
-): Promise<{stroke: WindowStroke; shape: CaretShape} | null> {
-  const candidates = [...window]
-    .filter(stroke => !stroke.isStraightLine && isCaretSizedRect(stroke.stats.rect) && !isTakenStrike(stroke.stats.rect, taken))
-    .sort((a, b) => b.numInPage - a.numInPage);
-  for (const stroke of candidates) {
+): Promise<{strokes: WindowStroke[]; rect: Rect; shape: CaretShape} | null> {
+  const byNum = [...window].sort((a, b) => b.numInPage - a.numInPage);
+  const candidates: Array<{strokes: WindowStroke[]; rect: Rect}> = [];
+  byNum.forEach((stroke, index) => {
+    const older = byNum[index + 1];
+    if (older && older.numInPage === stroke.numInPage - 1) {
+      const rect = unionRect(older.stats.rect, stroke.stats.rect);
+      if (isCaretSizedRect(rect) && !isTakenStrike(rect, taken)) {
+        candidates.push({strokes: [older, stroke], rect});
+      }
+    }
+    if (!stroke.isStraightLine && isCaretSizedRect(stroke.stats.rect) && !isTakenStrike(stroke.stats.rect, taken)) {
+      candidates.push({strokes: [stroke], rect: stroke.stats.rect});
+    }
+  });
+
+  const pointsOf = new Map<string, Point[] | null>();
+  const readPoints = async (stroke: WindowStroke): Promise<Point[] | null> => {
+    if (pointsOf.has(stroke.uuid)) {
+      return pointsOf.get(stroke.uuid) ?? null;
+    }
     const element = elements.get(stroke.uuid);
-    if (!element?.stroke?.points) {
+    let points: Point[] | null = null;
+    if (element?.stroke?.points) {
+      try {
+        points = (await readAccessorRange<Point>(element.stroke.points)).filter(
+          point => typeof point?.x === 'number' && typeof point?.y === 'number',
+        );
+      } catch (error) {
+        console.warn('[PenEditPageRead] caret points not read', String(error));
+      }
+    }
+    pointsOf.set(stroke.uuid, points);
+    return points;
+  };
+
+  for (const candidate of candidates) {
+    const legs = await Promise.all(candidate.strokes.map(readPoints));
+    if (legs.some(points => !points)) {
       continue;
     }
-    try {
-      const points = (await readAccessorRange<{x: number; y: number}>(element.stroke.points)).filter(
-        point => typeof point?.x === 'number' && typeof point?.y === 'number',
-      );
-      const shape = analyzeCaret(points);
-      if (shape) {
-        return {stroke, shape};
-      }
-    } catch (error) {
-      console.warn('[PenEditPageRead] caret points not read', String(error));
+    const shape =
+      legs.length === 2
+        ? analyzeTwoStrokeCaret(legs[0] as Point[], legs[1] as Point[])
+        : analyzeCaret(legs[0] as Point[]);
+    if (shape) {
+      return {strokes: candidate.strokes, rect: candidate.rect, shape};
     }
   }
   return null;
+}
+
+function unionRect(a: Rect, b: Rect): Rect {
+  return {
+    left: Math.min(a.left, b.left),
+    top: Math.min(a.top, b.top),
+    right: Math.max(a.right, b.right),
+    bottom: Math.max(a.bottom, b.bottom),
+  };
 }

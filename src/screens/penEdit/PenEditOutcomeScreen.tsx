@@ -17,7 +17,7 @@ function texts(outcome: PenEditTagOutcome): {title: string; body: string} {
         ? {
             title: `Insertion ${outcome.number} tagged`,
             body:
-              'No caret was found just before this text. Draw a V on the line (or a ∧ under it) where ' +
+              'No caret was found just before this text. Draw a caret (V, ∧, < or >) with its tip where ' +
               'the text goes, then write the text right after. Until then it shows under Ignored in the review.',
           }
         : {

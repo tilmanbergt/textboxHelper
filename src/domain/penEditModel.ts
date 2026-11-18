@@ -41,8 +41,8 @@ export type PenEditMark =
       caretRect: Rect;
       /** Where its tip was: the place in the text. */
       tip: {x: number; y: number};
-      /** 'down' for a V (tip below), 'up' for a ∧ (tip above). */
-      direction: 'down' | 'up';
+      /** Where the tip points: 'down' for a V, 'up' for a ∧, 'left' for a <, 'right' for a >. */
+      direction: 'down' | 'up' | 'left' | 'right';
     };
 
 export type RecognitionStatus = 'waiting' | 'done' | 'empty' | 'failed';
@@ -120,7 +120,10 @@ function parseMark(value: unknown): PenEditMark | null {
   if (value.kind === 'caret') {
     const caretRect = parseRect(value.caretRect);
     const tip = isRecord(value.tip) && isFiniteNumber(value.tip.x) && isFiniteNumber(value.tip.y) ? {x: value.tip.x, y: value.tip.y} : null;
-    const direction = value.direction === 'up' ? 'up' : value.direction === 'down' ? 'down' : null;
+    const direction =
+      value.direction === 'up' || value.direction === 'down' || value.direction === 'left' || value.direction === 'right'
+        ? value.direction
+        : null;
     return caretRect && tip && direction ? {kind: 'caret', caretRect, tip, direction} : null;
   }
   if (value.kind !== 'replace') {

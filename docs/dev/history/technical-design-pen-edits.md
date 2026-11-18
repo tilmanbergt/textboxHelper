@@ -286,3 +286,9 @@ the caret between paragraphs needs only reading order and could come first.
   to the neighbouring line. Now a tip inside a line's band (±4 px) belongs to that line; a tip in
   a textbox between two lines goes to the nearer one (a V prefers the line below, a ∧ the line
   above when equally near); outside the textboxes it is the space between paragraphs.
+- **Sideways and two-stroke carets** (device: a < after a paragraph's end and a < drawn as two
+  lines were never found at tag time; the two lines then showed up as delete markers): the shape
+  test now runs in all four directions (V down, ∧ up, < left, > right), and two strokes drawn one
+  after the other whose ends meet within 24 px are joined at that point and tested as one
+  (`analyzeTwoStrokeCaret`); both are tagged `mark` and the caret rect is their union. A < or >
+  may sit up to 100 px beside the text and a little above or below its line (0.6 line heights).
