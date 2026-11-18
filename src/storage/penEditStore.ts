@@ -87,21 +87,29 @@ export function changePenEditIndex(change: (index: PenEditIndex) => PenEditIndex
 
 /**
  * Stores an entry's handwriting: the strokes, and the picture moved in from its temporary place.
- * Returns whether the picture was kept (a missing picture is logged, not an error).
+ * A picture that couldn't be kept is reported with the reason, not as an error.
  */
-export async function savePenEditData(data: PenEditStrokeData, temporaryPicture: string | null): Promise<boolean> {
+export async function savePenEditData(
+  data: PenEditStrokeData,
+  temporaryPicture: string | null,
+): Promise<{kept: boolean; error: string | null}> {
   const dir = buildPenEditEntryDir(await pluginDir(), data.id);
   await RNFS.mkdir(dir);
   await RNFS.writeFile(`${dir}/${STROKES_FILE}`, JSON.stringify(data), 'utf8');
   if (!temporaryPicture) {
-    return false;
+    return {kept: false, error: 'no picture from the host'};
   }
+  const source = temporaryPicture.replace(/^file:\/\//, '');
   try {
-    await RNFS.moveFile(temporaryPicture, `${dir}/${PICTURE_FILE}`);
-    return true;
+    if (!(await RNFS.exists(source))) {
+      return {kept: false, error: `picture not found at ${source}`};
+    }
+    await RNFS.copyFile(source, `${dir}/${PICTURE_FILE}`);
+    await RNFS.unlink(source).catch(() => undefined);
+    return {kept: true, error: null};
   } catch (error) {
-    console.warn('[PenEditStore] picture not kept', JSON.stringify({id: data.id, error: String(error)}));
-    return false;
+    console.warn('[PenEditStore] picture not kept', JSON.stringify({id: data.id, source, error: String(error)}));
+    return {kept: false, error: String(error)};
   }
 }
 
@@ -125,7 +133,7 @@ export async function penEditPictureUri(id: string): Promise<string> {
   return `file://${buildPenEditEntryDir(await pluginDir(), id)}/${PICTURE_FILE}`;
 }
 
-/** A temporary path for the lasso picture, in the app's document folder. */
+/** A temporary path for the lasso picture, in the app's cache folder (as Kept GTD's temp folder). */
 export function temporaryPicturePath(id: string): string {
-  return `${RNFS.DocumentDirectoryPath}/pen-edit-${id}.png`;
+  return `${RNFS.CachesDirectoryPath}/pen-edit-${id}.png`;
 }

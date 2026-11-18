@@ -67,13 +67,15 @@ export function isPenEditElement(element: {userData?: unknown}): boolean {
 // ---------------------------------------------------------------------------
 // Numbers
 
-/** Font size of the number textboxes: readable, but clearly not body text. */
-export const PEN_EDIT_NUMBER_FONT_SIZE = 20;
+/** Font size of the number textboxes: readable next to body text, but clearly a mark. */
+export const PEN_EDIT_NUMBER_FONT_SIZE = 28;
 /** A one- or two-digit textbox at or below this size counts as a pen-edit number. */
-export const PEN_EDIT_NUMBER_MAX_FONT_SIZE = 24;
-const NUMBER_BOX_WIDTH = 44;
-const NUMBER_BOX_HEIGHT = 32;
+export const PEN_EDIT_NUMBER_MAX_FONT_SIZE = 30;
+const NUMBER_BOX_WIDTH = 48;
+const NUMBER_BOX_HEIGHT = 40;
 const NUMBER_GAP = 6;
+/** How far the mark's number reaches down over the top end of the vertical line. */
+const MARK_NUMBER_OVERLAP = 10;
 
 /**
  * Second guard next to `userData`: a textbox holding only a one- or two-digit number in a small
@@ -97,18 +99,21 @@ export function nextPenEditNumber(numbersInUse: number[]): number {
 /** The number next to the snippet: right of the tag icon. */
 export function snippetNumberRect(iconRect: Rect): Rect {
   const left = Math.round(iconRect.right + NUMBER_GAP);
-  const top = Math.round(iconRect.top - 2);
+  const top = Math.round(iconRect.top - NUMBER_GAP);
   return {left, top, right: left + NUMBER_BOX_WIDTH, bottom: top + NUMBER_BOX_HEIGHT};
 }
 
-/** The number at the replace mark: right of the strike's end, centred on it, kept on the page. */
-export function markNumberRect(strikeRect: Rect, pageWidth: number): Rect {
-  const centerY = (strikeRect.top + strikeRect.bottom) / 2;
-  let left = Math.round(strikeRect.right + NUMBER_GAP);
+/**
+ * The number at the replace mark: like a superscript on the right vertical line, its bottom just
+ * over the line's top end, so it sits next to the mark rather than on the following words. Kept
+ * on the page.
+ */
+export function markNumberRect(rightVertical: Rect, pageWidth: number): Rect {
+  let left = Math.round(rightVertical.right + 2);
   if (pageWidth > 0 && left + NUMBER_BOX_WIDTH > pageWidth) {
-    left = Math.max(0, Math.round(strikeRect.left - NUMBER_GAP - NUMBER_BOX_WIDTH));
+    left = Math.max(0, Math.round(rightVertical.left - 2 - NUMBER_BOX_WIDTH));
   }
-  const top = Math.round(centerY - NUMBER_BOX_HEIGHT / 2);
+  const top = Math.max(0, Math.round(rightVertical.top + MARK_NUMBER_OVERLAP - NUMBER_BOX_HEIGHT));
   return {left, top, right: left + NUMBER_BOX_WIDTH, bottom: top + NUMBER_BOX_HEIGHT};
 }
 

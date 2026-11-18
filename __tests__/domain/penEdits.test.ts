@@ -10,7 +10,7 @@ import {
   WAITING_RECOGNITION,
   type PenEditEntry,
 } from '../../src/domain/penEditModel';
-import {findReplaceMarkInWindow, lookBackNumbers, type WindowStroke} from '../../src/domain/penEditPairing';
+import {findReplaceMarkInWindow, lookBackNumbers, strokeStatsFromRect, type WindowStroke} from '../../src/domain/penEditPairing';
 import {overlapWithBelow, placeInsertion} from '../../src/domain/penEditInsertion';
 import {
   isPenEditElement,
@@ -82,13 +82,13 @@ describe('pen edit numbers and icon', () => {
     }
   });
 
-  it('places the numbers next to the icon and the strike, inside the page', () => {
-    expect(snippetNumberRect({left: 104, top: 204, right: 132, bottom: 232}).left).toBe(138);
-    const right = markNumberRect({left: 300, top: 400, right: 500, bottom: 404}, 1404);
-    expect(right.left).toBe(506);
-    expect((right.top + right.bottom) / 2).toBe(402);
-    const atEdge = markNumberRect({left: 1200, top: 400, right: 1390, bottom: 404}, 1404);
-    expect(atEdge.right).toBeLessThanOrEqual(1200);
+  it('places the numbers next to the icon and over the top of the right vertical line', () => {
+    expect(snippetNumberRect({left: 104, top: 204, right: 132, bottom: 232})).toEqual({left: 138, top: 198, right: 186, bottom: 238});
+    const vertical = {left: 440, top: 145, right: 458, bottom: 224};
+    expect(markNumberRect(vertical, 1404)).toEqual({left: 460, top: 115, right: 508, bottom: 155});
+    const atEdge = markNumberRect({left: 1380, top: 400, right: 1398, bottom: 440}, 1404);
+    expect(atEdge.right).toBeLessThanOrEqual(1380);
+    expect(markNumberRect({left: 100, top: 5, right: 110, bottom: 40}, 1404).top).toBe(0);
   });
 });
 
@@ -204,7 +204,7 @@ describe('look-back pairing', () => {
   const vertical = (uuid: string, num: number, x: number) => stroke(uuid, num, [[x, 480], [x + 2, 522]]);
 
   it('reads the numbers just before the snippet', () => {
-    expect(lookBackNumbers(12)).toEqual([11, 10, 9, 8, 7, 6, 5, 4]);
+    expect(lookBackNumbers(20)).toEqual([19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6]);
     expect(lookBackNumbers(3)).toEqual([2, 1]);
     expect(lookBackNumbers(1)).toEqual([]);
   });
@@ -231,6 +231,22 @@ describe('look-back pairing', () => {
     const notCrossing = stroke('v2', 9, [[430, 540], [432, 580]]);
     expect(findReplaceMarkInWindow([strike('k', 7), vertical('v1', 8, 400), notCrossing], new Set())).toBeNull();
     expect(findReplaceMarkInWindow([strike('k', 7), vertical('v1', 8, 320), vertical('v2', 9, 500)], new Set())).toBeNull();
+  });
+
+  it('pairs from recognize rects alone (the device test page)', () => {
+    const fromRect = (uuid: string, num: number, rect: Rect): WindowStroke => ({
+      uuid,
+      numInPage: num,
+      isStraightLine: false,
+      stats: strokeStatsFromRect(rect)!,
+    });
+    const window = [
+      fromRect('strike', 29, {left: 600, top: 808, right: 972, bottom: 820}),
+      fromRect('v1', 30, {left: 790, top: 789, right: 807, bottom: 833}),
+      fromRect('v2', 31, {left: 800, top: 786, right: 817, bottom: 827}),
+      fromRect('n', 25, {left: 594, top: 1279, right: 605, bottom: 1286}),
+    ];
+    expect(findReplaceMarkInWindow(window, new Set())).toEqual({kind: 'replace', strikeUuid: 'strike', modifierUuids: ['v1', 'v2']});
   });
 
   it('ignores a plain delete stroke and handwriting', () => {

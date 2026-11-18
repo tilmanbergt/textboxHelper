@@ -1,9 +1,11 @@
 import {rectCenter} from './geometry';
+import type {Rect} from './textboxModel';
 import {
   MAX_MARKER_HEIGHT_RATIO,
   MIN_MARKER_WIDTH,
   REPLACE_MODIFIER_MIN_HEIGHT,
   REPLACE_MODIFIER_PAIR_MAX_GAP,
+  buildStrokeStats,
   isVerticalLikeStroke,
 } from './markerStrokes';
 import type {PenEditMark} from './penEditModel';
@@ -16,8 +18,13 @@ import type {StrokeStats} from './markerTypes';
  * the strike really covers words is checked later, in the review.
  */
 
-/** How many element numbers before the snippet are read. */
+/** How many elements before the snippet are looked at, not counting Textbox Tools' own. */
 export const LOOK_BACK_WINDOW = 8;
+/**
+ * The most element numbers read: the host renumbers after inserts, so our own icons and numbers
+ * can sit between a mark and its snippet and are skipped without counting.
+ */
+export const LOOK_BACK_MAX_READS = 14;
 
 /** One element of the look-back window, already reduced to its stroke statistics. */
 export type WindowStroke = {
@@ -28,13 +35,29 @@ export type WindowStroke = {
   stats: StrokeStats;
 };
 
-/** The element numbers to read: L−1 down to L−window, never below 1. */
-export function lookBackNumbers(lowestSnippetNum: number, window = LOOK_BACK_WINDOW): number[] {
+/** The element numbers that may be read, newest first: L−1 down to L−maxReads, never below 1. */
+export function lookBackNumbers(lowestSnippetNum: number, maxReads = LOOK_BACK_MAX_READS): number[] {
   const numbers: number[] = [];
-  for (let num = lowestSnippetNum - 1; num >= 1 && num >= lowestSnippetNum - window; num -= 1) {
+  for (let num = lowestSnippetNum - 1; num >= 1 && num >= lowestSnippetNum - maxReads; num -= 1) {
     numbers.push(num);
   }
   return numbers;
+}
+
+/**
+ * Stroke statistics from an element's bounding rect alone (the host's recognize rect): a line
+ * through its long side. Enough for the pairing's shape tests, without reading the stroke points.
+ */
+export function strokeStatsFromRect(rect: Rect): StrokeStats | null {
+  const width = rect.right - rect.left;
+  const height = rect.bottom - rect.top;
+  const cx = (rect.left + rect.right) / 2;
+  const cy = (rect.top + rect.bottom) / 2;
+  const stats =
+    width >= height
+      ? buildStrokeStats([{x: rect.left, y: cy}, {x: rect.right, y: cy}])
+      : buildStrokeStats([{x: cx, y: rect.top}, {x: cx, y: rect.bottom}]);
+  return stats ? {...stats, rect: {...rect}, width, height} : null;
 }
 
 function isStrikeLike(stroke: WindowStroke): boolean {

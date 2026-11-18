@@ -77,6 +77,10 @@ function boundsOfPoints(points: number[][]): Rect | null {
   return Number.isFinite(left) ? {left, top, right, bottom} : null;
 }
 
+function windowItem(window: WindowStroke[], uuid: string | undefined): WindowStroke | undefined {
+  return uuid ? window.find(item => item.uuid === uuid) : undefined;
+}
+
 let running = false;
 
 export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcome> {
@@ -120,13 +124,15 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
 
     let mark: PenEditMark | null = null;
     let strike: WindowStroke | undefined;
+    let lookBackWindow: WindowStroke[] = [];
     let lookBack = {read: 0, ms: 0};
     if (tagKind === 'replacement') {
       const lowest = Math.min(...snap.strokeNums);
       const result = await readLookBackWindow(notePath, page, lookBackNumbers(lowest));
       lookBack = {read: result.read, ms: result.ms};
+      lookBackWindow = result.window;
       mark = findReplaceMarkInWindow(result.window, takenStrikeUuids(index));
-      strike = mark ? result.window.find(item => item.uuid === mark?.strikeUuid) : undefined;
+      strike = mark ? windowItem(result.window, mark.strikeUuid) : undefined;
       step('lookBack');
     }
 
@@ -136,8 +142,10 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     }
     const iconRect = tagIconRect(lassoRect);
     const numbers: TagNumber[] = [{role: 'snippetnum', rect: snippetNumberRect(iconRect), number}];
-    if (strike) {
-      numbers.push({role: 'marknum', rect: markNumberRect(strike.stats.rect, snap.pageSize?.width ?? 0), number});
+    const rightVertical = mark ? windowItem(lookBackWindow, mark.modifierUuids[mark.modifierUuids.length - 1]) : undefined;
+    const markAnchor = rightVertical?.stats.rect ?? strike?.stats.rect;
+    if (markAnchor) {
+      numbers.push({role: 'marknum', rect: markNumberRect(markAnchor, snap.pageSize?.width ?? 0), number});
     }
     const placed = await insertTagElements({page, id, kind: tagKind, iconRect, numbers});
     step('elements');
@@ -146,7 +154,8 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
       return {kind: 'failed', detail: `Could not put the tag on the page (${placed.error ?? 'unknown error'}). Nothing was tagged; please try again.`};
     }
 
-    const hasPicture = await savePenEditData({version: 1, id, pageSize: snap.pageSize, strokes: snap.strokes}, snap.picture);
+    const picture = await savePenEditData({version: 1, id, pageSize: snap.pageSize, strokes: snap.strokes}, snap.picture);
+    const hasPicture = picture.kept;
     const entry: PenEditEntry = {
       id,
       kind: tagKind,
@@ -178,7 +187,10 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
         paired: !!mark,
         lookBack,
         hasPicture,
+        pictureError: picture.error,
         saved: placed.saved,
+        insertMs: placed.insertMs,
+        saveMs: placed.saveMs,
         retried: placed.retried,
         lassoTimings: snap.timingsMs,
         steps,

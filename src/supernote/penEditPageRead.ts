@@ -1,16 +1,27 @@
 import {PluginCommAPI, PluginFileAPI, type Element} from 'sn-plugin-lib';
-import {isStraightLineGeometryElement, isSupportedEditMarkerElement} from '../domain/markerStrokes';
-import type {WindowStroke} from '../domain/penEditPairing';
+import {buildRecognizeRect, buildStrokeStats, isStraightLineGeometryElement, isSupportedEditMarkerElement} from '../domain/markerStrokes';
+import {LOOK_BACK_WINDOW, strokeStatsFromRect, type WindowStroke} from '../domain/penEditPairing';
 import {isPenEditElement} from '../domain/penEditTags';
-import {loadMarkerStrokeStats} from './markerStrokeRead';
 
 /**
- * The look-back reads of a replacement tag (technical-design-pen-edits.md §3.5): only the few
- * elements numbered just before the snippet, one `getElement` each, reduced to what the pairing
- * needs. Never throws; an unreadable number is skipped.
+ * The look-back reads of a replacement tag (technical-design-pen-edits.md §3.5): the elements
+ * numbered just before the snippet, one `getElement` each, until LOOK_BACK_WINDOW elements that
+ * aren't Textbox Tools' own were seen. Only the element's own rect is used (the host's recognize
+ * rect, or a straight line's points): no stroke points are read. Never throws; an unreadable
+ * number is skipped.
  */
 
 type Response<T> = {success?: boolean; result?: T} | null | undefined;
+
+function windowStroke(element: Element): WindowStroke | null {
+  if (isStraightLineGeometryElement(element)) {
+    const stats = buildStrokeStats(element.geometry?.points ?? []);
+    return stats ? {uuid: element.uuid, numInPage: element.numInPage, isStraightLine: true, stats} : null;
+  }
+  const rect = buildRecognizeRect(element.recognizeResult);
+  const stats = rect ? strokeStatsFromRect(rect) : null;
+  return stats ? {uuid: element.uuid, numInPage: element.numInPage, isStraightLine: false, stats} : null;
+}
 
 export async function readLookBackWindow(
   notePath: string,
@@ -20,7 +31,11 @@ export async function readLookBackWindow(
   const start = Date.now();
   const window: WindowStroke[] = [];
   let read = 0;
+  let counted = 0;
   for (const num of numbers) {
+    if (counted >= LOOK_BACK_WINDOW) {
+      break;
+    }
     let element: Element | null = null;
     try {
       const response = (await PluginFileAPI.getElement(notePath, page, num)) as Response<Element>;
@@ -29,17 +44,16 @@ export async function readLookBackWindow(
         continue;
       }
       read += 1;
-      if (isPenEditElement(element) || !isSupportedEditMarkerElement(element)) {
+      if (isPenEditElement(element)) {
         continue;
       }
-      const stats = await loadMarkerStrokeStats(element);
-      if (stats) {
-        window.push({
-          uuid: element.uuid,
-          numInPage: element.numInPage,
-          isStraightLine: isStraightLineGeometryElement(element),
-          stats,
-        });
+      counted += 1;
+      if (!isSupportedEditMarkerElement(element)) {
+        continue;
+      }
+      const stroke = windowStroke(element);
+      if (stroke) {
+        window.push(stroke);
       }
     } catch (error) {
       console.warn('[PenEditPageRead] element not read', JSON.stringify({page, num, error: String(error)}));

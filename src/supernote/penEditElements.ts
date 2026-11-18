@@ -35,6 +35,8 @@ export type TagElementsResult = {
   retried: boolean;
   saved: boolean;
   error: string | null;
+  insertMs: number;
+  saveMs: number;
 };
 
 type Response<T> = {success?: boolean; result?: T; error?: {code?: number; message?: string}} | null | undefined;
@@ -90,7 +92,7 @@ async function buildElements(request: TagElementsRequest): Promise<Element[]> {
       textBox.textContentFull = String(number.number);
       textBox.textRect = number.rect;
       textBox.textAlign = 0;
-      textBox.textBold = 0;
+      textBox.textBold = 1;
       textBox.textItalics = 0;
       textBox.textFrameWidthType = 0;
       textBox.textFrameStyle = 0;
@@ -129,6 +131,7 @@ async function saveCurrentNote(): Promise<boolean> {
 export async function insertTagElements(request: TagElementsRequest): Promise<TagElementsResult> {
   let retried = false;
   let error: string | null = null;
+  const insertStart = Date.now();
   try {
     error = await insertOnce(request);
     if (error && error.includes(BUSY_ERROR)) {
@@ -140,11 +143,14 @@ export async function insertTagElements(request: TagElementsRequest): Promise<Ta
     error = caught instanceof Error ? caught.message : String(caught);
   }
   const placed = error === null;
+  const insertMs = Date.now() - insertStart;
+  const saveStart = Date.now();
   const saved = placed ? await saveCurrentNote() : false;
+  const saveMs = Date.now() - saveStart;
   if (placed) {
     console.log('[PenEditElements] placed', JSON.stringify({id: request.id, page: request.page, numbers: request.numbers.length, retried, saved}));
   } else {
     console.warn('[PenEditElements] not placed', JSON.stringify({id: request.id, error}));
   }
-  return {placed, retried, saved, error};
+  return {placed, retried, saved, error, insertMs, saveMs};
 }
