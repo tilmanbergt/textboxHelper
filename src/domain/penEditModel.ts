@@ -33,7 +33,17 @@ export type PenEditStrokeData = {
  * What a pen edit is paired with. A tagged union so later mark kinds (the caret of
  * technical-design-pen-edits.md §8) need no change to stored entries.
  */
-export type PenEditMark = {kind: 'replace'; strikeRect: Rect; modifierRects: Rect[]};
+export type PenEditMark =
+  | {kind: 'replace'; strikeRect: Rect; modifierRects: Rect[]}
+  | {
+      kind: 'caret';
+      /** The caret stroke's rect at tag time. */
+      caretRect: Rect;
+      /** Where its tip was: the place in the text. */
+      tip: {x: number; y: number};
+      /** 'down' for a V (tip below), 'up' for a ∧ (tip above). */
+      direction: 'down' | 'up';
+    };
 
 export type RecognitionStatus = 'waiting' | 'done' | 'empty' | 'failed';
 
@@ -104,7 +114,16 @@ function parseRects(value: unknown): Rect[] {
 }
 
 function parseMark(value: unknown): PenEditMark | null {
-  if (!isRecord(value) || value.kind !== 'replace') {
+  if (!isRecord(value)) {
+    return null;
+  }
+  if (value.kind === 'caret') {
+    const caretRect = parseRect(value.caretRect);
+    const tip = isRecord(value.tip) && isFiniteNumber(value.tip.x) && isFiniteNumber(value.tip.y) ? {x: value.tip.x, y: value.tip.y} : null;
+    const direction = value.direction === 'up' ? 'up' : value.direction === 'down' ? 'down' : null;
+    return caretRect && tip && direction ? {kind: 'caret', caretRect, tip, direction} : null;
+  }
+  if (value.kind !== 'replace') {
     return null;
   }
   const strikeRect = parseRect(value.strikeRect);
@@ -216,6 +235,13 @@ export function updatePenEdit(
     version: PEN_EDIT_INDEX_VERSION,
     entries: index.entries.map(entry => (entry.id === id ? change(entry) : entry)),
   };
+}
+
+/** Caret rects of the active insertions on a page: a caret pairs with one snippet only. */
+export function takenCaretRects(index: PenEditIndex, notePath: string, page: number): Rect[] {
+  return activePenEditsOnPage(index, notePath, page)
+    .map(entry => (entry.mark?.kind === 'caret' ? entry.mark.caretRect : null))
+    .filter((rect): rect is Rect => rect !== null);
 }
 
 /** Active entries of one note page. */

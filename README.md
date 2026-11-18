@@ -32,6 +32,7 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 
 - Tag handwritten new text with the lasso buttons "Replacement" or "Insertion" instead of converting it to text first
 - A replacement is written right after its replace mark; a small number at both shows which belong together
+- An insertion is written right after a caret (a V on the line or a ∧ under it): between words, inside a word, or between paragraphs; paragraphs below move down to make room
 - The review recognizes the tagged text while you read, shows a picture of the handwriting, and lets you correct it with the Supernote's handwriting pad or skip it for later
 - The handwriting and its picture are kept in the plugin folder (`pen-edits/`)
 

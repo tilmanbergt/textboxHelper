@@ -13,12 +13,19 @@ import {requestEinkRefresh} from '../../utils/screenRefresh';
 function texts(outcome: PenEditTagOutcome): {title: string; body: string} {
   switch (outcome.kind) {
     case 'noMark':
-      return {
-        title: `Replacement ${outcome.number} tagged`,
-        body:
-          'No replace mark was found just before this text. Write the replacement right after its ' +
-          'mark (strike through, then two short lines across). Until then it shows under Ignored in the review.',
-      };
+      return outcome.tagKind === 'insertion'
+        ? {
+            title: `Insertion ${outcome.number} tagged`,
+            body:
+              'No caret was found just before this text. Draw a V on the line (or a ∧ under it) where ' +
+              'the text goes, then write the text right after. Until then it shows under Ignored in the review.',
+          }
+        : {
+            title: `Replacement ${outcome.number} tagged`,
+            body:
+              'No replace mark was found just before this text. Write the replacement right after its ' +
+              'mark (strike through, then a small circle). Until then it shows under Ignored in the review.',
+          };
     case 'empty':
       return {title: 'Nothing to tag', body: 'Lasso handwriting to tag it as a replacement or insertion.'};
     case 'failed':

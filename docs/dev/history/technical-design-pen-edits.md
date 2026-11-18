@@ -259,3 +259,24 @@ the caret between paragraphs needs only reading order and could come first.
   lasso closed (`LASSO_SETTLE_MS`); the plugin-file writes run during that wait. The elements are
   created one after the other again (in parallel saved < 0.1 s). Host fact: don't change the page
   right after closing the lasso.
+- **Insertion caret (v2)** (device: insertions as new textboxes never showed up after apply; they
+  were written through the open note with `insertText` while every other change went into the
+  file, most likely lost when NOTE reloaded the file). An insertion now pairs with a caret drawn
+  just before it, like a replacement with its mark (`domain/penEditCaret.ts`):
+  - Shape: one stroke, a V (tip down) or a ∧ (tip up), legs fairly straight, ends on both sides
+    of the tip (`analyzeCaret`); in the tag's look-back only caret-sized strokes have their points
+    read (`findCaretInWindow`). Stored as `mark: {kind: 'caret', caretRect, tip, direction}`; the
+    caret stroke is tagged `mark`. Its number goes between the ends of the legs (no ring).
+  - Place (review): the textboxes in the caret's column near its tip are measured; the line is the
+    one the tip points to (a V's tip on a line's upper part or just above, a ∧'s on its lower part
+    or below), the offset from the word boxes; within 0.6 characters of a word edge the tip snaps
+    to the edge (`locateCaret`). Between words spaces are added (`caretInsertionText`), inside a
+    word the text goes in as written, on a blank line it becomes a paragraph of its own. The
+    change is a zero-length range of the textbox, applied like a replacement.
+  - Between two textboxes: a new textbox styled like the one above, keeping the gap's spacing;
+    several in one gap follow each other (`placeGapParagraphs`). Written into the file with
+    `PluginFileAPI.insertElements` after the other changes.
+  - Push down: a paragraph that grows and every new paragraph move the textboxes below in the same
+    column down (`planReflow`); textboxes never move up. Handwriting below doesn't move.
+  - An insertion without a caret (or tagged before this build) goes to Ignored. The old
+    placement (`penEditInsertion.ts`) is gone.

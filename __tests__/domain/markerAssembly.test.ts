@@ -112,7 +112,7 @@ describe('assembleMarkerPreview', () => {
     expect(preview.skippedCount).toBe(1);
   });
 
-  it('adds a ready insertion as a new textbox', () => {
+  it('adds a ready gap insertion as a new paragraph', () => {
     const insertionBase = base({
       drafts: [],
       textboxes: [],
@@ -121,12 +121,12 @@ describe('assembleMarkerPreview', () => {
           penEditId: 'pe2',
           number: 2,
           left: 144,
-          top: 430,
           width: 1104,
           style: {...textbox, textContentFull: TEXT},
           aboveNumInPage: 2,
           belowNumInPage: 17,
-          belowTop: 746,
+          aboveRect: {left: 144, top: 155, right: 1248, bottom: 372},
+          belowRect: {left: 144, top: 400, right: 1248, bottom: 500},
         },
       ],
       penEdits: [{id: 'pe2', kind: 'insertion', number: 2, pictureUri: null}],
@@ -138,9 +138,52 @@ describe('assembleMarkerPreview', () => {
 
     const ready = assembleMarkerPreview(insertionBase, {pe2: state({text: 'A new thought.'})});
     expect(ready.applyPlan?.insertions).toEqual([
-      expect.objectContaining({penEditId: 'pe2', text: 'A new thought.', top: 430, belowTop: 746}),
+      expect.objectContaining({penEditId: 'pe2', text: 'A new thought.', aboveRect: insertionBase.insertions[0].aboveRect}),
     ]);
     expect(ready.applyPlan?.textMutations).toEqual([]);
+  });
+
+  it('puts a caret insertion into the paragraph with the spaces it needs', () => {
+    // Caret after "humble," (offset 21): the text goes in before " but".
+    const caretDraft: OperationDraft = {
+      range: {kind: 'replace', start: 21, end: 21},
+      operation: {
+        id: 'insert:pe3',
+        kind: 'insert',
+        markerUuid: 'pe3',
+        markerNumInPage: 0,
+        consumedMarkerNums: [],
+        targetTextboxUuid: 'tb',
+        targetTextboxNumInPage: 2,
+        lineIndex: 0,
+        summary: '',
+        detail: '',
+        words: [],
+        textStart: 21,
+        penEditId: 'pe3',
+        penEditNumber: 3,
+        insertMode: 'betweenWords',
+      },
+    };
+    const caretBase = base({drafts: [caretDraft], penEdits: [{id: 'pe3', kind: 'insertion', number: 3, pictureUri: null}]});
+
+    const waiting = assembleMarkerPreview(caretBase, {});
+    expect(waiting.applyPlan).toBeNull();
+    expect(waiting.textboxes[0].segments.some(segment => segment.style === 'muted')).toBe(true);
+
+    const ready = assembleMarkerPreview(caretBase, {pe3: state({text: 'even proud'})});
+    expect(ready.applyPlan?.textMutations[0].nextText).toBe('This can feel humble, even proud but not because');
+    expect(ready.applyPlan?.penEditIds).toEqual(['pe3']);
+    expect(ready.operations[0].summary).toBe('Insert "even proud"');
+  });
+
+  it('puts a caret insertion inside a word as written', () => {
+    const inWord: OperationDraft = {
+      range: {kind: 'replace', start: 18, end: 18},
+      operation: {...draft('i', 18, 18).operation, kind: 'insert', id: 'insert:pe4', penEditId: 'pe4', penEditNumber: 4, consumedMarkerNums: [], insertMode: 'inWord'},
+    };
+    const ready = assembleMarkerPreview(base({drafts: [inWord]}), {pe4: state({text: 'b'})});
+    expect(ready.applyPlan?.textMutations[0].nextText).toBe('This can feel humbble, but not because');
   });
 
   it('hides marker strokes used by a change from Ignored, but keeps ignored pen edits', () => {

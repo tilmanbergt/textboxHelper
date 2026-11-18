@@ -13,6 +13,7 @@ import type {
   TextMutationRange,
 } from './markerTypes';
 import {cloneRect} from './geometry';
+import {caretInsertionText} from './penEditCaret';
 
 /**
  * The edit-marker preview assembled from the analysis and the pen edits' current text
@@ -86,8 +87,42 @@ export function assembleMarkerPreview(
     map.set(uuid, [...(map.get(uuid) ?? []), range]);
   };
 
+  const originalTextOf = new Map(base.textboxes.map(textbox => [textbox.uuid, textbox.originalText]));
+
   for (const {operation, range} of base.drafts) {
     const uuid = operation.targetTextboxUuid;
+    if (operation.penEditId && operation.kind === 'insert') {
+      // An insertion at a caret: the text goes in at the caret, with the spaces it needs.
+      const state = penStates[operation.penEditId];
+      const status = penOperationStatus(state);
+      const number = operation.penEditNumber ?? 0;
+      const text = status === 'ready' ? penTextOf(state) : '';
+      const joined = text
+        ? caretInsertionText(originalTextOf.get(uuid) ?? '', range.start, text, operation.insertMode ?? 'betweenWords')
+        : '';
+      const shown = text || placeholder('insertion', number, status);
+      const assembled: RecognizedEditOperation = {
+        ...operation,
+        penStatus: status,
+        replacementText: text || undefined,
+        summary: `Insert "${shown}"`,
+      };
+      operations.push(assembled);
+      if (status === 'ready' && joined) {
+        readyOperations.push(assembled);
+        readyPenIds.push(operation.penEditId);
+        add(displayRanges, uuid, {...range, kind: 'replace', replacementText: joined});
+        add(applyRanges, uuid, {...range, kind: 'replace', replacementText: joined});
+      } else {
+        if (status === 'skipped') {
+          skippedCount += 1;
+        } else {
+          pendingCount += 1;
+        }
+        add(displayRanges, uuid, {...range, kind: 'replace', replacementText: ` ${shown} `, pending: true});
+      }
+      continue;
+    }
     if (!operation.penEditId) {
       operations.push(operation);
       readyOperations.push(operation);
@@ -158,8 +193,8 @@ export function assembleMarkerPreview(
       targetTextboxUuid: uuid,
       targetTextboxNumInPage: insertion.aboveNumInPage ?? 0,
       lineIndex: 0,
-      summary: `Insert "${shown}"`,
-      detail: insertion.aboveNumInPage !== null ? `After textbox ${insertion.aboveNumInPage}` : 'Before the first textbox',
+      summary: `New paragraph "${shown}"`,
+      detail: insertion.aboveNumInPage !== null ? `After textbox ${insertion.aboveNumInPage}` : `Before textbox ${insertion.belowNumInPage ?? ''}`.trim(),
       words: [],
       replacementText: text || undefined,
       textStart: 0,
@@ -185,10 +220,10 @@ export function assembleMarkerPreview(
         penEditId: insertion.penEditId,
         text,
         left: insertion.left,
-        top: insertion.top,
         width: insertion.width,
         style: insertion.style,
-        belowTop: insertion.belowTop,
+        aboveRect: insertion.aboveRect,
+        belowRect: insertion.belowRect,
       });
     } else if (status === 'skipped') {
       skippedCount += 1;

@@ -1,6 +1,7 @@
 import type {PageWordCandidate} from './hitTesting';
 import type {TextboxMeasurementCalibration} from './textboxLayout';
 import type {TextSegment} from './textPages';
+import type {CaretInsertMode} from './penEditCaret';
 import type {PenEditReview, RecognitionStatus} from './penEditModel';
 import type {PageElementData, Rect, TextElementData, TextboxData} from './textboxModel';
 
@@ -46,6 +47,8 @@ export type RecognizedEditOperation = {
   penEditId?: string;
   penEditNumber?: number;
   penStatus?: PenOperationStatus;
+  /** An insertion at a caret: how its text joins the words around it. */
+  insertMode?: CaretInsertMode;
 };
 
 export type IgnoredEditMarker = {
@@ -121,17 +124,21 @@ export type OperationDraft = {
 /** An affected textbox as read for the preview (a TextMutationPlan without the new text). */
 export type MarkerTextboxBase = Omit<TextMutationPlan, 'nextText' | 'nextTextRect'>;
 
-/** An insertion: a new textbox at the snippet's place, styled like its neighbour. */
+/**
+ * An insertion whose caret is in the space between two paragraphs: a new textbox there, styled
+ * like the paragraph above (or below). Its top and the push of the paragraphs below are worked out
+ * at apply, once its height is measured.
+ */
 export type InsertionDraft = {
   penEditId: string;
   number: number;
   left: number;
-  top: number;
   width: number;
   style: TextboxData;
   aboveNumInPage: number | null;
   belowNumInPage: number | null;
-  belowTop: number | null;
+  aboveRect: Rect | null;
+  belowRect: Rect | null;
 };
 
 /** Everything the review needs that doesn't change while pen edits are recognized or corrected. */
@@ -150,15 +157,15 @@ export type MarkerPreviewBase = {
   penStates: Record<string, PenTextState>;
 };
 
-/** A ready insertion as applied. */
+/** A ready new paragraph as applied. */
 export type InsertionPlan = {
   penEditId: string;
   text: string;
   left: number;
-  top: number;
   width: number;
   style: TextboxData;
-  belowTop: number | null;
+  aboveRect: Rect | null;
+  belowRect: Rect | null;
 };
 
 export type EditMarkerPreviewScope = 'lasso' | 'page';

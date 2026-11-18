@@ -35,9 +35,13 @@ import type {
 } from '../domain/markerTypes';
 import type {PenEditEntry} from '../domain/penEditModel';
 import {DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION} from '../domain/textboxLayout';
-import {DEFAULT_FONT_SIZE} from '../domain/textboxModel';
+import {DEFAULT_FONT_SIZE, type Rect} from '../domain/textboxModel';
 import {isPenEditElement, parsePenEditUserData} from '../domain/penEditTags';
-import {buildTextInsert, isNormalTextElement, sortTextElements} from '../domain/textboxEditPlan';
+import {placeGapParagraphs, planReflow, type ReflowEvent, type ReflowItem} from '../domain/penEditCaret';
+import {shiftRect} from '../domain/penEditMatching';
+import {rectHeight} from '../domain/geometry';
+import {insertTextboxesIntoFile} from '../supernote/noteTextInsertion';
+import {isNormalTextElement, sortTextElements} from '../domain/textboxEditPlan';
 import {writeBackupFile} from '../storage/backupFile';
 import {writeJsonExportFile} from '../storage/exportFile';
 import {loadMarkerStrokeStats} from '../supernote/markerStrokeRead';
@@ -45,7 +49,6 @@ import {
   deletePageElements,
   getPreviewContext,
   hideLassoBox,
-  insertTextboxElement,
   modifyPageElements,
   readPageElements,
   readPageSizeForDiagnostics,
@@ -70,7 +73,7 @@ import {
   markPenEditsDropped,
   penEditBackupData,
   penEditElementNums,
-  placeInsertions,
+  placeCaretInsertions,
 } from './penEditReview';
 
 /**
@@ -532,17 +535,42 @@ async function buildEditMarkerPreview(
           penEditId: entry.id,
         });
       });
-    const placed = placeInsertions(pen.entries, pen.snippetRects, pageTextboxes);
-    placed.unplaced.forEach(entry => {
+    // Insertions: into the paragraph their caret points to, or as a new paragraph between two.
+    const placed = await placeCaretInsertions(pen.entries, pen.carets, pageTextboxes, currentEditMarkerCalibration);
+    placed.ignored.forEach(({entry, reason}) => {
       ignoredMarkers.push({
         markerUuid: entry.id,
         markerNumInPage: 0,
         summary: `Insertion ${entry.number}`,
-        reason: 'No textbox above or below it in the same column to take the place and style from.',
+        reason,
         penEditNumber: entry.number,
         penEditId: entry.id,
       });
     });
+    placed.inline.forEach(({entry, textbox, offset, mode}) => {
+      groupedTextboxes.set(textbox.uuid, textbox);
+      drafts.push({
+        range: {kind: 'replace', start: offset, end: offset},
+        operation: {
+          id: `insert:${entry.id}`,
+          kind: 'insert',
+          markerUuid: entry.id,
+          markerNumInPage: 0,
+          consumedMarkerNums: [],
+          targetTextboxUuid: textbox.uuid,
+          targetTextboxNumInPage: textbox.numInPage,
+          lineIndex: 0,
+          summary: `Insert ${entry.number}`,
+          detail: `Textbox ${textbox.numInPage} · ${mode === 'inWord' ? 'inside a word' : mode === 'blankLine' ? 'new paragraph' : 'between words'}`,
+          words: [],
+          textStart: offset,
+          penEditId: entry.id,
+          penEditNumber: entry.number,
+          insertMode: mode,
+        },
+      });
+    });
+    const insertedIds = new Set([...placed.inline.map(item => item.entry.id), ...placed.gaps.map(gap => gap.penEditId)]);
 
     const textboxBases: MarkerTextboxBase[] = sortTextElements([...groupedTextboxes.values()]).map(textbox => ({
       uuid: textbox.uuid,
@@ -569,8 +597,8 @@ async function buildEditMarkerPreview(
       ignored: ignoredMarkers,
       textboxes: textboxBases,
       replacementSourceTextboxNums: [...replacementSourceTextboxNums],
-      insertions: placed.drafts,
-      penEdits: pen.views.filter(view => pairedPenEditIds.has(view.id) || placed.drafts.some(d => d.penEditId === view.id)),
+      insertions: placed.gaps,
+      penEdits: pen.views.filter(view => pairedPenEditIds.has(view.id) || insertedIds.has(view.id)),
       penStates: pen.states,
     };
     const preview = assembleMarkerPreview(base, pen.states);
@@ -655,22 +683,72 @@ export async function applyEditMarkerPreview(
     await saveCurrentNoteForConsistency('applying edit markers');
 
     reportProgress(options, 'Applying recognized markers...', false);
-    const modifiedTextboxes = textMutations
-      .filter(mutation => mutation.nextText.length > 0)
-      .map(mutation => {
-        const currentTextbox = pageTextboxByNum.get(mutation.numInPage);
-        if (!currentTextbox) {
-          throw new Error(
-            `Textbox ${mutation.numInPage} is no longer available. Refresh the preview and try again.`,
+    // New paragraphs in the gaps between paragraphs: measured now, placed in their gap.
+    const gapParagraphs = await Promise.all(
+      plan.insertions.map(async insertion => {
+        const style = {...insertion.style, fontPath: insertion.style.fontPath || NOTE_SYSTEM_FONT_PATH};
+        const height = await estimateTextboxHeight(
+          insertion.text,
+          insertion.width,
+          style.fontSize || DEFAULT_FONT_SIZE,
+          style.fontPath,
+          currentEditMarkerCalibration,
+        );
+        return {insertion, style, height};
+      }),
+    );
+    const placedGaps = placeGapParagraphs(
+      gapParagraphs.map(({insertion, height}) => ({
+        key: `new:${insertion.penEditId}`,
+        group: `${insertion.aboveRect?.bottom ?? 'top'}:${insertion.belowRect?.top ?? 'end'}:${insertion.left}`,
+        left: insertion.left,
+        width: insertion.width,
+        height,
+        above: insertion.aboveRect,
+        below: insertion.belowRect,
+      })),
+    );
+
+    // Paragraphs that got longer, and new paragraphs, push the paragraphs below them down.
+    const mutationByNum = new Map(textMutations.map(mutation => [mutation.numInPage, mutation]));
+    const growthEvents: ReflowEvent[] = textMutations.map(mutation => ({
+      y: mutation.textRect.bottom,
+      left: mutation.textRect.left,
+      right: mutation.textRect.right,
+      delta: rectHeight(mutation.nextTextRect) - rectHeight(mutation.textRect),
+      sourceKeys: [`n:${mutation.numInPage}`],
+    }));
+    const reflowItems: ReflowItem[] = [
+      ...[...pageTextboxByNum.values()].map(textbox => ({key: `n:${textbox.numInPage}`, rect: textbox.textBox.textRect})),
+      ...[...placedGaps.rects].map(([key, rect]) => ({key, rect})),
+    ];
+    const shifts = planReflow(reflowItems, [...growthEvents, ...placedGaps.events]);
+
+    const modifiedTextboxes: Element[] = [];
+    for (const textbox of pageTextboxByNum.values()) {
+      const mutation = mutationByNum.get(textbox.numInPage);
+      const dy = shifts.get(`n:${textbox.numInPage}`) ?? 0;
+      if (mutation) {
+        if (mutation.nextText.length > 0) {
+          modifiedTextboxes.push(
+            cloneTextElementForMutation(textbox, {...mutation, nextTextRect: shiftRect(mutation.nextTextRect, 0, dy)}),
           );
         }
-
-        return cloneTextElementForMutation(currentTextbox, mutation);
-      });
+      } else if (dy > 0) {
+        modifiedTextboxes.push({
+          ...textbox,
+          textBox: {...textbox.textBox, textRect: shiftRect(textbox.textBox.textRect, 0, dy)},
+        } as Element);
+      }
+    }
     const emptyTargetTextboxNums = textMutations
       .filter(mutation => mutation.nextText.length === 0)
       .map(mutation => mutation.numInPage);
     const penEditNums = penEditElementNums(plan.penEditIds, penBackup?.entries ?? [], pageElements);
+    logEditMarker('applyReflow', {
+      shifts: Object.fromEntries(shifts),
+      newParagraphs: Object.fromEntries(placedGaps.rects),
+    });
 
     await modifyPageElements(plan.notePath, plan.page, modifiedTextboxes);
     await deletePageElements(plan.notePath, plan.page, [
@@ -680,31 +758,31 @@ export async function applyEditMarkerPreview(
       ...penEditNums,
     ]);
 
-    // New textboxes last: inserting may renumber the page's elements.
-    const overlaps: string[] = [];
-    for (const insertion of plan.insertions) {
+    // New textboxes last, into the file like the changes above: inserting may renumber elements.
+    if (gapParagraphs.length > 0) {
       reportProgress(options, 'Inserting new paragraphs...', false);
-      const fontSize = insertion.style.fontSize || DEFAULT_FONT_SIZE;
-      // A neighbour without a font gets NOTE's system font, as NOTE itself writes it.
-      const style = {...insertion.style, fontPath: insertion.style.fontPath || NOTE_SYSTEM_FONT_PATH};
-      const height = await estimateTextboxHeight(
-        insertion.text,
-        insertion.width,
-        fontSize,
-        style.fontPath,
-        currentEditMarkerCalibration,
+      await insertTextboxesIntoFile(
+        plan.notePath,
+        plan.page,
+        gapParagraphs.map(({insertion, style}) => {
+          const key = `new:${insertion.penEditId}`;
+          const rect = placedGaps.rects.get(key) as Rect;
+          return {
+            text: insertion.text,
+            rect: shiftRect(rect, 0, shifts.get(key) ?? 0),
+            style: {
+              fontSize: style.fontSize || DEFAULT_FONT_SIZE,
+              fontPath: style.fontPath,
+              textAlign: style.textAlign ?? 0,
+              textBold: style.textBold ?? 0,
+              textItalics: style.textItalics ?? 0,
+              textFrameWidthType: style.textFrameWidthType ?? 0,
+              textFrameStyle: style.textFrameStyle ?? 0,
+              textEditable: style.textEditable ?? 0,
+            },
+          };
+        }),
       );
-      const rect = {
-        left: insertion.left,
-        top: insertion.top,
-        right: insertion.left + insertion.width,
-        bottom: insertion.top + height,
-      };
-      await insertTextboxElement(buildTextInsert(style, insertion.text, rect));
-      const overlap = insertion.belowTop === null ? 0 : Math.max(0, Math.round(rect.bottom - insertion.belowTop));
-      if (overlap > 0) {
-        overlaps.push(`${overlap} px`);
-      }
     }
 
     try {
@@ -715,14 +793,12 @@ export async function applyEditMarkerPreview(
 
     await hideLassoBox('[EditMarkerActions]');
 
-    const overlapNote =
-      overlaps.length > 0
-        ? ` A new paragraph overlaps the next one (${overlaps.join(', ')}); move it with the lasso.`
-        : '';
+    const movedCount = [...shifts.keys()].filter(key => key.startsWith('n:')).length;
+    const movedNote = movedCount > 0 ? ` Moved ${plural(movedCount, 'paragraph')} below down to make room.` : '';
     const left = preview.pendingCount + preview.skippedCount;
     const leftNote = left > 0 ? ` ${plural(left, 'pen edit')} left for later.` : '';
     return {
-      message: `Applied ${plural(plan.operations.length, 'change')} and removed ${plural(plan.recognizedMarkerNums.length, 'marker')}.${leftNote}${overlapNote}`,
+      message: `Applied ${plural(plan.operations.length, 'change')} and removed ${plural(plan.recognizedMarkerNums.length, 'marker')}.${leftNote}${movedNote}`,
       backupPath,
       clipboardSummary,
       appliedOperationCount: plan.operations.length,

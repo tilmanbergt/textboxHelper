@@ -1,7 +1,11 @@
 import {PluginCommAPI, PluginFileAPI, type Element} from 'sn-plugin-lib';
 import {buildRecognizeRect, buildStrokeStats, isStraightLineGeometryElement, isSupportedEditMarkerElement} from '../domain/markerStrokes';
 import {LOOK_BACK_WINDOW, strokeStatsFromRect, type WindowStroke} from '../domain/penEditPairing';
+import {analyzeCaret, isCaretSizedRect, type CaretShape} from '../domain/penEditCaret';
+import {isTakenStrike} from '../domain/penEditMatching';
 import {isPenEditDecoration} from '../domain/penEditTags';
+import type {Rect} from '../domain/textboxModel';
+import {readAccessorRange} from './markerStrokeRead';
 
 /**
  * The look-back reads of a replacement tag (technical-design-pen-edits.md §3.5): the elements
@@ -86,4 +90,37 @@ function recycle(element: Element): void {
 export function recycleWindow(elements: Map<string, Element>): void {
   elements.forEach(recycle);
   elements.clear();
+}
+
+/**
+ * The caret of an insertion among the window's strokes, newest first: a caret-sized stroke whose
+ * points form a V or a ∧ (`analyzeCaret`), not already paired. Only the few candidates' points are
+ * read. Never throws.
+ */
+export async function findCaretInWindow(
+  window: WindowStroke[],
+  elements: Map<string, Element>,
+  taken: Rect[],
+): Promise<{stroke: WindowStroke; shape: CaretShape} | null> {
+  const candidates = [...window]
+    .filter(stroke => !stroke.isStraightLine && isCaretSizedRect(stroke.stats.rect) && !isTakenStrike(stroke.stats.rect, taken))
+    .sort((a, b) => b.numInPage - a.numInPage);
+  for (const stroke of candidates) {
+    const element = elements.get(stroke.uuid);
+    if (!element?.stroke?.points) {
+      continue;
+    }
+    try {
+      const points = (await readAccessorRange<{x: number; y: number}>(element.stroke.points)).filter(
+        point => typeof point?.x === 'number' && typeof point?.y === 'number',
+      );
+      const shape = analyzeCaret(points);
+      if (shape) {
+        return {stroke, shape};
+      }
+    } catch (error) {
+      console.warn('[PenEditPageRead] caret points not read', String(error));
+    }
+  }
+  return null;
 }

@@ -1,6 +1,7 @@
 import {PluginCommAPI, type Element} from 'sn-plugin-lib';
 import {
   activePenEditsOnPage,
+  takenCaretRects,
   takenStrikeRects,
   upsertPenEdit,
   WAITING_RECOGNITION,
@@ -8,6 +9,7 @@ import {
 } from '../domain/penEditModel';
 import {findReplaceMarkInWindow, lookBackNumbers, storedMark, type WindowMark} from '../domain/penEditPairing';
 import {
+  BADGE_SIZE_PX,
   badgeNumberRect,
   circlePolygon,
   markBadgeRect,
@@ -28,7 +30,9 @@ import {
 import {readLasso, type LassoSnapshot} from '../supernote/lassoRead';
 import {hideLassoBox} from '../supernote/noteElements';
 import {insertTagElements, tagUserStrokes, type TagBadge, type TagNumber} from '../supernote/penEditElements';
-import {readLookBackWindow, recycleWindow} from '../supernote/penEditPageRead';
+import {findCaretInWindow, readLookBackWindow, recycleWindow} from '../supernote/penEditPageRead';
+import {caretNumberCenter, type CaretShape} from '../domain/penEditCaret';
+import type {WindowStroke} from '../domain/penEditPairing';
 import {ensurePermissions} from '../supernote/permissions';
 
 /**
@@ -40,7 +44,7 @@ import {ensurePermissions} from '../supernote/permissions';
 
 export type PenEditTagOutcome =
   | {kind: 'tagged'; tagKind: PenEditKind; number: number}
-  | {kind: 'noMark'; number: number}
+  | {kind: 'noMark'; tagKind: PenEditKind; number: number}
   | {kind: 'empty'}
   | {kind: 'busy'}
   | {kind: 'failed'; detail: string};
@@ -153,6 +157,7 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     step('index');
 
     let found: WindowMark | null = null;
+    let caret: {stroke: WindowStroke; shape: CaretShape} | null = null;
     let lookBack = {read: 0, ms: 0};
     if (tagKind === 'replacement') {
       const lowest = Math.min(...snap.strokeNums);
@@ -164,6 +169,15 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
       windowElements = result.elements;
       lookBack = {read: result.read, ms: result.ms};
       found = findReplaceMarkInWindow(result.window, taken);
+      step('lookBack');
+    } else {
+      // An insertion's caret: the newest V or ∧ just before the snippet. The whole window is read
+      // (its points only for caret-sized strokes); this runs inside the wait after the lasso.
+      const lowest = Math.min(...snap.strokeNums);
+      const result = await readLookBackWindow(notePath, page, lookBackNumbers(lowest));
+      windowElements = result.elements;
+      caret = await findCaretInWindow(result.window, result.elements, takenCaretRects(index, notePath, page));
+      lookBack = {read: result.read, ms: Date.now() - last};
       step('lookBack');
     }
 
@@ -178,6 +192,12 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
       element,
       role: 'stroke' as const,
     }));
+    if (caret && windowElements) {
+      const element = windowElements.get(caret.stroke.uuid);
+      if (element) {
+        strokesToTag.push({element, role: 'mark'});
+      }
+    }
     if (found && windowElements) {
       for (const item of [found.strike, ...found.modifiers]) {
         const element = windowElements.get(item.uuid);
@@ -200,7 +220,13 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
     const badge = snippetBadgeRect(lassoRect);
     const badges: TagBadge[] = [{role: 'snippet', points: snippetBadgePolygon(tagKind, badge)}];
     const numbers: TagNumber[] = [{role: 'snippetnum', rect: badgeNumberRect(badge, number), number}];
-    if (found?.loop) {
+    if (caret) {
+      // The caret's number sits between the ends of its legs, on its open side.
+      const center = caretNumberCenter(caret.shape);
+      const half = BADGE_SIZE_PX / 2;
+      const box = {left: center.x - half, top: center.y - half, right: center.x + half, bottom: center.y + half};
+      numbers.push({role: 'marknum', rect: badgeNumberRect(box, number), number});
+    } else if (found?.loop) {
       // The user drew the circle: the number goes inside it.
       numbers.push({role: 'marknum', rect: badgeNumberRect(found.loop.stats.rect, number), number});
     } else if (found) {
@@ -236,7 +262,11 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
       strokeRects: snap.strokeRects,
       iconRect: badge,
       strokesTagged: tagged.tagged,
-      mark: found ? storedMark(found) : null,
+      mark: caret
+        ? {kind: 'caret', caretRect: {...caret.stroke.stats.rect}, tip: {...caret.shape.tip}, direction: caret.shape.direction}
+        : found
+          ? storedMark(found)
+          : null,
       hasPicture,
       recognition: WAITING_RECOGNITION,
       correctedText: null,
@@ -256,8 +286,8 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
         number,
         strokes: snap.strokes.length,
         strokeNums: [Math.min(...snap.strokeNums), Math.max(...snap.strokeNums)],
-        paired: !!found,
-        markKind: found ? (found.loop ? 'loop' : 'verticals') : null,
+        paired: !!found || !!caret,
+        markKind: caret ? `caret-${caret.shape.direction}` : found ? (found.loop ? 'loop' : 'verticals') : null,
         lookBack,
         strokesTagged: tagged.tagged,
         tagError: tagged.error,
@@ -274,8 +304,8 @@ export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcom
         totalMs: Date.now() - start,
       }),
     );
-    if (tagKind === 'replacement' && !found) {
-      return {kind: 'noMark', number};
+    if ((tagKind === 'replacement' && !found) || (tagKind === 'insertion' && !caret)) {
+      return {kind: 'noMark', tagKind, number};
     }
     return {kind: 'tagged', tagKind, number};
   } catch (error) {

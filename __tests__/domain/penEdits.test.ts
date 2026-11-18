@@ -11,7 +11,6 @@ import {
   type PenEditEntry,
 } from '../../src/domain/penEditModel';
 import {findReplaceMarkInWindow, lookBackNumbers, strokeStatsFromRect, type WindowStroke} from '../../src/domain/penEditPairing';
-import {overlapWithBelow, placeInsertion} from '../../src/domain/penEditInsertion';
 import {
   badgeNumberRect,
   boundsOfPoints,
@@ -30,7 +29,7 @@ import {
 import {matchByRects, rectShift, rectsMatch} from '../../src/domain/penEditMatching';
 import {normalizeRecognizedText} from '../../src/domain/penEditText';
 import {isNormalTextElement} from '../../src/domain/textboxEditPlan';
-import type {PageElementData, Rect, TextElementData} from '../../src/domain/textboxModel';
+import type {PageElementData, Rect} from '../../src/domain/textboxModel';
 
 const ID = 'pe-20261118-145501-042';
 
@@ -285,54 +284,6 @@ describe('normalizeRecognizedText', () => {
 
   it('handles empty input', () => {
     expect(normalizeRecognizedText(' \n ')).toBe('');
-  });
-});
-
-describe('placeInsertion', () => {
-  const box = (uuid: string, rect: Rect): TextElementData => ({
-    uuid,
-    type: 500,
-    layerNum: 0,
-    numInPage: 1,
-    textBox: {
-      fontSize: 36,
-      fontPath: null,
-      textContentFull: uuid,
-      textRect: rect,
-      textAlign: 0,
-      textBold: 0,
-      textItalics: 0,
-      textFrameWidthType: 0,
-      textFrameStyle: 0,
-      textEditable: 0,
-    },
-    title: null,
-    link: null,
-    picture: null,
-    geometry: null,
-  });
-  const first = box('first', {left: 100, top: 100, right: 1300, bottom: 400});
-  const second = box('second', {left: 100, top: 600, right: 1300, bottom: 900});
-
-  it('goes between two paragraphs with the style of the one above', () => {
-    const placement = placeInsertion({left: 150, top: 430, right: 800, bottom: 560}, [first, second]);
-    expect(placement?.above?.uuid).toBe('first');
-    expect(placement?.below?.uuid).toBe('second');
-    expect(placement).toMatchObject({left: 100, top: 430, width: 1200});
-  });
-
-  it('takes the style from below when nothing is above', () => {
-    expect(placeInsertion({left: 150, top: 20, right: 800, bottom: 80}, [first, second])?.styleSource.uuid).toBe('first');
-  });
-
-  it('needs a textbox in the same column', () => {
-    expect(placeInsertion({left: 1350, top: 430, right: 1400, bottom: 560}, [first, second])).toBeNull();
-  });
-
-  it('reports the overlap with the paragraph below', () => {
-    expect(overlapWithBelow(430, 120, second)).toBe(0);
-    expect(overlapWithBelow(430, 210, second)).toBe(40);
-    expect(overlapWithBelow(430, 210, null)).toBe(0);
   });
 });
 

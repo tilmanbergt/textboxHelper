@@ -8,11 +8,11 @@ import {
   type PenEditReview,
   type PenEditStrokeData,
 } from '../domain/penEditModel';
-import {placeInsertion} from '../domain/penEditInsertion';
+import {locateCaret, type CaretInsertMode, type CaretTextbox} from '../domain/penEditCaret';
 import {boundsOfPoints, isPenEditDecoration, parsePenEditUserData} from '../domain/penEditTags';
 import {normalizeRecognizedText} from '../domain/penEditText';
-import {sortTextElements} from '../domain/textboxEditPlan';
-import type {Rect, TextElementData} from '../domain/textboxModel';
+import type {TextboxMeasurementCalibration} from '../domain/textboxLayout';
+import {DEFAULT_FONT_SIZE, type Rect, type TextElementData} from '../domain/textboxModel';
 import {
   changePenEditIndex,
   penEditPictureUri,
@@ -20,6 +20,7 @@ import {
   readPenEditStrokes,
 } from '../storage/penEditStore';
 import {recognizeStrokes} from '../supernote/strokeRecognition';
+import {measureDetailedTextLayout} from '../supernote/textboxMetrics';
 
 /**
  * The pen edits' side of the edit-marker review (technical-design-pen-edits.md §3.6–§3.9):
@@ -35,6 +36,8 @@ export type PenEditContext = {
   strikeOwner: (element: Element) => PenEditEntry | undefined;
   /** Each entry's snippet on the page now (its strokes' bounds, or where it was tagged, shifted). */
   snippetRects: Map<string, Rect>;
+  /** Each insertion's caret as it is on the page now: its tip moved with the caret. */
+  carets: Map<string, {tip: {x: number; y: number}; direction: 'down' | 'up'}>;
   states: Record<string, PenTextState>;
   views: PenEditView[];
   warning: string | null;
@@ -45,6 +48,7 @@ export const EMPTY_PEN_EDIT_CONTEXT: PenEditContext = {
   isExcluded: element => isPenEditDecoration(element),
   strikeOwner: () => undefined,
   snippetRects: new Map(),
+  carets: new Map(),
   states: {},
   views: [],
   warning: null,
@@ -130,7 +134,7 @@ export function resolvePenEdit(entry: PenEditEntry, elements: Element[]): Resolv
       : matchByRects(entry.strokeRects, untagged, shift).map(item => item.element);
   let strike: Element | null = null;
   if (entry.mark) {
-    const strikeRect = entry.mark.strikeRect;
+    const strikeRect = entry.mark.kind === 'replace' ? entry.mark.strikeRect : entry.mark.caretRect;
     const candidates =
       markElements.length > 0
         ? markElements.map(element => ({element, rect: elementRect(element)}))
@@ -213,22 +217,30 @@ export async function loadPenEditContext(
   const excludedRects: Rect[] = [];
   const snippetRects = new Map<string, Rect>();
   const strikeRects = new Map<string, Rect>();
+  const carets: PenEditContext['carets'] = new Map();
   for (const entry of onPage) {
     const resolved = resolvePenEdit(entry, pageElements);
     const rects = resolved.strokes.map(elementRect).filter((rect): rect is Rect => rect !== null);
     excludedRects.push(...rects);
     snippetRects.set(entry.id, unionRects(rects) ?? shiftRect(entry.rect, resolved.shift.dx, resolved.shift.dy));
-    const strikeRect = resolved.strike ? elementRect(resolved.strike) : null;
-    if (entry.mark && strikeRect) {
-      strikeRects.set(entry.id, strikeRect);
+    const markRect = resolved.strike ? elementRect(resolved.strike) : null;
+    if (entry.mark?.kind === 'replace' && markRect) {
+      strikeRects.set(entry.id, markRect);
+    }
+    if (entry.mark?.kind === 'caret' && markRect) {
+      // A caret is never a delete marker; its tip moves with it.
+      excludedRects.push(markRect);
+      const {dx, dy} = rectShift(entry.mark.caretRect, markRect);
+      carets.set(entry.id, {tip: {x: entry.mark.tip.x + dx, y: entry.mark.tip.y + dy}, direction: entry.mark.direction});
     }
   }
+  const caretIds = new Set(onPage.filter(entry => entry.mark?.kind === 'caret').map(entry => entry.id));
   const byId = new Map(onPage.map(entry => [entry.id, entry]));
 
   const isExcluded = (element: Element): boolean => {
     const tag = parsePenEditUserData(element.userData);
     if (tag) {
-      return tag.role !== 'mark';
+      return tag.role !== 'mark' || caretIds.has(tag.id);
     }
     const rect = elementRect(element);
     return !!rect && excludedRects.some(other => rectsMatch(rect, other));
@@ -282,40 +294,115 @@ export async function loadPenEditContext(
       pictureUri: entry.hasPicture ? await penEditPictureUri(entry.id) : null,
     });
   }
-  return {entries, isExcluded, strikeOwner, snippetRects, states, views, warning};
+  return {entries, isExcluded, strikeOwner, snippetRects, carets, states, views, warning};
 }
 
-/** Where each insertion goes; one without a textbox in its column comes back as unplaced. */
-export function placeInsertions(
+/** An insertion whose caret points into a paragraph: the text goes in there. */
+export type CaretInline = {entry: PenEditEntry; textbox: TextElementData; offset: number; mode: CaretInsertMode};
+
+/**
+ * Where each insertion goes (technical-design-pen-edits.md As built, caret): into the paragraph
+ * its caret points to, or as a new paragraph in the space between two. Only the textboxes in the
+ * caret's column near its tip are measured. An insertion without a usable caret comes back with
+ * the reason.
+ */
+export async function placeCaretInsertions<T extends TextElementData>(
   entries: PenEditEntry[],
-  snippetRects: Map<string, Rect>,
-  pageTextboxes: TextElementData[],
-): {drafts: InsertionDraft[]; unplaced: PenEditEntry[]} {
-  const ordered = sortTextElements(pageTextboxes);
-  const drafts: InsertionDraft[] = [];
-  const unplaced: PenEditEntry[] = [];
+  carets: PenEditContext['carets'],
+  pageTextboxes: T[],
+  calibration: TextboxMeasurementCalibration,
+): Promise<{inline: Array<CaretInline & {textbox: T}>; gaps: InsertionDraft[]; ignored: Array<{entry: PenEditEntry; reason: string}>}> {
+  const inline: Array<CaretInline & {textbox: T}> = [];
+  const gaps: InsertionDraft[] = [];
+  const ignored: Array<{entry: PenEditEntry; reason: string}> = [];
+  const measured = new Map<string, CaretTextbox>();
   for (const entry of entries) {
     if (entry.kind !== 'insertion') {
       continue;
     }
-    const placement = placeInsertion(snippetRects.get(entry.id) ?? entry.rect, ordered);
-    if (!placement) {
-      unplaced.push(entry);
+    const caret = carets.get(entry.id);
+    if (!caret) {
+      ignored.push({
+        entry,
+        reason:
+          entry.mark?.kind === 'caret'
+            ? 'Its caret is no longer on the page.'
+            : 'No caret was found just before it when it was tagged: draw a V (or ∧) where it goes and tag it again.',
+      });
       continue;
     }
-    drafts.push({
+    const near = pageTextboxes.filter(textbox => {
+      const rect = textbox.textBox.textRect;
+      return caret.tip.x >= rect.left - 40 && caret.tip.x <= rect.right + 40 && caret.tip.y >= rect.top - 400 && caret.tip.y <= rect.bottom + 400;
+    });
+    const boxes: CaretTextbox[] = [];
+    for (const textbox of near) {
+      const known = measured.get(textbox.uuid) ?? (await measureCaretTextbox(textbox, calibration));
+      if (known) {
+        measured.set(textbox.uuid, known);
+        boxes.push(known);
+      }
+    }
+    const target = locateCaret(caret.tip, caret.direction, boxes);
+    if (!target) {
+      ignored.push({entry, reason: "Its caret doesn't point at a line of text or the space between two paragraphs."});
+      continue;
+    }
+    if (target.kind === 'text') {
+      const textbox = near.find(item => item.uuid === target.uuid);
+      if (textbox) {
+        inline.push({entry, textbox, offset: target.offset, mode: target.mode});
+      }
+      continue;
+    }
+    const above = near.find(item => item.uuid === target.above) ?? null;
+    const below = near.find(item => item.uuid === target.below) ?? null;
+    const styleSource = above ?? below;
+    if (!styleSource) {
+      continue;
+    }
+    const rect = styleSource.textBox.textRect;
+    gaps.push({
       penEditId: entry.id,
       number: entry.number,
-      left: placement.left,
-      top: placement.top,
-      width: placement.width,
-      style: {...placement.styleSource.textBox},
-      aboveNumInPage: placement.above?.numInPage ?? null,
-      belowNumInPage: placement.below?.numInPage ?? null,
-      belowTop: placement.below?.textBox.textRect.top ?? null,
+      left: rect.left,
+      width: rect.right - rect.left,
+      style: {...styleSource.textBox},
+      aboveNumInPage: above?.numInPage ?? null,
+      belowNumInPage: below?.numInPage ?? null,
+      aboveRect: above ? {...above.textBox.textRect} : null,
+      belowRect: below ? {...below.textBox.textRect} : null,
     });
   }
-  return {drafts, unplaced};
+  return {inline, gaps, ignored};
+}
+
+async function measureCaretTextbox(
+  textbox: TextElementData,
+  calibration: TextboxMeasurementCalibration,
+): Promise<CaretTextbox | null> {
+  const rect = textbox.textBox.textRect;
+  const text = textbox.textBox.textContentFull || '';
+  const measurement = await measureDetailedTextLayout(
+    text,
+    rect.right - rect.left,
+    textbox.textBox.fontSize || DEFAULT_FONT_SIZE,
+    textbox.textBox.fontPath || undefined,
+    calibration,
+  );
+  if (!measurement) {
+    return null;
+  }
+  const x = rect.left + calibration.offsetX;
+  const y = rect.top + calibration.offsetY;
+  return {
+    uuid: textbox.uuid,
+    numInPage: textbox.numInPage,
+    rect: {...rect},
+    text,
+    lines: measurement.lines.map(line => ({index: line.index, start: line.start, end: line.end, top: y + line.top, bottom: y + line.bottom})),
+    words: measurement.words.map(word => ({start: word.start, end: word.end, lineIndex: word.lineIndex, left: x + word.left, right: x + word.right})),
+  };
 }
 
 /** Recognizes one pen edit from its stored strokes and stores the result. Never throws. */
@@ -404,7 +491,9 @@ export function penEditElementNums(ids: string[], entries: PenEditEntry[], pageE
   const nums: number[] = [];
   for (const entry of entries.filter(item => ids.includes(item.id))) {
     const resolved = resolvePenEdit(entry, pageElements);
-    for (const element of [...resolved.decorations, ...resolved.strokes]) {
+    // The caret goes with its insertion; a replace mark is removed as a marker.
+    const marks = entry.mark?.kind === 'caret' ? resolved.markElements : [];
+    for (const element of [...resolved.decorations, ...resolved.strokes, ...marks]) {
       // Kept GTD's rule: remove by number only when the number is unique on the page.
       if (counts.get(element.numInPage) === 1) {
         nums.push(element.numInPage);
