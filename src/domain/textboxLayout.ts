@@ -90,6 +90,16 @@ const BOX_HORIZONTAL_PADDING_FACTOR = 0.62;
 const BOX_VERTICAL_PADDING_FACTOR = 0.72;
 const LINE_HEIGHT_FACTOR = 1.35;
 
+/**
+ * Where a textbox's text starts on the page. NOTE draws text with an inner margin on both sides;
+ * the width adjustment takes off both, so its half is the left margin (device: words were drawn
+ * about 15–18 px right of where they were measured while the X offset was 0). The X offset adds
+ * to it.
+ */
+export function textLeftX(textRectLeft: number, calibration: TextboxMeasurementCalibration): number {
+  return textRectLeft + calibration.offsetX + Math.max(0, calibration.widthAdjustment) / 2;
+}
+
 export function getRequestedWidth(
   width: number,
   calibration: TextboxMeasurementCalibration,

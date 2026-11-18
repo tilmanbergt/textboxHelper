@@ -12,7 +12,7 @@ import type {
   TextMutationRange,
   WordCandidate,
 } from './markerTypes';
-import type {NativeDetailedLine} from './textboxLayout';
+import {textLeftX, type NativeDetailedLine} from './textboxLayout';
 import {
   ELEMENT_TYPE_GEO,
   ELEMENT_TYPE_STROKE,
@@ -199,8 +199,8 @@ export function buildLineLogSummary(
     index: line.index,
     start: line.start,
     end: line.end,
-    left: roundNumber(textRect.left + calibration.offsetX + line.left),
-    right: roundNumber(textRect.left + calibration.offsetX + line.right),
+    left: roundNumber(textLeftX(textRect.left, calibration) + line.left),
+    right: roundNumber(textLeftX(textRect.left, calibration) + line.right),
     top: roundNumber(textRect.top + calibration.offsetY + line.top),
     bottom: roundNumber(textRect.top + calibration.offsetY + line.bottom),
     width: roundNumber(line.width),

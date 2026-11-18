@@ -11,7 +11,7 @@ import {
 import {locateCaret, type CaretDirection, type CaretInsertMode, type CaretTextbox} from '../domain/penEditCaret';
 import {boundsOfPoints, isPenEditDecoration, parsePenEditUserData} from '../domain/penEditTags';
 import {normalizeRecognizedText} from '../domain/penEditText';
-import type {TextboxMeasurementCalibration} from '../domain/textboxLayout';
+import {textLeftX, type TextboxMeasurementCalibration} from '../domain/textboxLayout';
 import {DEFAULT_FONT_SIZE, type Rect, type TextElementData} from '../domain/textboxModel';
 import {
   changePenEditIndex,
@@ -402,7 +402,7 @@ async function measureCaretTextbox(
   if (!measurement) {
     return null;
   }
-  const x = rect.left + calibration.offsetX;
+  const x = textLeftX(rect.left, calibration);
   const y = rect.top + calibration.offsetY;
   return {
     uuid: textbox.uuid,

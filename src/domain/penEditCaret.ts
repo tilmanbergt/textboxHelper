@@ -163,11 +163,11 @@ export type CaretTarget =
   | {kind: 'gap'; above: string | null; below: string | null};
 
 /**
- * How close (in characters) to a word's edge the tip snaps to that edge. On the device a tip
- * aimed at a word's start landed about one character in, so text goes inside a word only when
- * the tip is clearly inside it.
+ * How close (in characters) to a word's edge the tip snaps to that edge. (A device test once
+ * looked like it needed more: the words were measured about 15 px left of where NOTE draws them,
+ * see `textLeftX`.)
  */
-export const WORD_EDGE_SNAP_CHARS = 1.25;
+export const WORD_EDGE_SNAP_CHARS = 0.6;
 /** Horizontal slack around a textbox for a caret drawn just left or right of the text. */
 const COLUMN_SLACK_PX = 24;
 /** The same for a < or > in the margin. */

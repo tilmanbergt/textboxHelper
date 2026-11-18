@@ -292,6 +292,11 @@ the caret between paragraphs needs only reading order and could come first.
   after the other whose ends meet within 24 px are joined at that point and tested as one
   (`analyzeTwoStrokeCaret`); both are tagged `mark` and the caret rect is their union. A < or >
   may sit up to 100 px beside the text and a little above or below its line (0.6 line heights).
-- **Word-edge snap 1.25 characters** (device: with the line fix, both carets landed one character
-  into the word they were aimed at, "d|ullness", "s|ound"): a tip within 1.25 characters of a word
-  edge snaps to it; text goes inside a word only when the tip is clearly inside.
+- **Text margin, not snapping** (device: with the line fix both carets landed one character into
+  the word they were aimed at): a wider snap (1.25 characters) was tried first and taken back. The
+  diagnostics showed the real cause: NOTE draws a textbox's text about 15–18 px right of its rect
+  (page 27: rect left 112, "To" drawn from about 130; "One" measured 1077, drawn from about 1095),
+  while the measurement started at the rect's left edge (X offset 0). The width adjustment (30)
+  already took the margin off both sides; `textLeftX` now also starts the text at half of it.
+  Used everywhere words are placed: carets, delete-marker word picking, line bands. Snap is 0.6
+  characters again.

@@ -10,11 +10,15 @@ import {
   type CaretTextbox,
   type Point,
 } from '../../src/domain/penEditCaret';
+import {textLeftX} from '../../src/domain/textboxLayout';
 
 function leg(from: Point, to: Point, steps = 8): Point[] {
   const points: Point[] = [];
   for (let i = 0; i <= steps; i += 1) {
-    points.push({x: from.x + ((to.x - from.x) * i) / steps, y: from.y + ((to.y - from.y) * i) / steps});
+    points.push({
+      x: from.x + ((to.x - from.x) * i) / steps,
+      y: from.y + ((to.y - from.y) * i) / steps,
+    });
   }
   return points;
 }
@@ -29,22 +33,31 @@ function stroke(...corners: Point[]): Point[] {
 
 describe('analyzeCaret', () => {
   it('finds a V with its tip at the bottom', () => {
-    const shape = analyzeCaret(stroke({x: 100, y: 100}, {x: 120, y: 140}, {x: 140, y: 100}));
+    const shape = analyzeCaret(
+      stroke({x: 100, y: 100}, {x: 120, y: 140}, {x: 140, y: 100}),
+    );
     expect(shape?.direction).toBe('down');
     expect(shape?.tip).toEqual({x: 120, y: 140});
   });
 
   it('finds a ∧ with its tip at the top', () => {
-    const shape = analyzeCaret(stroke({x: 100, y: 140}, {x: 118, y: 100}, {x: 140, y: 140}));
+    const shape = analyzeCaret(
+      stroke({x: 100, y: 140}, {x: 118, y: 100}, {x: 140, y: 140}),
+    );
     expect(shape?.direction).toBe('up');
     expect(shape?.tip.y).toBe(100);
   });
 
   it('finds a < and a > drawn beside the text (device case: < after a paragraph end)', () => {
-    const less = analyzeCaret(stroke({x: 1220, y: 633}, {x: 1132, y: 665}, {x: 1229, y: 698}));
+    const less = analyzeCaret(
+      stroke({x: 1220, y: 633}, {x: 1132, y: 665}, {x: 1229, y: 698}),
+    );
     expect(less?.direction).toBe('left');
     expect(less?.tip).toEqual({x: 1132, y: 665});
-    expect(analyzeCaret(stroke({x: 100, y: 100}, {x: 160, y: 125}, {x: 100, y: 150}))?.direction).toBe('right');
+    expect(
+      analyzeCaret(stroke({x: 100, y: 100}, {x: 160, y: 125}, {x: 100, y: 150}))
+        ?.direction,
+    ).toBe('right');
   });
 
   it('joins a caret drawn as two strokes (device case: < from two lines)', () => {
@@ -54,13 +67,19 @@ describe('analyzeCaret', () => {
     expect(shape?.direction).toBe('left');
     expect(shape?.tip.x).toBeLessThanOrEqual(1099);
     // Either drawing order and direction of the legs.
-    expect(analyzeTwoStrokeCaret([...lower].reverse(), upper)?.direction).toBe('left');
+    expect(analyzeTwoStrokeCaret([...lower].reverse(), upper)?.direction).toBe(
+      'left',
+    );
     // Two lines whose ends don't meet are no caret.
-    expect(analyzeTwoStrokeCaret(upper, leg({x: 1150, y: 1450}, {x: 1250, y: 1480}))).toBeNull();
+    expect(
+      analyzeTwoStrokeCaret(upper, leg({x: 1150, y: 1450}, {x: 1250, y: 1480})),
+    ).toBeNull();
   });
 
   it('puts the number between the ends of the legs', () => {
-    const shape = analyzeCaret(stroke({x: 100, y: 100}, {x: 120, y: 160}, {x: 144, y: 104}));
+    const shape = analyzeCaret(
+      stroke({x: 100, y: 100}, {x: 120, y: 160}, {x: 144, y: 104}),
+    );
     expect(shape).not.toBeNull();
     expect(caretNumberCenter(shape!)).toEqual({x: 122, y: 102});
   });
@@ -70,11 +89,27 @@ describe('analyzeCaret', () => {
     expect(analyzeCaret(stroke({x: 100, y: 100}, {x: 100, y: 150}))).toBeNull();
     const loop: Point[] = [];
     for (let i = 0; i <= 24; i += 1) {
-      loop.push({x: 120 + 20 * Math.cos((i / 24) * 2 * Math.PI), y: 120 + 20 * Math.sin((i / 24) * 2 * Math.PI)});
+      loop.push({
+        x: 120 + 20 * Math.cos((i / 24) * 2 * Math.PI),
+        y: 120 + 20 * Math.sin((i / 24) * 2 * Math.PI),
+      });
     }
     expect(analyzeCaret(loop)).toBeNull();
-    expect(analyzeCaret(stroke({x: 100, y: 100}, {x: 110, y: 140}, {x: 130, y: 100}, {x: 140, y: 140}))).toBeNull();
-    expect(analyzeCaret(stroke({x: 100, y: 100}, {x: 200, y: 300}, {x: 300, y: 100}))).toBeNull();
+    expect(
+      analyzeCaret(
+        stroke(
+          {x: 100, y: 100},
+          {x: 110, y: 140},
+          {x: 130, y: 100},
+          {x: 140, y: 140},
+        ),
+      ),
+    ).toBeNull();
+    expect(
+      analyzeCaret(
+        stroke({x: 100, y: 100}, {x: 200, y: 300}, {x: 300, y: 100}),
+      ),
+    ).toBeNull();
   });
 });
 
@@ -98,23 +133,48 @@ const box: CaretTextbox = {
     {start: 24, end: 28, lineIndex: 2, left: 200, right: 280},
   ],
 };
-const nextBox: CaretTextbox = {...box, uuid: 'b', numInPage: 5, rect: {left: 100, top: 320, right: 700, bottom: 368}, text: 'Last', lines: [{index: 0, start: 0, end: 4, top: 320, bottom: 368}], words: [{start: 0, end: 4, lineIndex: 0, left: 100, right: 180}]};
+const nextBox: CaretTextbox = {
+  ...box,
+  uuid: 'b',
+  numInPage: 5,
+  rect: {left: 100, top: 320, right: 700, bottom: 368},
+  text: 'Last',
+  lines: [{index: 0, start: 0, end: 4, top: 320, bottom: 368}],
+  words: [{start: 0, end: 4, lineIndex: 0, left: 100, right: 180}],
+};
 
 describe('locateCaret', () => {
   it('places a V between two words on the line it points to', () => {
-    expect(locateCaret({x: 210, y: 112}, 'down', [box, nextBox])).toEqual({kind: 'text', uuid: 'a', numInPage: 4, offset: 5, mode: 'betweenWords'});
+    expect(locateCaret({x: 210, y: 112}, 'down', [box, nextBox])).toEqual({
+      kind: 'text',
+      uuid: 'a',
+      numInPage: 4,
+      offset: 5,
+      mode: 'betweenWords',
+    });
   });
 
   it('places a ∧ drawn on the line inside a word', () => {
     // "brave": 5 chars over 100 px; x = 260 is 2 chars in.
-    expect(locateCaret({x: 260, y: 104}, 'up', [box, nextBox])).toEqual({kind: 'text', uuid: 'a', numInPage: 4, offset: 8, mode: 'inWord'});
+    expect(locateCaret({x: 260, y: 104}, 'up', [box, nextBox])).toEqual({
+      kind: 'text',
+      uuid: 'a',
+      numInPage: 4,
+      offset: 8,
+      mode: 'inWord',
+    });
   });
 
   it('keeps a tip inside a line on that line, whatever the direction', () => {
     // Device case: a V drawn on the line, its tip near the baseline of line 0.
-    expect(locateCaret({x: 210, y: 145}, 'down', [box])).toMatchObject({offset: 5});
+    expect(locateCaret({x: 210, y: 145}, 'down', [box])).toMatchObject({
+      offset: 5,
+    });
     // Device case: a ∧ drawn on line 2, its tip near the top of the letters.
-    expect(locateCaret({x: 190, y: 200}, 'up', [box])).toMatchObject({offset: 23, mode: 'betweenWords'});
+    expect(locateCaret({x: 190, y: 200}, 'up', [box])).toMatchObject({
+      offset: 23,
+      mode: 'betweenWords',
+    });
   });
 
   it('between two lines of a textbox, as near to both: a V takes the line below, a ∧ the line above', () => {
@@ -126,32 +186,81 @@ describe('locateCaret', () => {
         {index: 2, start: 19, end: 28, top: 156, bottom: 196},
       ],
     };
-    expect(locateCaret({x: 190, y: 148}, 'down', [spaced])).toMatchObject({offset: 23});
-    expect(locateCaret({x: 210, y: 148}, 'up', [spaced])).toMatchObject({offset: 5});
+    expect(locateCaret({x: 190, y: 148}, 'down', [spaced])).toMatchObject({
+      offset: 23,
+    });
+    expect(locateCaret({x: 210, y: 148}, 'up', [spaced])).toMatchObject({
+      offset: 5,
+    });
   });
 
   it('snaps a tip close to a word edge to that edge', () => {
-    expect(locateCaret({x: 225, y: 112}, 'down', [box])).toMatchObject({offset: 6, mode: 'betweenWords'});
-    expect(locateCaret({x: 316, y: 112}, 'down', [box])).toMatchObject({offset: 11, mode: 'betweenWords'});
-    // Device case: a tip about one character into the word still means its start.
-    expect(locateCaret({x: 239, y: 112}, 'down', [box])).toMatchObject({offset: 6, mode: 'betweenWords'});
+    expect(locateCaret({x: 225, y: 112}, 'down', [box])).toMatchObject({
+      offset: 6,
+      mode: 'betweenWords',
+    });
+    expect(locateCaret({x: 316, y: 112}, 'down', [box])).toMatchObject({
+      offset: 11,
+      mode: 'betweenWords',
+    });
   });
 
   it('puts the text after the last word when the tip is past the line end', () => {
-    expect(locateCaret({x: 520, y: 112}, 'down', [box])).toMatchObject({offset: 17, mode: 'betweenWords'});
+    expect(locateCaret({x: 520, y: 112}, 'down', [box])).toMatchObject({
+      offset: 17,
+      mode: 'betweenWords',
+    });
   });
 
   it('takes a sideways caret just below the last line to that line, at its end', () => {
     // Device case: a < right of "permission." a few pixels below the paragraph.
-    expect(locateCaret({x: 760, y: 252}, 'left', [box, nextBox])).toMatchObject({uuid: 'a', offset: 28, mode: 'betweenWords'});
+    expect(locateCaret({x: 760, y: 252}, 'left', [box, nextBox])).toMatchObject(
+      {uuid: 'a', offset: 28, mode: 'betweenWords'},
+    );
+  });
+
+  it('measures words from where NOTE draws the text (device case: "One" on page 27)', () => {
+    const calibration = {offsetX: 0, offsetY: 0, widthAdjustment: 30};
+    const left = textLeftX(112, calibration);
+    expect(left).toBe(127);
+    // Measured relative to the text start: "compassion." 753–956, "One" 965–1032. On screen "One"
+    // starts at about 1095; a tip just before it means its start.
+    const page27: CaretTextbox = {
+      uuid: 'p',
+      numInPage: 3,
+      rect: {left: 112, top: 1337, right: 1216, bottom: 1529},
+      text: 'compassion. One does',
+      lines: [{index: 0, start: 0, end: 16, top: 1337, bottom: 1385}],
+      words: [
+        {start: 0, end: 11, lineIndex: 0, left: left + 753, right: left + 956},
+        {
+          start: 12,
+          end: 15,
+          lineIndex: 0,
+          left: left + 965,
+          right: left + 1032,
+        },
+      ],
+    };
+    expect(locateCaret({x: 1094, y: 1370}, 'down', [page27])).toMatchObject({
+      offset: 12,
+      mode: 'betweenWords',
+    });
   });
 
   it('finds a blank line between paragraphs of one textbox', () => {
-    expect(locateCaret({x: 300, y: 160}, 'down', [box])).toMatchObject({offset: 18, mode: 'blankLine'});
+    expect(locateCaret({x: 300, y: 160}, 'down', [box])).toMatchObject({
+      offset: 18,
+      mode: 'blankLine',
+    });
   });
 
   it('finds the space between two textboxes', () => {
-    expect(locateCaret({x: 300, y: 290}, 'down', [box, nextBox])).toEqual({kind: 'gap', above: 'a', below: 'b'});
+    expect(locateCaret({x: 300, y: 290}, 'down', [box, nextBox])).toEqual({
+      kind: 'gap',
+      above: 'a',
+      below: 'b',
+    });
   });
 
   it('finds nothing away from the text', () => {
@@ -162,10 +271,14 @@ describe('locateCaret', () => {
 describe('caretInsertionText', () => {
   const original = 'Hello brave world';
   it('adds a space before the word at a word end', () => {
-    expect(caretInsertionText(original, 5, 'very', 'betweenWords')).toBe(' very');
+    expect(caretInsertionText(original, 5, 'very', 'betweenWords')).toBe(
+      ' very',
+    );
   });
   it('adds a space after the word at a word start', () => {
-    expect(caretInsertionText(original, 6, 'very', 'betweenWords')).toBe('very ');
+    expect(caretInsertionText(original, 6, 'very', 'betweenWords')).toBe(
+      'very ',
+    );
   });
   it('keeps punctuation tight', () => {
     expect(caretInsertionText(original, 17, '.', 'betweenWords')).toBe('.');
@@ -175,7 +288,9 @@ describe('caretInsertionText', () => {
     expect(caretInsertionText(original, 8, ' ss ', 'inWord')).toBe('ss');
   });
   it('makes a paragraph on a blank line', () => {
-    expect(caretInsertionText('A\n\nB', 2, 'Middle', 'blankLine')).toBe('\nMiddle\n');
+    expect(caretInsertionText('A\n\nB', 2, 'Middle', 'blankLine')).toBe(
+      '\nMiddle\n',
+    );
   });
 });
 
@@ -186,19 +301,29 @@ describe('planReflow and gapParagraphPlacement', () => {
       {key: 'b', rect: {left: 100, top: 240, right: 700, bottom: 300}},
       {key: 'c', rect: {left: 800, top: 240, right: 1300, bottom: 300}},
     ];
-    const shifts = planReflow(items, [{y: 200, left: 100, right: 700, delta: 48, sourceKeys: ['a']}]);
+    const shifts = planReflow(items, [
+      {y: 200, left: 100, right: 700, delta: 48, sourceKeys: ['a']},
+    ]);
     expect(shifts.get('a')).toBeUndefined();
     expect(shifts.get('b')).toBe(48);
     expect(shifts.get('c')).toBeUndefined();
   });
 
   it('keeps the space between paragraphs around a new one', () => {
-    const placement = gapParagraphPlacement({left: 0, top: 100, right: 600, bottom: 200}, {left: 0, top: 230, right: 600, bottom: 300}, 48);
+    const placement = gapParagraphPlacement(
+      {left: 0, top: 100, right: 600, bottom: 200},
+      {left: 0, top: 230, right: 600, bottom: 300},
+      48,
+    );
     expect(placement).toEqual({top: 230, spacing: 30, pushBelow: 78});
   });
 
   it('does not push when there is room', () => {
-    const placement = gapParagraphPlacement({left: 0, top: 100, right: 600, bottom: 200}, {left: 0, top: 500, right: 600, bottom: 560}, 48);
+    const placement = gapParagraphPlacement(
+      {left: 0, top: 100, right: 600, bottom: 200},
+      {left: 0, top: 500, right: 600, bottom: 560},
+      48,
+    );
     expect(placement.top).toBe(260);
     expect(placement.pushBelow).toBe(0);
   });
@@ -210,10 +335,28 @@ describe('planReflow and gapParagraphPlacement', () => {
       {key: 'n1', group: 'g', left: 0, width: 600, height: 48, above, below},
       {key: 'n2', group: 'g', left: 0, width: 600, height: 48, above, below},
     ]);
-    expect(rects.get('n1')).toEqual({left: 0, top: 230, right: 600, bottom: 278});
-    expect(rects.get('n2')).toEqual({left: 0, top: 308, right: 600, bottom: 356});
-    expect(events).toEqual([{y: 230, left: 0, right: 600, delta: 156, sourceKeys: ['n1', 'n2']}]);
-    const shifts = planReflow([{key: 'b', rect: below}, {key: 'n1', rect: rects.get('n1')!}], events);
+    expect(rects.get('n1')).toEqual({
+      left: 0,
+      top: 230,
+      right: 600,
+      bottom: 278,
+    });
+    expect(rects.get('n2')).toEqual({
+      left: 0,
+      top: 308,
+      right: 600,
+      bottom: 356,
+    });
+    expect(events).toEqual([
+      {y: 230, left: 0, right: 600, delta: 156, sourceKeys: ['n1', 'n2']},
+    ]);
+    const shifts = planReflow(
+      [
+        {key: 'b', rect: below},
+        {key: 'n1', rect: rects.get('n1')!},
+      ],
+      events,
+    );
     expect(shifts.get('b')).toBe(156);
     expect(shifts.get('n1')).toBeUndefined();
   });

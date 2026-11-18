@@ -88,3 +88,6 @@ Library: `sn-plugin-lib` 0.2.3.
   `modifyPageElements` sent within that time crashed NOTE natively twice (`stoi: no conversion`
   on its main thread, a SIGSEGV in its binder thread); NOTE closes and the DOC app comes to the
   front. The pen-edit tag waits until 0.9 s after closing the lasso (`LASSO_SETTLE_MS`).
+- **Text is drawn inside a margin of the textbox.** NOTE starts a textbox's text about 15–18 px
+  right of `textRect.left` (36 px font, A5 X2), and the line width is about 30 px less than the
+  rect. Measurements place words from `textLeftX` = left + X offset + width adjustment / 2.

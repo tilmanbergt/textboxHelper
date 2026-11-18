@@ -35,6 +35,7 @@ import type {
   WordCandidate,
 } from '../domain/markerTypes';
 import {DEFAULT_FONT_SIZE, type Rect} from '../domain/textboxModel';
+import {textLeftX} from '../domain/textboxLayout';
 import {loadMarkerStrokeStats} from '../supernote/markerStrokeRead';
 import {measureDetailedTextLayout} from '../supernote/textboxMetrics';
 import {logEditMarker} from '../utils/editMarkerLog';
@@ -210,8 +211,8 @@ export async function analyzeDeleteMarker(
   }
 
   const lineRect: Rect = {
-    left: textboxRect.left + currentEditMarkerCalibration.offsetX + measurementLine.left,
-    right: textboxRect.left + currentEditMarkerCalibration.offsetX + measurementLine.right,
+    left: textLeftX(textboxRect.left, currentEditMarkerCalibration) + measurementLine.left,
+    right: textLeftX(textboxRect.left, currentEditMarkerCalibration) + measurementLine.right,
     top: textboxRect.top + currentEditMarkerCalibration.offsetY + measurementLine.top,
     bottom: textboxRect.top + currentEditMarkerCalibration.offsetY + measurementLine.bottom,
   };
