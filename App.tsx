@@ -13,6 +13,7 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {DeviceEventEmitter} from 'react-native';
 import {PluginManager} from 'sn-plugin-lib';
 import {setEditMarkerCalibration} from './src/actions/editMarkers';
+import {getPenEditOutcome, setPenEditOutcome, subscribePenEditOutcome} from './src/actions/penEditTag';
 import {loadSettings} from './src/storage/settingsFile';
 import {ensurePermissions} from './src/supernote/permissions';
 import {PLUGIN_BUTTON_EVENT, checkPendingButton} from './src/supernote/pluginRouting';
@@ -34,6 +35,7 @@ import DirectActionScreen from './src/screens/direct/DirectActionScreen';
 import ExportScreen from './src/screens/export/ExportScreen';
 import ImportScreen from './src/screens/import/ImportScreen';
 import EditMarkerReviewScreen from './src/screens/markers/EditMarkerReviewScreen';
+import PenEditOutcomeScreen from './src/screens/penEdit/PenEditOutcomeScreen';
 import TextboxToolsScreen from './src/screens/tools/TextboxToolsScreen';
 import ScreenFrame from './src/ui/ScreenFrame';
 
@@ -54,7 +56,17 @@ function App(): React.JSX.Element | null {
   const [markerScope, setMarkerScope] = useState<EditMarkerPreviewScope>('lasso');
   const [directAction, setDirectAction] = useState<TextboxActionKind>('split');
 
+  // Set by a pen-edit tag that needs a word (index.js); shown before any other screen.
+  const [penEditOutcome, setPenEditOutcomeState] = useState(getPenEditOutcome());
+
   const closePluginView = useCallback(() => {
+    PluginManager.closePluginView();
+  }, []);
+
+  useEffect(() => subscribePenEditOutcome(() => setPenEditOutcomeState(getPenEditOutcome())), []);
+
+  const closePenEditOutcome = useCallback(() => {
+    setPenEditOutcome(null);
     PluginManager.closePluginView();
   }, []);
 
@@ -121,6 +133,10 @@ function App(): React.JSX.Element | null {
       subscription?.remove();
     };
   }, []);
+
+  if (penEditOutcome) {
+    return <PenEditOutcomeScreen outcome={penEditOutcome} onClose={closePenEditOutcome} />;
+  }
 
   switch (screen) {
     case 'routing':

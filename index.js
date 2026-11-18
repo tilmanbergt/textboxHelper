@@ -26,13 +26,38 @@ import {
   BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
   BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
   BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
+  BUTTON_ID_TOOLBAR_TAG_INSERTION,
+  BUTTON_ID_TOOLBAR_TAG_REPLACEMENT,
 } from './src/domain/buttonIds';
+import {outcomeNeedsScreen, setPenEditOutcome, tagPenEdit} from './src/actions/penEditTag';
 import {initPluginRouting} from './src/supernote/pluginRouting';
 
 AppRegistry.registerComponent(appName, () => App);
 
 PluginManager.init();
-initPluginRouting();
+
+// "Replacement" / "Insertion" (docs/dev/history/technical-design-pen-edits.md §3.4): one tap, no
+// plugin screen. Only a failure or a replacement without its mark opens App's small result card.
+function runPenEditTag(kind) {
+  tagPenEdit(kind)
+    .then(async outcome => {
+      if (!outcomeNeedsScreen(outcome)) {
+        return;
+      }
+      setPenEditOutcome(outcome);
+      try {
+        await PluginManager.showPluginView();
+      } catch (error) {
+        console.error('[PenEdit] showPluginView failed', String(error));
+      }
+    })
+    .catch(error => console.error('[PenEdit] tag threw', String(error)));
+}
+
+initPluginRouting({
+  [BUTTON_ID_TOOLBAR_TAG_REPLACEMENT]: () => runPenEditTag('replacement'),
+  [BUTTON_ID_TOOLBAR_TAG_INSERTION]: () => runPenEditTag('insertion'),
+});
 
 PluginManager.registerButton(2, ['NOTE'], {
   id: BUTTON_ID_TEXTBOX_TOOLS,
@@ -159,4 +184,30 @@ PluginManager.registerButton(2, ['NOTE'], {
   icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
   showType: 1,
   editDataTypes: [0, 3, 5],
+});
+
+PluginManager.registerButton(2, ['NOTE'], {
+  id: BUTTON_ID_TOOLBAR_TAG_REPLACEMENT,
+  name: JSON.stringify({
+    en: 'Replacement',
+    zh_CN: 'Replacement',
+    zh_TW: 'Replacement',
+    ja: 'Replacement',
+  }),
+  icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
+  showType: 0,
+  editDataTypes: [0],
+});
+
+PluginManager.registerButton(2, ['NOTE'], {
+  id: BUTTON_ID_TOOLBAR_TAG_INSERTION,
+  name: JSON.stringify({
+    en: 'Insertion',
+    zh_CN: 'Insertion',
+    zh_TW: 'Insertion',
+    ja: 'Insertion',
+  }),
+  icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
+  showType: 0,
+  editDataTypes: [0],
 });

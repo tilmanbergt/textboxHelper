@@ -4,6 +4,10 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ## [Unreleased]
 
+### Added
+
+- Two new lasso toolbar buttons, "Replacement" and "Insertion": lasso handwritten new text and tap one to tag it, without converting it to text first. The tap is quick and opens no screen: a small icon and a number appear at the text, and for a replacement the same number appears at the replace mark written just before it. Recognizing tagged text in the edit-marker review comes in a later step.
+
 ### Changed
 
 - The plugin is now called Textbox Tools everywhere (plugin list, screens, permission request). Its identity is unchanged: updates install over the previous version, and the folders in MyStyle keep their names.

@@ -28,6 +28,12 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 - Review all changes before applying them: removed words struck through, replacements in bold, one textbox at a time
 - Calibrate the text measurement and save diagnostics of a marker preview to the EXPORT folder (Details), for bug reports
 
+### Replacement and Insertion (in development)
+
+- Tag handwritten new text with the lasso buttons "Replacement" or "Insertion" instead of converting it to text first
+- A replacement is written right after its replace mark; a small number at both shows which belong together
+- The handwriting and a picture of it are kept in the plugin folder (`pen-edits/`) until the change is applied
+
 ### Apply All Edit Markers
 
 - Run marker recognition on the full current page from the NOTE toolbar
@@ -61,7 +67,8 @@ be wrong.
 ## Settings
 
 The plugin remembers the import settings, the export pages and rules, and the edit-marker
-calibration in `settings.json` in its own plugin folder.
+calibration in `settings.json` in its own plugin folder. Tagged replacements and insertions are
+kept in `pen-edits/` in the same folder.
 
 ## Installation
 

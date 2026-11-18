@@ -35,6 +35,7 @@ import type {
 } from '../domain/markerTypes';
 import {DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION} from '../domain/textboxLayout';
 import {DEFAULT_FONT_SIZE} from '../domain/textboxModel';
+import {parsePenEditUserData} from '../domain/penEditTags';
 import {isNormalTextElement, sortTextElements} from '../domain/textboxEditPlan';
 import {writeBackupFile} from '../storage/backupFile';
 import {writeJsonExportFile} from '../storage/exportFile';
@@ -202,6 +203,17 @@ async function buildEditMarkerPreview(
       elementTypes: countElementTypes(effectiveSelection),
       selectedMarkerCount: selectedMarkers.length,
       selectedTextboxCount: selectedTextboxes.length,
+      // Pen-edit icons and numbers on the page: whether userData survives moves (pen-edits §5).
+      penEditElements: pageElements
+        .map(element => ({element, tag: parsePenEditUserData(element.userData)}))
+        .filter(item => item.tag !== null)
+        .map(({element, tag}) => ({
+          id: tag?.id,
+          role: tag?.role,
+          uuid: element.uuid,
+          numInPage: element.numInPage,
+          rect: element.textBox?.textRect ?? null,
+        })),
     });
 
     if (effectiveSelection.length === 0) {
