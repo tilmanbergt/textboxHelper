@@ -376,13 +376,22 @@ export async function penEditBackupData(ids: string[]): Promise<{entries: PenEdi
 
 /** After apply: the applied pen edits are done. */
 export async function markPenEditsApplied(ids: string[]): Promise<void> {
+  await setPenEditsState(ids, 'applied');
+}
+
+/** Removed from the page without applying; the stored handwriting and picture stay on disk. */
+export async function markPenEditsDropped(ids: string[]): Promise<void> {
+  await setPenEditsState(ids, 'dropped');
+}
+
+async function setPenEditsState(ids: string[], state: PenEditEntry['state']): Promise<void> {
   if (ids.length === 0) {
     return;
   }
   await changePenEditIndex(current => {
     let next = current;
     for (const id of ids) {
-      next = updatePenEdit(next, id, entry => ({...entry, state: 'applied'}));
+      next = updatePenEdit(next, id, entry => ({...entry, state}));
     }
     return next;
   });

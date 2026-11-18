@@ -56,6 +56,12 @@ export type IgnoredEditMarker = {
   /** Set when the ignored item is a tagged snippet, not a marker stroke. */
   penEditNumber?: number;
   penEditId?: string;
+  /**
+   * The stroke numbers "Remove" deletes for a marker that landed on a textbox (with a replace
+   * mark's verticals or loop). Unset for strokes that may be ordinary handwriting: those are
+   * never offered for removal.
+   */
+  removableNums?: number[];
 };
 
 export type EditMarkerTextboxPreview = {

@@ -37,7 +37,7 @@ export const EDIT_MARKERS_HELP = `## Delete words
 Draw a horizontal line through the words you want to remove, with the pen or the straight-line tool. One line of text per marker.
 
 ## Replace words
-Draw the delete line, then a small circle right after its end (or two short vertical lines across it). Right after, write the new words anywhere on the page, lasso them and tap Replacement in the lasso toolbar. A circled number appears left of the words, and the same number in your circle at the mark. The older way still works: a line in a textbox below the paragraph that starts with #.
+Draw the delete line, then a small circle right after its end or just above the line (or two short vertical lines across it). Right after, write the new words anywhere on the page, lasso them and tap Replacement in the lasso toolbar. A circled number appears left of the words, and the same number in your circle at the mark. The older way still works: a line in a textbox below the paragraph that starts with #.
 
 ## Insert a paragraph
 Make room between two paragraphs, write the new text there, lasso it and tap Insertion.
@@ -49,7 +49,10 @@ The review recognizes the tagged handwriting while you read; until then a grey p
 The note button reads every marker on the page. The lasso toolbar button reads only the lassoed markers and textboxes.
 
 ## Wrong words picked?
-Details has the calibration (X offset, Width) and Save Diagnostics for a bug report. The values are kept for next time.`;
+Details has the calibration (X offset, Width) and Save Diagnostics for a bug report. The values are kept for next time.
+
+## Not used
+The Ignored tab lists marks and tagged text the review could not use. Remove deletes one from the page, Remove all every one listed with a button; tap twice to confirm. Strokes away from any textbox may be your own handwriting and are never offered for removal.`;
 
 export const TEXTBOX_TOOLS_HELP = `## The actions
 Split Sentences: one textbox becomes one textbox per sentence.

@@ -10,6 +10,7 @@
  */
 import React, {useEffect, useMemo, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
+import {isRemovableIgnored} from '../../actions/editMarkers';
 import {EDIT_MARKERS_HELP} from '../../domain/helpTexts';
 import type {
   EditMarkerPreviewScope,
@@ -48,6 +49,18 @@ export default function EditMarkerReviewScreen({scope, onClose}: Props): React.J
 
   const operations = useMemo(() => preview?.operations ?? [], [preview]);
   const ignored = useMemo(() => preview?.ignoredMarkers ?? [], [preview]);
+  const removable = useMemo(() => ignored.filter(isRemovableIgnored), [ignored]);
+  // Removing is destructive: the first tap arms the button, the second removes.
+  const [armedRemove, setArmedRemove] = useState<string | null>(null);
+  useEffect(() => setArmedRemove(null), [ignored, tab]);
+  const removeTapped = (key: string, items: IgnoredEditMarker[]) => {
+    if (armedRemove === key) {
+      setArmedRemove(null);
+      review.removeIgnored(items);
+    } else {
+      setArmedRemove(key);
+    }
+  };
   const textboxes = useMemo(() => preview?.textboxes ?? [], [preview]);
 
   // A new set of changes selects its first one; with only ignored markers, the Ignored tab opens.
@@ -169,9 +182,33 @@ export default function EditMarkerReviewScreen({scope, onClose}: Props): React.J
           ) : (
             <PagedSection
               header="Not used"
+              headerAccessory={
+                removable.length > 1 && !applied ? (
+                  <PillButton
+                    size="small"
+                    label={armedRemove === 'all' ? 'Tap again to remove' : `Remove all (${removable.length})`}
+                    onPress={() => removeTapped('all', removable)}
+                    disabled={busy || loading}
+                  />
+                ) : undefined
+              }
               rows={ignored}
               rowHeight={() => ROW_HEIGHT}
-              renderRow={marker => <IgnoredRow key={marker.markerUuid} marker={marker} />}
+              renderRow={marker => (
+                <IgnoredRow
+                  key={marker.markerUuid}
+                  marker={marker}
+                  removeLabel={
+                    isRemovableIgnored(marker)
+                      ? armedRemove === marker.markerUuid
+                        ? 'Tap again'
+                        : 'Remove'
+                      : null
+                  }
+                  disabled={busy || loading}
+                  onRemove={() => removeTapped(marker.markerUuid, [marker])}
+                />
+              )}
             />
           )}
         </View>
@@ -300,11 +337,29 @@ function PenEditPanel({
   );
 }
 
-function IgnoredRow({marker}: {marker: IgnoredEditMarker}): React.JSX.Element {
+function IgnoredRow({
+  marker,
+  removeLabel,
+  disabled,
+  onRemove,
+}: {
+  marker: IgnoredEditMarker;
+  /** Null when the stroke may be ordinary handwriting: no Remove then. */
+  removeLabel: string | null;
+  disabled: boolean;
+  onRemove: () => void;
+}): React.JSX.Element {
   return (
     <View style={styles.row}>
-      <Text style={styles.kind}>{marker.penEditNumber !== undefined ? marker.summary : `Marker ${marker.markerNumInPage}`}</Text>
-      <Text style={styles.rowMeta} numberOfLines={3}>
+      <View style={styles.ignoredHead}>
+        <Text style={styles.kind}>
+          {marker.penEditNumber !== undefined ? marker.summary : `Marker ${marker.markerNumInPage}`}
+        </Text>
+        {removeLabel ? (
+          <PillButton size="small" label={removeLabel} onPress={onRemove} disabled={disabled} />
+        ) : null}
+      </View>
+      <Text style={styles.rowMeta} numberOfLines={removeLabel ? 2 : 3}>
         {marker.reason}
       </Text>
     </View>
@@ -369,6 +424,11 @@ const styles = StyleSheet.create({
     fontSize: FONT.medium,
     color: COLORS.text,
     marginTop: 2,
+  },
+  ignoredHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   rowMeta: {
     fontSize: FONT.small,

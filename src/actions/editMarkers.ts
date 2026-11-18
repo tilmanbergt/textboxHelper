@@ -36,7 +36,7 @@ import type {
 import type {PenEditEntry} from '../domain/penEditModel';
 import {DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION} from '../domain/textboxLayout';
 import {DEFAULT_FONT_SIZE} from '../domain/textboxModel';
-import {parsePenEditUserData} from '../domain/penEditTags';
+import {isPenEditElement, parsePenEditUserData} from '../domain/penEditTags';
 import {buildTextInsert, isNormalTextElement, sortTextElements} from '../domain/textboxEditPlan';
 import {writeBackupFile} from '../storage/backupFile';
 import {writeJsonExportFile} from '../storage/exportFile';
@@ -67,6 +67,7 @@ import {
 import {
   loadPenEditContext,
   markPenEditsApplied,
+  markPenEditsDropped,
   penEditBackupData,
   penEditElementNums,
   placeInsertions,
@@ -440,9 +441,13 @@ async function buildEditMarkerPreview(
     markerCandidates.forEach(candidate => {
       const replaceInfo = replaceCandidateInfoByMarkerUuid.get(candidate.markerUuid);
       if (replaceInfo?.mismatchReason) {
-        ignoredMarkers.push(
-          buildIgnoredMarker(candidate.marker, replaceInfo.mismatchReason),
-        );
+        ignoredMarkers.push({
+          ...buildIgnoredMarker(candidate.marker, replaceInfo.mismatchReason),
+          removableNums: [
+            candidate.markerNumInPage,
+            ...replaceInfo.pair.map(pairEntry => pairEntry.marker.numInPage),
+          ],
+        });
         return;
       }
 
@@ -451,8 +456,8 @@ async function buildEditMarkerPreview(
       const nextWords = candidate.words.filter(word => !usedRanges.has(`${word.start}-${word.end}`));
 
       if (nextWords.length === 0) {
-        ignoredMarkers.push(
-          buildIgnoredMarker(
+        ignoredMarkers.push({
+          ...buildIgnoredMarker(
             {
               ...candidate.targetTextbox,
               uuid: candidate.markerUuid,
@@ -460,7 +465,8 @@ async function buildEditMarkerPreview(
             } as Element,
             'This marker duplicates text already covered by another recognized marker.',
           ),
-        );
+          removableNums: [candidate.markerNumInPage],
+        });
         return;
       }
 
@@ -722,6 +728,82 @@ export async function applyEditMarkerPreview(
       appliedOperationCount: plan.operations.length,
       removedMarkerCount: plan.recognizedMarkerNums.length,
       affectedTextboxCount: textMutations.length,
+    };
+  } finally {
+    await recycleElements(pageElements);
+  }
+}
+
+/** Whether "Remove" is offered for an ignored item: tagged pen edits and markers on a textbox. */
+export function isRemovableIgnored(item: IgnoredEditMarker): boolean {
+  return item.penEditId !== undefined || (item.removableNums?.length ?? 0) > 0;
+}
+
+/**
+ * Removes ignored markers and unused pen edits from the page: the marker strokes (with a replace
+ * mark's verticals or loop), and a pen edit's handwriting, mark, badge and number. Reads the page
+ * fresh and deletes only strokes that are still there under a unique number; never textboxes.
+ */
+export async function removeIgnoredItems(
+  preview: EditMarkerPreview,
+  items: IgnoredEditMarker[],
+): Promise<{message: string}> {
+  const base = preview.base;
+  const removable = items.filter(isRemovableIgnored);
+  if (!base || removable.length === 0) {
+    throw new Error('Nothing here can be removed.');
+  }
+  let pageElements: Element[] = [];
+  try {
+    pageElements = await readPageElements(
+      base.notePath,
+      base.page,
+      `Could not read page ${base.page} elements before removing markers.`,
+    );
+    const counts = new Map<number, number>();
+    pageElements.forEach(element => counts.set(element.numInPage, (counts.get(element.numInPage) ?? 0) + 1));
+    const byNum = new Map(pageElements.map(element => [element.numInPage, element]));
+    const markerNums = removable
+      .flatMap(item => item.removableNums ?? [])
+      .filter(num => {
+        const element = byNum.get(num);
+        return (
+          !!element &&
+          counts.get(num) === 1 &&
+          isSupportedEditMarkerElement(element) &&
+          !isPenEditElement(element)
+        );
+      });
+
+    const penIds = removable.map(item => item.penEditId).filter((id): id is string => !!id);
+    const penEntries = penIds.length > 0 ? (await penEditBackupData(penIds)).entries : [];
+    const penNums = penEditElementNums(penIds, penEntries, pageElements);
+
+    const nums = [...new Set([...markerNums, ...penNums])];
+    logEditMarker('removeIgnored', {
+      items: removable.map(item => item.penEditId ?? item.markerNumInPage),
+      markerNums,
+      penNums,
+    });
+    // As in apply: save first, so the file the delete works on holds the latest strokes.
+    await saveCurrentNoteForConsistency('removing ignored markers');
+    await deletePageElements(base.notePath, base.page, nums);
+    try {
+      await markPenEditsDropped(penIds);
+    } catch (error) {
+      console.warn('[EditMarkerActions] pen edits not marked dropped', String(error));
+    }
+    await hideLassoBox('[EditMarkerActions]');
+
+    const parts = [
+      markerNums.length > 0 ? plural(removable.filter(item => !item.penEditId).length, 'marker') : null,
+      penIds.length > 0 ? plural(penIds.length, 'pen edit') : null,
+    ].filter(Boolean);
+    return {
+      message:
+        nums.length > 0
+          ? `Removed ${parts.join(' and ')} from the page.`
+          : 'Nothing was removed: the strokes are no longer on the page.',
     };
   } finally {
     await recycleElements(pageElements);

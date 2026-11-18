@@ -368,8 +368,15 @@ describe('the loop after a strike', () => {
     expect(isReplaceLoopRect(strike, {left: 955, top: 795, right: 990, bottom: 830})).toBe(true);
   });
 
+  it('counts a loop above the line along the strike', () => {
+    expect(isReplaceLoopRect(strike, {left: 760, top: 740, right: 800, bottom: 780})).toBe(true);
+    expect(isReplaceLoopRect(strike, {left: 980, top: 750, right: 1020, bottom: 790})).toBe(true);
+  });
+
   it('ignores loops elsewhere, too big, too flat or too small', () => {
-    expect(isReplaceLoopRect(strike, {left: 700, top: 790, right: 740, bottom: 830})).toBe(false);
+    expect(isReplaceLoopRect(strike, {left: 700, top: 815, right: 740, bottom: 855})).toBe(false);
+    expect(isReplaceLoopRect(strike, {left: 500, top: 740, right: 540, bottom: 780})).toBe(false);
+    expect(isReplaceLoopRect(strike, {left: 760, top: 620, right: 800, bottom: 660})).toBe(false);
     expect(isReplaceLoopRect(strike, {left: 975, top: 900, right: 1015, bottom: 940})).toBe(false);
     expect(isReplaceLoopRect(strike, {left: 975, top: 760, right: 1135, bottom: 900})).toBe(false);
     expect(isReplaceLoopRect(strike, {left: 975, top: 805, right: 1035, bottom: 815})).toBe(false);

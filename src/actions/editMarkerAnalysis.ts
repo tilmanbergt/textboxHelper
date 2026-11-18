@@ -56,6 +56,7 @@ export function buildRejectedResult(
   marker: Element,
   reason: string,
   extra?: Record<string, unknown>,
+  landedOnTextbox = true,
 ): {ignored: IgnoredEditMarker} {
   logEditMarker('markerRejected', {
     markerUuid: marker.uuid,
@@ -64,8 +65,9 @@ export function buildRejectedResult(
     ...(extra || {}),
   });
 
+  const ignored = buildIgnoredMarker(marker, reason);
   return {
-    ignored: buildIgnoredMarker(marker, reason),
+    ignored: landedOnTextbox ? {...ignored, removableNums: [marker.numInPage]} : ignored,
   };
 }
 
@@ -80,6 +82,8 @@ export async function analyzeDeleteMarker(
     return buildRejectedResult(
       marker,
       'No usable page-coordinate marker geometry was available.',
+      undefined,
+      false,
     );
   }
 
@@ -107,6 +111,8 @@ export async function analyzeDeleteMarker(
         centeredTextboxCount: centeredTextboxes.length,
         overlappingTextboxCount: overlappingTextboxes.length,
       },
+      // Strokes away from every textbox may be ordinary handwriting: never offered for removal.
+      centeredTextboxes.length > 0,
     );
   }
 

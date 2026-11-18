@@ -229,3 +229,12 @@ the caret between paragraphs needs only reading order and could come first.
   written into the plugin's own folder (`pen-edits/tmp/`), as Kept GTD does.
 - **Numbering per page**: the review drops active entries of the page whose badge is gone (they
   had pushed the next number up), and moves entries whose badge is on another page.
+- **Loop above the line** (fourth device check): the loop may also sit above the line anywhere
+  along the strike, its bottom at most about one loop height plus 60 px above the strike's centre;
+  of several loops the one closest to the strike's end wins.
+- **Removing ignored items**: the Ignored tab offers Remove per row and Remove all, armed by a
+  first tap. `removableNums` is set only for markers that landed on a textbox (with a mismatched
+  replace mark's verticals or loop); strokes away from every textbox may be handwriting and are
+  never offered. Pen edits are resolved on a fresh page read (`penEditElementNums`) and marked
+  `dropped`; their stored strokes and picture stay. Only strokes with a unique number that are
+  still marker-like are deleted, never textboxes (`removeIgnoredItems`).

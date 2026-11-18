@@ -13,10 +13,12 @@ import {
   resetEditMarkerCalibration,
   saveEditMarkerDiagnostics,
   setEditMarkerCalibration,
+  removeIgnoredItems,
 } from '../../actions/editMarkers';
 import {resetRecognition, setPenEditCorrection, setPenEditReview} from '../../actions/penEditReview';
 import {assembleMarkerPreview} from '../../domain/markerAssembly';
 import type {
+  IgnoredEditMarker,
   EditMarkerCalibration,
   EditMarkerPreview,
   EditMarkerPreviewScope,
@@ -29,6 +31,8 @@ import {usePenRecognitionQueue} from './usePenRecognitionQueue';
 
 export interface EditMarkerReview {
   preview: EditMarkerPreview | null;
+  /** Deletes ignored markers and unused pen edits from the page, then reads the page again. */
+  removeIgnored: (items: IgnoredEditMarker[]) => void;
   loading: boolean;
   busy: boolean;
   applied: boolean;
@@ -212,8 +216,30 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
       .finally(() => setBusy(false));
   }, [busy, load, loading, preview]);
 
+  const removeIgnored = useCallback(
+    (items: IgnoredEditMarker[]) => {
+      if (!preview || loading || busy || items.length === 0) {
+        return;
+      }
+      setBusy(true);
+      setStatus({text: 'Removing from the page…'});
+      removeIgnoredItems(preview, items)
+        .then(async result => {
+          setStatus({text: result.message});
+          await load(true);
+        })
+        .catch(error => {
+          console.warn('[EditMarkerReview] remove failed', String(error));
+          setStatus({kind: 'error', text: userMessage(error, 'Could not remove them from the page.')});
+        })
+        .finally(() => setBusy(false));
+    },
+    [busy, load, loading, preview],
+  );
+
   return {
     preview,
+    removeIgnored,
     loading,
     busy,
     applied,

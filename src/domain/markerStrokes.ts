@@ -301,7 +301,8 @@ export const REPLACE_LOOP_MAX_SIZE = 110;
 
 /**
  * The second replace gesture (technical-design-pen-edits.md As built): a small, roughly round
- * loop drawn right after the strike's end, at its height. Tested on rects only, so it works with
+ * loop drawn close to the strike: right after its end at its height, or above the line anywhere
+ * along the strike (from its start to just past its end). Tested on rects only, so it works with
  * the host's recognize rects as well as with stroke statistics.
  */
 export function isReplaceLoopRect(strike: Rect, loop: Rect): boolean {
@@ -315,11 +316,19 @@ export function isReplaceLoopRect(strike: Rect, loop: Rect): boolean {
   ) {
     return false;
   }
-  const loopCenter = rectCenter(loop);
+  const center = rectCenter(loop);
   const strikeY = (strike.top + strike.bottom) / 2;
-  const nearEnd = loop.left >= strike.right - size * 0.6 && loop.left <= strike.right + size + 24;
-  const atHeight = Math.abs(loopCenter.y - strikeY) <= size / 2 + 20;
-  return nearEnd && atHeight;
+  const afterEnd =
+    loop.left >= strike.right - size * 0.6 &&
+    loop.left <= strike.right + size + 24 &&
+    Math.abs(center.y - strikeY) <= size / 2 + 20;
+  const aboveLine =
+    center.x >= strike.left - size / 2 &&
+    center.x <= strike.right + size + 24 &&
+    center.y < strikeY &&
+    loop.bottom >= strikeY - size - 60 &&
+    loop.bottom <= strikeY + 10;
+  return afterEnd || aboveLine;
 }
 
 /** The loop after a delete candidate's strike, if one of the strokes is such a loop. */
@@ -332,5 +341,8 @@ export function findReplaceLoop<Analysis extends MarkerStrokeAnalysis>(
       analysis.marker.uuid !== candidate.markerUuid &&
       isReplaceLoopRect(candidate.strokeStats.rect, analysis.strokeStats.rect),
   );
-  return loops.sort((a, b) => a.strokeStats.rect.left - b.strokeStats.rect.left)[0] ?? null;
+  // The loop closest to the strike's end.
+  const end = {x: candidate.strokeStats.rect.right, y: rectCenter(candidate.strokeStats.rect).y};
+  const distance = (rect: Rect) => Math.hypot(rectCenter(rect).x - end.x, rectCenter(rect).y - end.y);
+  return loops.sort((a, b) => distance(a.strokeStats.rect) - distance(b.strokeStats.rect))[0] ?? null;
 }
