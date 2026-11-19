@@ -37,13 +37,19 @@ export const EDIT_MARKERS_HELP = `## Delete words
 Draw a horizontal line through the words you want to remove, with the pen or the straight-line tool. One line of text per marker.
 
 ## Replace words
-Draw the delete line, then a small circle right after its end or just above the line (or two short vertical lines across it). Right after, write the new words anywhere on the page, lasso them and tap Replacement in the lasso toolbar. A circled number appears left of the words, and the same number in your circle at the mark. The older way still works: a line in a textbox below the paragraph that starts with #.
+Draw the delete line, then a small circle right after its end or just above the line (or two short vertical lines across it). Right after, write the new words anywhere on the page, lasso them and tap Insertion or Replacement in the lasso toolbar. A circled number appears left of the words, and the same number in your circle at the mark. The older way still works: a line in a textbox below the paragraph that starts with #.
 
 ## Insert words
-Draw a V or ∧ on the line, its tip between two words or inside a word. Right after, write the new text anywhere on the page, lasso it and tap Insertion. The number appears between the ends of the caret's legs, so draw it big enough. Between words the spaces are added for you; inside a word the text goes in as written.
+Draw a V or ∧ on the line, its tip between two words or inside a word. Right after, write the new text anywhere on the page, lasso it and tap Insertion or Replacement. The number appears between the ends of the caret's legs, so draw it big enough. Between words the spaces are added for you; inside a word the text goes in as written.
 
 ## Insert or break paragraphs
-A < or > beside the text (one stroke or two lines meeting at the tip) points with its tip between two lines; a step mark (draw under the line to the right, straight up, then on above the next word) marks a word gap. On its own, either breaks the paragraph there. Followed by text tagged as Insertion, the text becomes a paragraph of its own there. Between two paragraphs a < or > puts the new text in as a new paragraph. A tip in the middle of a line is unclear and is ignored. Paragraphs below move down to make room.
+A < or > beside the text (one stroke or two lines meeting at the tip) points with its tip between two lines; a step mark (draw under the line to the right, straight up, then on above the next word) marks a word gap. On its own, either breaks the paragraph there. Followed by tagged text, the text becomes a paragraph of its own there. Between two paragraphs a < or > puts the new text in as a new paragraph. A tip in the middle of a line is unclear and is ignored. Paragraphs below move down to make room.
+
+## One button, the mark decides
+Insertion or Replacement tags the lassoed text. The mark you drew just before it decides what it is: a delete line with a circle makes it a replacement, a caret an insertion.
+
+## No mark found?
+If no mark is found just before the text, a card says so. Select mark now: draw the mark (or lasso the one you drew), lasso only the mark and tap Insertion or Replacement again within 5 minutes. The text never needs to be written again. Or choose Fix in review: the text waits under Ignored, where Select mark does the same and brings you back to the review.
 
 ## Review and apply
 The review recognizes the tagged handwriting while you read; until then a grey placeholder stands in the text, with a picture of the handwriting below. Correct fixes the text (write with the Supernote's handwriting pad), Skip for later leaves it on the page for another pass. Apply changes everything that is ready; a backup of the page is written first. Only used markers, carets and tagged handwriting are removed from the page.

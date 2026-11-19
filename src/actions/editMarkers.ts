@@ -463,6 +463,16 @@ async function buildEditMarkerPreview(
           pair: replaceModifiers(candidate, strokeAnalyses),
         }))
         .filter(entry => {
+          // A strike selected as a snippet's mark (Select mark) may stand alone: the user said it
+          // is a replace mark (technical-design-pen-edits-2.md §4.2).
+          const owner = pen.strikeOwner(entry.candidate.marker);
+          const declaredAlone =
+            entry.pair.length === 0 &&
+            owner?.mark?.kind === 'replace' &&
+            owner.mark.modifierRects.length === 0;
+          if (declaredAlone) {
+            return true;
+          }
           if (
             entry.pair.length === 0 ||
             entry.pair.some(pairEntry =>
@@ -647,6 +657,20 @@ async function buildEditMarkerPreview(
       });
     });
 
+    // Tagged text without a mark: Select mark gives it one.
+    pen.entries
+      .filter(entry => entry.kind === 'unpaired')
+      .forEach(entry => {
+        ignoredMarkers.push({
+          markerUuid: entry.id,
+          markerNumInPage: 0,
+          summary: `Text ${entry.number}`,
+          reason:
+            'No replace mark or caret was found just before it. Select mark, then draw or lasso its mark.',
+          penEditNumber: entry.number,
+          penEditId: entry.id,
+        });
+      });
     // Tagged replacements whose mark wasn't recognized on the page.
     pen.entries
       .filter(

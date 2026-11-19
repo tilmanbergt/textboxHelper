@@ -84,7 +84,15 @@ export type PenEditEntry = {
   correctedText: string | null;
   review: PenEditReview;
   state: PenEditState;
+  /**
+   * Set while the user is asked to draw or lasso this snippet's mark (Select mark,
+   * technical-design-pen-edits-2.md §4): the next tap on a few strokes becomes its mark.
+   */
+  awaitingMark: AwaitingMark | null;
 };
+
+/** Where Select mark was started: the tag's result card, or the review (which opens again). */
+export type AwaitingMark = {since: string; from: 'tag' | 'review'};
 
 export type PenEditIndex = {version: number; entries: PenEditEntry[]};
 
@@ -157,7 +165,8 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     return null;
   }
   const rect = parseRect(value.rect);
-  const kind = value.kind === 'replacement' || value.kind === 'insertion' ? value.kind : null;
+  const kind =
+    value.kind === 'replacement' || value.kind === 'insertion' || value.kind === 'unpaired' ? value.kind : null;
   if (
     !isString(value.id) ||
     !kind ||
@@ -187,7 +196,15 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     correctedText: isString(value.correctedText) ? value.correctedText : null,
     review: reviews.includes(value.review as PenEditReview) ? (value.review as PenEditReview) : 'open',
     state: states.includes(value.state as PenEditState) ? (value.state as PenEditState) : 'active',
+    awaitingMark: parseAwaitingMark(value.awaitingMark),
   };
+}
+
+function parseAwaitingMark(value: unknown): AwaitingMark | null {
+  if (!isRecord(value) || !isString(value.since) || (value.from !== 'tag' && value.from !== 'review')) {
+    return null;
+  }
+  return {since: value.since, from: value.from};
 }
 
 /**
@@ -269,4 +286,66 @@ export function penEditText(entry: PenEditEntry): string {
     return entry.correctedText;
   }
   return entry.recognition.status === 'done' ? entry.recognition.text : '';
+}
+
+/**
+ * How long a snippet waits for its mark after Select mark. Later, a tap on a few strokes is an
+ * ordinary new tag again: reading it as a mark long after the request would surprise the user.
+ */
+export const AWAIT_MARK_MS = 5 * 60 * 1000;
+
+/** The most strokes a lasso may hold to be read as the waiting snippet's mark. */
+export const MAX_DECLARED_MARK_STROKES = 3;
+
+/**
+ * `id` waits for its mark from now on; every other entry stops waiting (only one snippet waits at
+ * a time, so the next mark can't be meant for another).
+ */
+export function setAwaitingMark(
+  index: PenEditIndex,
+  id: string,
+  from: AwaitingMark['from'],
+  now: Date,
+): PenEditIndex {
+  return {
+    ...index,
+    entries: index.entries.map(entry =>
+      entry.id === id
+        ? {...entry, awaitingMark: {since: now.toISOString(), from}}
+        : entry.awaitingMark
+          ? {...entry, awaitingMark: null}
+          : entry,
+    ),
+  };
+}
+
+/** The active entry of this page still waiting for its mark, if its wait hasn't run out. */
+export function awaitingEntry(
+  index: PenEditIndex,
+  notePath: string,
+  page: number,
+  now: Date,
+): PenEditEntry | null {
+  return (
+    index.entries.find(entry => {
+      if (
+        !entry.awaitingMark ||
+        entry.state !== 'active' ||
+        entry.notePath !== notePath ||
+        entry.page !== page
+      ) {
+        return false;
+      }
+      const since = Date.parse(entry.awaitingMark.since);
+      return Number.isFinite(since) && now.getTime() - since >= 0 && now.getTime() - since <= AWAIT_MARK_MS;
+    }) ?? null
+  );
+}
+
+/** The snippet's kind follows from its mark. */
+export function kindOfMark(mark: PenEditMark | null): PenEditKind {
+  if (!mark) {
+    return 'unpaired';
+  }
+  return mark.kind === 'replace' ? 'replacement' : 'insertion';
 }

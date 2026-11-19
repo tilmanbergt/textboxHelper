@@ -11,6 +11,7 @@ import {
 } from './markerStrokes';
 import type {PenEditMark} from './penEditModel';
 import {isTakenStrike} from './penEditMatching';
+import {analyzeCaret, analyzeTwoStrokeCaret, type CaretShape, type Point} from './penEditCaret';
 import type {StrokeStats} from './markerTypes';
 
 /**
@@ -143,4 +144,85 @@ export function storedMark(mark: WindowMark): PenEditMark {
     strikeRect: {...mark.strike.stats.rect},
     modifierRects: mark.modifiers.map(modifier => ({...modifier.stats.rect})),
   };
+}
+
+/** The newest element number among a mark's strokes. */
+function newestNum(strokes: WindowStroke[]): number {
+  return Math.max(...strokes.map(stroke => stroke.numInPage));
+}
+
+/**
+ * Which of the two marks found in the look-back the snippet belongs to (technical-design-pen-
+ * edits-2.md §3): the one written last, closest before the snippet. A caret that reuses a stroke of
+ * the replace mark (a loop or vertical read as a caret) is part of that replace mark.
+ */
+export function pickNewestMark(
+  replace: WindowMark | null,
+  caretStrokes: WindowStroke[] | null,
+): 'replace' | 'caret' | null {
+  if (!replace) {
+    return caretStrokes && caretStrokes.length > 0 ? 'caret' : null;
+  }
+  if (!caretStrokes || caretStrokes.length === 0) {
+    return 'replace';
+  }
+  const replaceStrokes = [replace.strike, ...replace.modifiers];
+  const replaceUuids = new Set(replaceStrokes.map(stroke => stroke.uuid));
+  if (caretStrokes.some(stroke => replaceUuids.has(stroke.uuid))) {
+    return 'replace';
+  }
+  return newestNum(caretStrokes) > newestNum(replaceStrokes) ? 'caret' : 'replace';
+}
+
+/** A lassoed stroke with its points, for a mark the user selected. */
+export type DeclaredStroke = WindowStroke & {points: Point[]};
+
+export type DeclaredMark =
+  | {kind: 'replace'; mark: WindowMark}
+  | {kind: 'caret'; strokes: WindowStroke[]; rect: Rect; shape: CaretShape};
+
+function unionOf(a: Rect, b: Rect): Rect {
+  return {
+    left: Math.min(a.left, b.left),
+    top: Math.min(a.top, b.top),
+    right: Math.max(a.right, b.right),
+    bottom: Math.max(a.bottom, b.bottom),
+  };
+}
+
+/**
+ * The mark in a lasso the user selected as a snippet's mark (Select mark). The user said it is a
+ * mark, so the rules are looser than in the look-back: a caret (V ∧ < > or step, one stroke or two
+ * meeting at the tip) first, as its shape is the more specific; else a replace mark, where the
+ * strike alone is enough and a loop or crossing short lines are taken along when present. Strokes
+ * that belong to neither stay out of the mark. Null when no stroke reads as a mark.
+ */
+export function readDeclaredMark(strokes: DeclaredStroke[]): DeclaredMark | null {
+  const ordered = [...strokes].sort((a, b) => a.numInPage - b.numInPage);
+  for (const stroke of ordered) {
+    const shape = stroke.isStraightLine ? null : analyzeCaret(stroke.points);
+    if (shape) {
+      return {kind: 'caret', strokes: [stroke], rect: {...stroke.stats.rect}, shape};
+    }
+  }
+  for (let i = 0; i + 1 < ordered.length; i += 1) {
+    const [first, second] = [ordered[i], ordered[i + 1]];
+    const shape = analyzeTwoStrokeCaret(first.points, second.points);
+    if (shape) {
+      return {kind: 'caret', strokes: [first, second], rect: unionOf(first.stats.rect, second.stats.rect), shape};
+    }
+  }
+  const strike = [...ordered]
+    .filter(isStrikeLike)
+    .sort((a, b) => b.stats.width - a.stats.width)[0];
+  if (!strike) {
+    return null;
+  }
+  const others = ordered.filter(other => other.uuid !== strike.uuid && !other.isStraightLine);
+  const loop = others.find(other => isReplaceLoopRect(strike.stats.rect, other.stats.rect)) ?? null;
+  if (loop) {
+    return {kind: 'replace', mark: {strike, modifiers: [loop], loop}};
+  }
+  const crossing = others.filter(other => crossesStrike(strike, other)).slice(0, 2);
+  return {kind: 'replace', mark: {strike, modifiers: crossing, loop: null}};
 }

@@ -13,7 +13,14 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {DeviceEventEmitter} from 'react-native';
 import {PluginManager} from 'sn-plugin-lib';
 import {setEditMarkerCalibration} from './src/actions/editMarkers';
-import {getPenEditOutcome, setPenEditOutcome, subscribePenEditOutcome} from './src/actions/penEditTag';
+import {
+  getPenEditOutcome,
+  getReviewFocus,
+  setPenEditOutcome,
+  setReviewFocus,
+  subscribePenEditOutcome,
+  subscribeReviewFocus,
+} from './src/actions/penEditTag';
 import {loadSettings} from './src/storage/settingsFile';
 import {ensurePermissions} from './src/supernote/permissions';
 import {PLUGIN_BUTTON_EVENT, checkPendingButton} from './src/supernote/pluginRouting';
@@ -65,6 +72,26 @@ function App(): React.JSX.Element | null {
 
   useEffect(() => subscribePenEditOutcome(() => setPenEditOutcomeState(getPenEditOutcome())), []);
 
+  // A mark selected from the review (Select mark): the review opens again, for the whole page, at
+  // that snippet's change.
+  const [focusPenEditId, setFocusPenEditId] = useState<string | null>(null);
+  useEffect(() => {
+    const openFocus = () => {
+      const focus = getReviewFocus();
+      if (!focus) {
+        return;
+      }
+      setReviewFocus(null);
+      setPenEditOutcome(null);
+      setFocusPenEditId(focus.penEditId);
+      setMarkerScope('page');
+      setLaunchKey(key => key + 1);
+      setScreen('markers');
+    };
+    openFocus();
+    return subscribeReviewFocus(openFocus);
+  }, []);
+
   const closePenEditOutcome = useCallback(() => {
     setPenEditOutcome(null);
     PluginManager.closePluginView();
@@ -72,6 +99,7 @@ function App(): React.JSX.Element | null {
 
   const routeButton = (buttonId: number) => {
     setLaunchKey(key => key + 1);
+    setFocusPenEditId(null);
     if (buttonId === BUTTON_ID_TEXTBOX_TOOLS) {
       setScreen('tools');
       return;
@@ -153,7 +181,14 @@ function App(): React.JSX.Element | null {
     case 'tools':
       return <TextboxToolsScreen key={launchKey} onClose={closePluginView} />;
     case 'markers':
-      return <EditMarkerReviewScreen key={launchKey} scope={markerScope} onClose={closePluginView} />;
+      return (
+        <EditMarkerReviewScreen
+          key={launchKey}
+          scope={markerScope}
+          focusPenEditId={focusPenEditId}
+          onClose={closePluginView}
+        />
+      );
     case 'direct':
       return <DirectActionScreen key={launchKey} action={directAction} onClose={closePluginView} />;
     case 'import':

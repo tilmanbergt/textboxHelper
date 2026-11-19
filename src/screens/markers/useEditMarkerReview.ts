@@ -15,7 +15,12 @@ import {
   setEditMarkerCalibration,
   removeIgnoredItems,
 } from '../../actions/editMarkers';
-import {resetRecognition, setPenEditCorrection, setPenEditReview} from '../../actions/penEditReview';
+import {
+  resetRecognition,
+  setPenEditCorrection,
+  setPenEditReview,
+  startSelectMark,
+} from '../../actions/penEditReview';
 import {assembleMarkerPreview} from '../../domain/markerAssembly';
 import type {
   IgnoredEditMarker,
@@ -48,6 +53,11 @@ export interface EditMarkerReview {
   setSkipped: (id: string, skipped: boolean) => void;
   recognizeAgain: (id: string) => void;
   correct: (id: string, text: string | null) => void;
+  /**
+   * Select mark: the snippet waits for its mark and the review closes (`onDone`); the next tap of
+   * "Insertion or Replacement" on the mark opens the review again at this change.
+   */
+  selectMark: (id: string, onDone: () => void) => void;
   penStates: Record<string, PenTextState>;
 }
 
@@ -152,6 +162,21 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
     [penStates, store],
   );
 
+  const selectMark = useCallback(
+    (id: string, onDone: () => void) => {
+      if (loading || busy) {
+        return;
+      }
+      startSelectMark(id, 'review')
+        .then(onDone)
+        .catch(error => {
+          console.warn('[EditMarkerReview] select mark not stored', String(error));
+          setStatus({kind: 'error', text: 'Could not remember the text for Select mark. Please try again.'});
+        });
+    },
+    [busy, loading],
+  );
+
   // Calibration is kept between sessions so it can be tuned over time (settings file).
   const remember = (next: EditMarkerCalibration) => {
     setCalibration(next);
@@ -254,6 +279,7 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
     setSkipped,
     recognizeAgain,
     correct,
+    selectMark,
     penStates,
   };
 }

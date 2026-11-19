@@ -3,6 +3,7 @@ import type {TextboxMeasurementCalibration} from './textboxLayout';
 import type {TextSegment} from './textPages';
 import type {CaretInsertMode} from './penEditCaret';
 import type {PenEditReview, RecognitionStatus} from './penEditModel';
+import type {PenEditKind} from './penEditTags';
 import type {PageElementData, Rect, TextElementData, TextboxData} from './textboxModel';
 
 /**
@@ -111,7 +112,7 @@ export type PenTextState = {
 /** A tagged snippet as the review shows it. */
 export type PenEditView = {
   id: string;
-  kind: 'replacement' | 'insertion';
+  kind: PenEditKind;
   number: number;
   pictureUri: string | null;
 };

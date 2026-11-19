@@ -18,6 +18,7 @@ import {
   updatePenEdit,
   type PenEditEntry,
   type PenEditReview,
+  setAwaitingMark,
   type PenEditStrokeData,
 } from '../domain/penEditModel';
 import {
@@ -633,6 +634,19 @@ export async function setPenEditReview(
 ): Promise<void> {
   await changePenEditIndex(current =>
     updatePenEdit(current, id, entry => ({...entry, review})),
+  );
+}
+
+/**
+ * Select mark (technical-design-pen-edits-2.md §4): this snippet waits for the mark the user is
+ * about to draw or lasso; the next tap of "Insertion or Replacement" on a few strokes attaches it.
+ */
+export async function startSelectMark(
+  id: string,
+  from: 'tag' | 'review',
+): Promise<void> {
+  await changePenEditIndex(current =>
+    setAwaitingMark(current, id, from, new Date()),
   );
 }
 

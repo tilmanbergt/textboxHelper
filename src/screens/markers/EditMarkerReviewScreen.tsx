@@ -37,11 +37,14 @@ const ROW_HEIGHT = 96;
 interface Props {
   scope: EditMarkerPreviewScope;
   onClose: () => void;
+  /** The pen edit whose mark was just selected (Select mark): shown first. */
+  focusPenEditId?: string | null;
 }
 
 export default function EditMarkerReviewScreen({
   scope,
   onClose,
+  focusPenEditId = null,
 }: Props): React.JSX.Element {
   const review = useEditMarkerReview(scope);
   const {preview, loading, busy, applied} = review;
@@ -71,14 +74,31 @@ export default function EditMarkerReviewScreen({
 
   // A new set of changes selects its first one; with only ignored markers, the Ignored tab opens.
   // A pen edit's text arriving re-assembles the preview but keeps the selection.
+  // After Select mark, the change of that snippet is selected (or the Ignored tab shows why not).
   const changeKey = operations.map(operation => operation.id).join('|');
-  const firstId = operations[0]?.id ?? null;
-  const onlyIgnored = operations.length === 0 && ignored.length > 0;
+  const focusedOperation = focusPenEditId
+    ? operations.find(operation => operation.penEditId === focusPenEditId) ?? null
+    : null;
+  const focusedIgnored = focusPenEditId
+    ? ignored.find(marker => marker.penEditId === focusPenEditId) ?? null
+    : null;
+  const firstId = focusedOperation?.id ?? operations[0]?.id ?? null;
+  const onlyIgnored =
+    (operations.length === 0 && ignored.length > 0) ||
+    (!focusedOperation && !!focusedIgnored);
   useEffect(() => {
     setSelectedId(firstId);
     setTab(onlyIgnored ? 'ignored' : 'changes');
     setJumpKey(key => key + 1);
   }, [changeKey, firstId, onlyIgnored]);
+  const focusNote =
+    !focusPenEditId || loading
+      ? null
+      : focusedOperation
+      ? `Mark found: ${kindLabel(focusedOperation).toLowerCase()} is in the changes now.`
+      : focusedIgnored
+      ? `Mark selected for ${focusedIgnored.summary.toLowerCase()}, but it is still ignored: see why on the left.`
+      : null;
 
   const selected =
     operations.find(operation => operation.id === selectedId) ??
@@ -177,7 +197,7 @@ export default function EditMarkerReviewScreen({
       actions={[{label: 'Details', onPress: () => setView('details')}]}
       help={{title: 'Edit markers', text: EDIT_MARKERS_HELP}}
       onClose={onClose}
-      status={review.status}
+      status={review.status ?? (focusNote ? {text: focusNote} : null)}
       primary={primary}
       screenKey={`review-${tab}`}>
       <View style={styles.columns}>
@@ -236,6 +256,12 @@ export default function EditMarkerReviewScreen({
                 <IgnoredRow
                   key={marker.markerUuid}
                   marker={marker}
+                  onSelectMark={
+                    marker.penEditId && !applied
+                      ? () =>
+                          review.selectMark(marker.penEditId as string, onClose)
+                      : null
+                  }
                   removeLabel={
                     isRemovableIgnored(marker)
                       ? armedRemove === marker.markerUuid
@@ -434,8 +460,11 @@ function IgnoredRow({
   removeLabel,
   disabled,
   onRemove,
+  onSelectMark,
 }: {
   marker: IgnoredEditMarker;
+  /** Pen edits only: wait for a mark drawn or lassoed on the page (the review closes). */
+  onSelectMark: (() => void) | null;
   /** Null when the stroke may be ordinary handwriting: no Remove then. */
   removeLabel: string | null;
   disabled: boolean;
@@ -449,14 +478,24 @@ function IgnoredRow({
             ? marker.summary
             : `Marker ${marker.markerNumInPage}`}
         </Text>
-        {removeLabel ? (
-          <PillButton
-            size="small"
-            label={removeLabel}
-            onPress={onRemove}
-            disabled={disabled}
-          />
-        ) : null}
+        <View style={styles.rowButtons}>
+          {onSelectMark ? (
+            <PillButton
+              size="small"
+              label="Select mark ›"
+              onPress={onSelectMark}
+              disabled={disabled}
+            />
+          ) : null}
+          {removeLabel ? (
+            <PillButton
+              size="small"
+              label={removeLabel}
+              onPress={onRemove}
+              disabled={disabled}
+            />
+          ) : null}
+        </View>
       </View>
       <Text style={styles.rowMeta} numberOfLines={removeLabel ? 2 : 3}>
         {marker.reason}
@@ -479,8 +518,8 @@ function EmptyState({
     <View style={styles.empty}>
       <Text style={styles.emptyText}>{message || 'No changes to show.'}</Text>
       <Text style={styles.emptyHint}>
-        Delete: draw a line through the words. Replace: add two short vertical
-        lines across it, write the new words right after, lasso them and tap
+        Delete: draw a line through the words. Replace: add a small loop at its
+        end, write the new words right after, lasso them and tap Insertion or
         Replacement. ? has the details.
       </Text>
     </View>
@@ -530,6 +569,10 @@ const styles = StyleSheet.create({
     fontSize: FONT.medium,
     color: COLORS.text,
     marginTop: 2,
+  },
+  rowButtons: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
   },
   ignoredHead: {
     flexDirection: 'row',

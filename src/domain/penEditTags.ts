@@ -9,7 +9,11 @@ import type {Point, Rect} from './textboxModel';
  * found there by `userData`.
  */
 
-export type PenEditKind = 'replacement' | 'insertion';
+/**
+ * What a tagged snippet is, decided by the mark written just before it: a replace mark makes a
+ * replacement, a caret an insertion. 'unpaired' until a mark is found or selected.
+ */
+export type PenEditKind = 'replacement' | 'insertion' | 'unpaired';
 
 /**
  * What a tagged page element is: the badge at the snippet (its shape is the entry's anchor on the
@@ -176,22 +180,13 @@ export function circlePolygon(box: Rect): Point[] {
   return points;
 }
 
-/** A closed diamond filling `box`. */
-export function diamondPolygon(box: Rect): Point[] {
-  const cx = Math.round((box.left + box.right) / 2);
-  const cy = Math.round((box.top + box.bottom) / 2);
-  return [
-    {x: cx, y: box.top},
-    {x: box.right, y: cy},
-    {x: cx, y: box.bottom},
-    {x: box.left, y: cy},
-    {x: cx, y: box.top},
-  ];
-}
-
-/** The snippet badge's outline: a circle for a replacement, a diamond for an insertion. */
-export function snippetBadgePolygon(kind: PenEditKind, box: Rect): Point[] {
-  return kind === 'replacement' ? circlePolygon(box) : diamondPolygon(box);
+/**
+ * The snippet badge's outline: one circle for every snippet. The mark beside the text (loop or
+ * caret) already says what kind it is, and a snippet whose mark is selected later keeps its badge.
+ * Diamonds from earlier builds are still found: badges are recognized by `userData`, not shape.
+ */
+export function snippetBadgePolygon(box: Rect): Point[] {
+  return circlePolygon(box);
 }
 
 /** Bounds of a polygon's points (a badge's current place on the page). */

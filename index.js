@@ -26,25 +26,24 @@ import {
   BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
   BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
   BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
-  BUTTON_ID_TOOLBAR_TAG_INSERTION,
-  BUTTON_ID_TOOLBAR_TAG_REPLACEMENT,
+  BUTTON_ID_TOOLBAR_PEN_EDIT,
 } from './src/domain/buttonIds';
-import {outcomeNeedsScreen, setPenEditOutcome, tagPenEdit} from './src/actions/penEditTag';
+import {presentTagOutcome, tagPenEdit} from './src/actions/penEditTag';
 import {initPluginRouting} from './src/supernote/pluginRouting';
 
 AppRegistry.registerComponent(appName, () => App);
 
 PluginManager.init();
 
-// "Replacement" / "Insertion" (docs/dev/history/technical-design-pen-edits.md §3.4): one tap, no
-// plugin screen. Only a failure or a replacement without its mark opens App's small result card.
-function runPenEditTag(kind) {
-  tagPenEdit(kind)
+// "Insertion or Replacement" (docs/dev/history/technical-design-pen-edits-2.md §3, §4): one tap, no
+// plugin screen. A failure or a snippet without its mark opens App's small result card; a mark
+// selected from the review opens the review again at that change.
+function runPenEditTag() {
+  tagPenEdit()
     .then(async outcome => {
-      if (!outcomeNeedsScreen(outcome)) {
+      if (!presentTagOutcome(outcome)) {
         return;
       }
-      setPenEditOutcome(outcome);
       try {
         await PluginManager.showPluginView();
       } catch (error) {
@@ -55,8 +54,7 @@ function runPenEditTag(kind) {
 }
 
 initPluginRouting({
-  [BUTTON_ID_TOOLBAR_TAG_REPLACEMENT]: () => runPenEditTag('replacement'),
-  [BUTTON_ID_TOOLBAR_TAG_INSERTION]: () => runPenEditTag('insertion'),
+  [BUTTON_ID_TOOLBAR_PEN_EDIT]: () => runPenEditTag(),
 });
 
 PluginManager.registerButton(2, ['NOTE'], {
@@ -187,25 +185,12 @@ PluginManager.registerButton(2, ['NOTE'], {
 });
 
 PluginManager.registerButton(2, ['NOTE'], {
-  id: BUTTON_ID_TOOLBAR_TAG_REPLACEMENT,
+  id: BUTTON_ID_TOOLBAR_PEN_EDIT,
   name: JSON.stringify({
-    en: 'Replacement',
-    zh_CN: 'Replacement',
-    zh_TW: 'Replacement',
-    ja: 'Replacement',
-  }),
-  icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
-  showType: 0,
-  editDataTypes: [0],
-});
-
-PluginManager.registerButton(2, ['NOTE'], {
-  id: BUTTON_ID_TOOLBAR_TAG_INSERTION,
-  name: JSON.stringify({
-    en: 'Insertion',
-    zh_CN: 'Insertion',
-    zh_TW: 'Insertion',
-    ja: 'Insertion',
+    en: 'Insertion or Replacement',
+    zh_CN: 'Insertion or Replacement',
+    zh_TW: 'Insertion or Replacement',
+    ja: 'Insertion or Replacement',
   }),
   icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
   showType: 0,
