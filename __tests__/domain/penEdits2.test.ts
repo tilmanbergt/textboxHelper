@@ -10,8 +10,10 @@ import {
   type PenEditIndex,
 } from '../../src/domain/penEditModel';
 import {
+  ownedRects,
   pickNewestMark,
   readDeclaredMark,
+  withoutOwned,
   type DeclaredStroke,
   type WindowMark,
   type WindowStroke,
@@ -56,20 +58,20 @@ describe('pickNewestMark', () => {
   });
 
   it('takes the only mark found, or none', () => {
-    expect(pickNewestMark(null, null)).toBeNull();
-    expect(pickNewestMark(null, [])).toBeNull();
-    expect(pickNewestMark(replace(3, 4), null)).toBe('replace');
-    expect(pickNewestMark(null, [ws('v', 5)])).toBe('caret');
+    expect(pickNewestMark([], null, null)).toBeNull();
+    expect(pickNewestMark([], null, [])).toBeNull();
+    expect(pickNewestMark([ws('loop', 4)], replace(3, 4), null)).toBe('replace');
+    expect(pickNewestMark([ws('v', 5)], null, [ws('v', 5)])).toBe('caret');
   });
 
   it('takes the mark written last before the snippet', () => {
-    expect(pickNewestMark(replace(3, 4), [ws('v', 6)])).toBe('caret');
-    expect(pickNewestMark(replace(5, 6), [ws('v', 2)])).toBe('replace');
-    expect(pickNewestMark(replace(5, 6), [ws('a', 3), ws('b', 4)])).toBe('replace');
+    expect(pickNewestMark([ws('v', 6)], replace(3, 4), [ws('v', 6)])).toBe('caret');
+    expect(pickNewestMark([ws('loop', 6)], replace(5, 6), [ws('v', 2)])).toBe('replace');
+    expect(pickNewestMark([ws('loop', 6)], replace(5, 6), [ws('a', 3), ws('b', 4)])).toBe('replace');
   });
 
   it('keeps a replace mark whose loop was also read as a caret', () => {
-    expect(pickNewestMark(replace(3, 8), [ws('loop', 8)])).toBe('replace');
+    expect(pickNewestMark([ws('loop', 8)], replace(3, 8), [ws('loop', 8)])).toBe('replace');
   });
 });
 
@@ -171,5 +173,44 @@ describe('Select mark state', () => {
     const since = '2026-11-19T10:00:00.000Z';
     expect(parsePenEditEntry({...old, awaitingMark: {since, from: 'review'}})?.awaitingMark).toEqual({since, from: 'review'});
     expect(parsePenEditEntry({...old, awaitingMark: {since, from: 'elsewhere'}})?.awaitingMark).toBeNull();
+  });
+});
+
+describe('the second text right after a text whose mark was selected (device case)', () => {
+  // Page with typed text only. Text 1 (strokes 1-3) was tagged without a mark; then its replace
+  // mark was drawn and selected: a strike (4) and two short lines across it (5, 6). Text 2 is
+  // written right after, with no mark of its own.
+  const at = (uuid: string, numInPage: number, left: number, top: number, right: number, bottom: number): WindowStroke => ({
+    uuid,
+    numInPage,
+    isStraightLine: false,
+    stats: {...buildStrokeStats([{x: left, y: top}, {x: right, y: bottom}])!, rect: {left, top, right, bottom}},
+  });
+  const text1 = [at('t1a', 1, 100, 600, 140, 640), at('t1b', 2, 150, 600, 190, 640), at('t1c', 3, 200, 600, 240, 640)];
+  const strike = at('s', 4, 300, 500, 520, 506);
+  const lines = [at('v1', 5, 400, 480, 402, 524), at('v2', 6, 418, 480, 420, 524)];
+  const window = [...text1, strike, ...lines];
+  const entry1 = {
+    strokeRects: text1.map(stroke => stroke.stats.rect),
+    mark: {kind: 'replace' as const, strikeRect: strike.stats.rect, modifierRects: lines.map(line => line.stats.rect)},
+  };
+
+  it('leaves out every stroke that already belongs to tagged text', () => {
+    const owned = ownedRects([entry1]);
+    expect(withoutOwned(window, owned)).toEqual([]);
+  });
+
+  it('pairs no caret made of the earlier mark: the text gets "no mark found"', () => {
+    const left = withoutOwned(window, ownedRects([entry1]));
+    expect(pickNewestMark(left, null, null)).toBeNull();
+  });
+
+  it('takes a mark only when it is the last thing written before the text', () => {
+    const older = at('old', 1, 0, 0, 10, 10);
+    const replace: WindowMark = {strike: at('s2', 2, 300, 500, 520, 506), modifiers: [], loop: null};
+    const scribble = at('later', 3, 600, 600, 640, 640);
+    expect(pickNewestMark([older, replace.strike, scribble], replace, null)).toBeNull();
+    expect(pickNewestMark([older, replace.strike], replace, null)).toBe('replace');
+    expect(pickNewestMark([older, replace.strike, scribble], null, [scribble])).toBe('caret');
   });
 });

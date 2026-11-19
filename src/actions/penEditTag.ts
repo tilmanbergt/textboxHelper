@@ -15,11 +15,13 @@ import {
 import {
   findReplaceMarkInWindow,
   lookBackNumbers,
+  ownedRects,
   pickNewestMark,
   readDeclaredMark,
   storedMark,
   type DeclaredStroke,
   type WindowMark,
+  withoutOwned,
 } from '../domain/penEditPairing';
 import {buildStrokeStats} from '../domain/markerStrokes';
 import {
@@ -227,19 +229,23 @@ export async function tagPenEdit(): Promise<PenEditTagOutcome> {
     // Both marks are looked for; the snippet belongs to the one written last before it. The read
     // stops once a whole replace mark is in the window: everything newer was read before it, so a
     // newer caret is in the window too. Points are read only for caret-sized strokes.
+    // Strokes that already belong to tagged text (its handwriting or its mark) are never the mark
+    // of this text: skipped by their tag while reading, and by their stored place here.
     const lowest = Math.min(...snap.strokeNums);
     const taken = takenStrikeRects(index, notePath, page);
+    const owned = ownedRects(activePenEditsOnPage(index, notePath, page));
     const result = await readLookBackWindow(notePath, page, lookBackNumbers(lowest), window =>
-      findReplaceMarkInWindow(window, taken) !== null,
+      findReplaceMarkInWindow(withoutOwned(window, owned), taken) !== null,
     );
     windowElements = result.elements;
-    let found: WindowMark | null = findReplaceMarkInWindow(result.window, taken);
+    const window = withoutOwned(result.window, owned);
+    let found: WindowMark | null = findReplaceMarkInWindow(window, taken);
     let caret: {strokes: WindowStroke[]; rect: Rect; shape: CaretShape} | null = await findCaretInWindow(
-      result.window,
+      window,
       result.elements,
       takenCaretRects(index, notePath, page),
     );
-    const choice = pickNewestMark(found, caret?.strokes ?? null);
+    const choice = pickNewestMark(window, found, caret?.strokes ?? null);
     if (choice !== 'replace') {
       found = null;
     }

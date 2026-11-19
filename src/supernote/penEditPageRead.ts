@@ -19,7 +19,7 @@ import {
 } from '../domain/penEditCaret';
 import {isTakenStrike} from '../domain/penEditMatching';
 import {isStepSizedRect} from '../domain/paragraphMarks';
-import {isPenEditDecoration} from '../domain/penEditTags';
+import {isPenEditDecoration, parsePenEditUserData} from '../domain/penEditTags';
 import type {Rect} from '../domain/textboxModel';
 import {readAccessorRange} from './markerStrokeRead';
 
@@ -91,7 +91,9 @@ export async function readLookBackWindow(
         continue;
       }
       read += 1;
-      if (isPenEditDecoration(element)) {
+      // Our badges and numbers, and strokes tagged as another text's handwriting or mark: none of
+      // them is the mark of the text being tagged, and they don't count towards the window.
+      if (isPenEditDecoration(element) || parsePenEditUserData(element.userData) !== null) {
         continue;
       }
       counted += 1;

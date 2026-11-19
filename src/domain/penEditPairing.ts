@@ -10,7 +10,7 @@ import {
   isVerticalLikeStroke,
 } from './markerStrokes';
 import type {PenEditMark} from './penEditModel';
-import {isTakenStrike} from './penEditMatching';
+import {isTakenStrike, rectsMatch} from './penEditMatching';
 import {analyzeCaret, analyzeTwoStrokeCaret, type CaretShape, type Point} from './penEditCaret';
 import type {StrokeStats} from './markerTypes';
 
@@ -152,26 +152,50 @@ function newestNum(strokes: WindowStroke[]): number {
 }
 
 /**
- * Which of the two marks found in the look-back the snippet belongs to (technical-design-pen-
- * edits-2.md §3): the one written last, closest before the snippet. A caret that reuses a stroke of
- * the replace mark (a loop or vertical read as a caret) is part of that replace mark.
+ * The places of every stroke that already belongs to tagged text: its handwriting and its mark
+ * (strike, loop or crossing lines, caret). They are never the mark of new text. Their tag on the
+ * page usually says so too; the places cover strokes the host didn't let us tag.
+ */
+export function ownedRects(entries: Array<{strokeRects: Rect[]; mark: PenEditMark | null}>): Rect[] {
+  return entries.flatMap(entry => [
+    ...entry.strokeRects,
+    ...(entry.mark?.kind === 'replace'
+      ? [entry.mark.strikeRect, ...entry.mark.modifierRects]
+      : entry.mark?.kind === 'caret'
+        ? [entry.mark.caretRect]
+        : []),
+  ]);
+}
+
+/** The window without the strokes that already belong to tagged text. */
+export function withoutOwned(window: WindowStroke[], owned: Rect[]): WindowStroke[] {
+  return window.filter(stroke => !owned.some(rect => rectsMatch(rect, stroke.stats.rect)));
+}
+
+/**
+ * Which of the marks found in the look-back the snippet belongs to (technical-design-pen-
+ * edits-2.md §3): only a mark written last, right before the snippet, counts — its strokes must
+ * include the newest stroke of the window. Anything older is earlier writing, and the snippet
+ * gets "no mark found". When both qualify, a caret that reuses a stroke of the replace mark (a
+ * loop or line read as a caret) is part of that replace mark; otherwise the newer one wins.
  */
 export function pickNewestMark(
+  window: WindowStroke[],
   replace: WindowMark | null,
   caretStrokes: WindowStroke[] | null,
 ): 'replace' | 'caret' | null {
-  if (!replace) {
-    return caretStrokes && caretStrokes.length > 0 ? 'caret' : null;
+  if (window.length === 0) {
+    return null;
   }
-  if (!caretStrokes || caretStrokes.length === 0) {
-    return 'replace';
+  const newest = newestNum(window);
+  const replaceStrokes = replace ? [replace.strike, ...replace.modifiers] : [];
+  const replaceIsLast = replaceStrokes.length > 0 && newestNum(replaceStrokes) === newest;
+  const caretIsLast = !!caretStrokes && caretStrokes.length > 0 && newestNum(caretStrokes) === newest;
+  if (replaceIsLast && caretIsLast) {
+    const replaceUuids = new Set(replaceStrokes.map(stroke => stroke.uuid));
+    return (caretStrokes as WindowStroke[]).some(stroke => replaceUuids.has(stroke.uuid)) ? 'replace' : 'caret';
   }
-  const replaceStrokes = [replace.strike, ...replace.modifiers];
-  const replaceUuids = new Set(replaceStrokes.map(stroke => stroke.uuid));
-  if (caretStrokes.some(stroke => replaceUuids.has(stroke.uuid))) {
-    return 'replace';
-  }
-  return newestNum(caretStrokes) > newestNum(replaceStrokes) ? 'caret' : 'replace';
+  return replaceIsLast ? 'replace' : caretIsLast ? 'caret' : null;
 }
 
 /** A lassoed stroke with its points, for a mark the user selected. */

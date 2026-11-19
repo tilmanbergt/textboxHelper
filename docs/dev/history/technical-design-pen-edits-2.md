@@ -181,6 +181,13 @@ Device: see §11.
 - **Look-back with both finders**: the read still stops at a whole replace mark; carets are looked
   for in the same window, so a caret is found only when it is newer than the replace mark (or
   there is none) — which is the rule.
+- **Device fix: earlier tagged strokes taken as a caret.** Text tagged right after a text whose
+  mark had been selected was paired with that mark's two crossing lines, read as a two-stroke
+  caret: no card, and its number landed on the earlier one. The look-back now skips every stroke
+  carrying a pen-edit tag (not only badges and numbers) and every stroke at a stored place of an
+  active entry (`ownedRects`, `withoutOwned`), and `pickNewestMark` takes a mark only when its
+  strokes include the newest stroke of the window — the mark must be the last thing written before
+  the text.
 - **Strike alone**: a mark selected with Select mark may be a strike without loop or verticals;
   its number goes in a ring right of the strike's end. The review accepts such a strike as a
   replace mark only when its pen edit's stored mark has no modifiers.
