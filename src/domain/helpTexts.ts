@@ -61,7 +61,7 @@ Below the selected change, Start and End show the characters around its edges wi
 The note button reads every marker on the page. The lasso toolbar button reads only the lassoed markers and textboxes.
 
 ## Wrong words picked?
-Details has the calibration (X offset, Width) and Save Diagnostics for a bug report. The values are kept for next time.
+If the status line says a font can't be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/TextboxHelper/fonts and open the review again. Details has the calibration (X offset, Width) and Save Diagnostics for a bug report. The values are kept for next time.
 
 ## Not used, or not wanted
 The Ignored tab lists marks and tagged text the review could not use. Drop takes one off the page without applying it, Drop all every one listed; both ask first. For tagged text you choose: keep your handwriting (only the numbers and the mark go) or erase it too (a backup is written first). A change you don't want can be dropped from the Changes tab the same way. Strokes away from any textbox may be your own handwriting and are never offered.`;

@@ -21,6 +21,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Changed
 
+- Marks on a textbox whose font plugins can't read are now ignored instead of guessed: its words would be measured in a standard font and a mark could hit the wrong word. The review lists them under Ignored with the font's name and says in its status line which font to copy to MyStyle/TextboxHelper/fonts. Insertions between two paragraphs still work.
 - The plugin is now called Textbox Tools everywhere (plugin list, screens, permission request). Its identity is unchanged: updates install over the previous version, and the folders in MyStyle keep their names.
 - Textbox Tools (the lasso screen) is new and never scrolls: the actions on the left, After and Before of the chosen action on the right, paged. Split Paragraphs is now on this screen too. An action that doesn't fit the selection is greyed with the reason ("needs exactly 1 textbox", "nothing to clean"); when only one action fits, it is already chosen. The button names the action ("Apply Join Text Boxes"); after it the screen shows the result and the backup's file name. "Log All Textboxes" moved to Details.
 - Import Text File has a new screen: "Choose ›" opens the Supernote file selector in INBOX (only `.txt` files, folders inside INBOX work too) instead of a typed file name. The preview updates by itself after every change and draws the planned pages to scale; font size and margins moved to "Layout". The help is behind "?".

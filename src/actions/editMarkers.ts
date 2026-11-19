@@ -1,6 +1,6 @@
 import type {Element, TextBox} from 'sn-plugin-lib';
 import {createEditMarkerBackupPayload} from '../domain/backupPayload';
-import {NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
+import {buildLockedFontsMessage, NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
 import {assembleMarkerPreview} from '../domain/markerAssembly';
 import {plural} from '../domain/plural';
 import {cloneRect} from '../domain/geometry';
@@ -47,7 +47,6 @@ import {
   placeGapParagraphs,
   planReflow,
   type CaretDirection,
-  type CaretTextbox,
   type ReflowEvent,
   type ReflowItem,
 } from '../domain/penEditCaret';
@@ -74,11 +73,11 @@ import {
 import {
   buildResizedTextboxRect,
   estimateTextboxHeight,
-  getFontWarning,
   resetFontWarnings,
 } from '../supernote/textboxMetrics';
 import {logEditMarker, markerDiagnostics} from '../utils/editMarkerLog';
 import {analyzeDeleteMarker, type MarkerCandidate} from './editMarkerAnalysis';
+import {createTextboxMeasurer} from './markerMeasure';
 import {coveredSpan} from '../domain/edgeShift';
 import {
   loadPenEditContext,
@@ -193,20 +192,18 @@ export async function saveEditMarkerDiagnostics(): Promise<string> {
 }
 
 /**
- * Builds the edit-marker preview and adds a warning to its summary when a textbox font couldn't be
- * read, because then word positions were measured in a standard font (`src/domain/fontPaths.ts`).
+ * Builds the edit-marker preview. Marks on a textbox whose font can't be read are ignored, and
+ * the preview's status line says so (technical-design-swap-space-marks.md §2).
  */
 export async function getEditMarkerPreview(
   previewScope: EditMarkerPreviewScope = 'lasso',
 ): Promise<EditMarkerPreview> {
   resetFontWarnings();
   const preview = await buildEditMarkerPreview(previewScope);
-  const fontWarning = getFontWarning();
-  if (!fontWarning) {
-    return preview;
+  if (preview.fontWarning) {
+    logEditMarker('fontWarning', {fontWarning: preview.fontWarning});
   }
-  logEditMarker('fontWarning', {fontWarning});
-  return {...preview, fontWarning};
+  return preview;
 }
 
 function replaceModifiers(
@@ -292,6 +289,7 @@ async function buildEditMarkerPreview(
     }
 
     const pageTextboxes = pageElements.filter(isNormalTextElement);
+    const measurer = createTextboxMeasurer(currentEditMarkerCalibration);
     logEditMarker('previewContext', {
       previewScope: context.previewScope,
       notePath: context.notePath,
@@ -332,7 +330,6 @@ async function buildEditMarkerPreview(
 
     // Paragraph marks on their own (< or > between two lines, a step mark): a paragraph break,
     // never a delete candidate (technical-design-paragraph-marks.md).
-    const measuredForMarks = new Map<string, CaretTextbox>();
     const paragraphMarks: Array<{
       marker: Element;
       textbox: TextElement;
@@ -354,8 +351,7 @@ async function buildEditMarkerPreview(
         shape.tip,
         shape.direction,
         pageTextboxes,
-        currentEditMarkerCalibration,
-        measuredForMarks,
+        measurer,
       );
       const textbox =
         target?.kind === 'split'
@@ -388,18 +384,30 @@ async function buildEditMarkerPreview(
       });
     }
 
+    const nonParagraphMarkers = selectedMarkers.filter(
+      marker => !paragraphMarkNums.has(marker.numInPage),
+    );
     const candidateResults = await Promise.all(
-      selectedMarkers
-        .filter(marker => !paragraphMarkNums.has(marker.numInPage))
-        .map(marker =>
+      nonParagraphMarkers.map(marker =>
           analyzeDeleteMarker(
             marker,
             pageTextboxes,
-            currentEditMarkerCalibration,
+            measurer,
             strokeStatsByUuid.get(marker.uuid),
           ),
         ),
     );
+
+    // Tagged replacements whose strike is on a textbox with an unreadable font.
+    const lockedPenIds = new Set<string>();
+    candidateResults.forEach((result, index) => {
+      if (result.fontLocked) {
+        const owner = pen.strikeOwner(nonParagraphMarkers[index]);
+        if (owner) {
+          lockedPenIds.add(owner.id);
+        }
+      }
+    });
 
     const markerCandidates = candidateResults
       .map(result => result.candidate)
@@ -614,7 +622,9 @@ async function buildEditMarkerPreview(
           markerUuid: entry.id,
           markerNumInPage: 0,
           summary: `Replacement ${entry.number}`,
-          reason: entry.mark
+          reason: lockedPenIds.has(entry.id)
+            ? "Its replace mark is on a textbox whose font can't be read by plugins. Copy the font file to MyStyle/TextboxHelper/fonts and open the review again."
+            : entry.mark
             ? 'Its replace mark was not recognized on the page (erased, or not over a textbox).'
             : 'No replace mark was found just before it when it was tagged.',
           penEditNumber: entry.number,
@@ -626,7 +636,7 @@ async function buildEditMarkerPreview(
       pen.entries,
       pen.carets,
       pageTextboxes,
-      currentEditMarkerCalibration,
+      measurer,
     );
     placed.ignored.forEach(({entry, reason}) => {
       ignoredMarkers.push({
@@ -743,7 +753,13 @@ async function buildEditMarkerPreview(
       ignoredReasons: preview.ignoredMarkers.map(marker => marker.reason),
     });
 
-    return pen.warning ? {...preview, fontWarning: pen.warning} : preview;
+    const locked = measurer.lockedTextboxes();
+    const fontWarning =
+      buildLockedFontsMessage(
+        locked.map(item => item.fontName),
+        locked.length,
+      ) ?? pen.warning;
+    return fontWarning ? {...preview, fontWarning} : preview;
   } finally {
     await recycleElements(lassoElements);
     await recycleElements(pageElements);

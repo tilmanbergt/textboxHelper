@@ -27,11 +27,11 @@ import type {
   StrokeStats,
   WordCandidate,
 } from '../domain/markerTypes';
-import {DEFAULT_FONT_SIZE, type Rect} from '../domain/textboxModel';
+import type {Rect} from '../domain/textboxModel';
 import {textLeftX} from '../domain/textboxLayout';
 import {loadMarkerStrokeStats} from '../supernote/markerStrokeRead';
-import {measureDetailedTextLayout} from '../supernote/textboxMetrics';
 import {logEditMarker} from '../utils/editMarkerLog';
+import type {TextboxMeasurer} from './markerMeasure';
 
 /**
  * Recognizing one delete marker: which textbox and line it lands on and which words it covers,
@@ -67,9 +67,10 @@ export function buildRejectedResult(
 export async function analyzeDeleteMarker(
   marker: Element,
   textboxes: TextElement[],
-  currentEditMarkerCalibration: EditMarkerCalibration,
+  measurer: TextboxMeasurer,
   preloadedStrokeStats?: StrokeStats,
-): Promise<{candidate?: MarkerCandidate; ignored?: IgnoredEditMarker}> {
+): Promise<{candidate?: MarkerCandidate; ignored?: IgnoredEditMarker; fontLocked?: boolean}> {
+  const currentEditMarkerCalibration: EditMarkerCalibration = measurer.calibration;
   const strokeStats = preloadedStrokeStats || (await loadMarkerStrokeStats(marker));
   if (!strokeStats) {
     return buildRejectedResult(
@@ -109,6 +110,28 @@ export async function analyzeDeleteMarker(
     );
   }
 
+  const targetTextbox = centeredTextboxes[0];
+  const measured = await measurer.measure(targetTextbox);
+  if (!measured) {
+    return buildRejectedResult(
+      marker,
+      'Detailed text layout data was unavailable for the target textbox.',
+      {
+        stroke: buildStrokeLogSummary(marker, strokeStats),
+        targetTextbox: buildTextboxLogSummary(targetTextbox),
+      },
+    );
+  }
+  if (!measured.fontReadable) {
+    return {
+      ...buildRejectedResult(marker, measurer.locked(targetTextbox, measured), {
+        targetTextbox: buildTextboxLogSummary(targetTextbox),
+      }),
+      fontLocked: true,
+    };
+  }
+  const measurement = measured.measurement;
+
   if (strokeStats.width < MIN_MARKER_WIDTH) {
     return buildRejectedResult(marker, 'The marker is too short to classify reliably.', {
       stroke: buildStrokeLogSummary(marker, strokeStats),
@@ -121,33 +144,12 @@ export async function analyzeDeleteMarker(
     });
   }
 
-  const targetTextbox = centeredTextboxes[0];
-  const text = targetTextbox.textBox.textContentFull || '';
   const textboxRect = targetTextbox.textBox.textRect;
   const rawTextboxWidth = rectWidth(textboxRect);
   const effectiveMeasurementWidth = Math.max(
     24,
     rawTextboxWidth - currentEditMarkerCalibration.widthAdjustment,
   );
-  const measurement = await measureDetailedTextLayout(
-    text,
-    rawTextboxWidth,
-    targetTextbox.textBox.fontSize || DEFAULT_FONT_SIZE,
-    targetTextbox.textBox.fontPath || undefined,
-    currentEditMarkerCalibration,
-  );
-
-  if (!measurement) {
-    return buildRejectedResult(
-      marker,
-      'Detailed text layout data was unavailable for the target textbox.',
-      {
-        stroke: buildStrokeLogSummary(marker, strokeStats),
-        targetTextbox: buildTextboxLogSummary(targetTextbox),
-      },
-    );
-  }
-
   const wordCandidates = buildWordCandidates(
     measurement,
     textboxRect,

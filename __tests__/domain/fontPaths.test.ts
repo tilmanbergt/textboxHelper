@@ -1,5 +1,7 @@
 import {
   appendFontWarning,
+  buildLockedFontsMessage,
+  fontLockedReason,
   buildFontFallbackPaths,
   buildFontWarning,
   fontFileName,
@@ -58,5 +60,24 @@ describe('font warning', () => {
   it('is appended as its own paragraph', () => {
     expect(appendFontWarning('Done.', 'Warning: x')).toBe('Done.\n\nWarning: x');
     expect(appendFontWarning('Done.', null)).toBe('Done.');
+  });
+});
+
+describe('locked fonts (marks ignored on textboxes with an unreadable font)', () => {
+  it('names the font and the fix in the reason', () => {
+    const reason = fontLockedReason('851tegakizatsu.ttf');
+    expect(reason).toContain('851tegakizatsu.ttf');
+    expect(reason).toContain('MyStyle/TextboxHelper/fonts');
+  });
+
+  it('has no line when no mark was on a locked textbox', () => {
+    expect(buildLockedFontsMessage([], 0)).toBeNull();
+  });
+
+  it('counts the textboxes and lists each font once', () => {
+    const message = buildLockedFontsMessage(['b.ttf', 'a.ttf', 'b.ttf'], 3) ?? '';
+    expect(message).toContain('3 textboxes were ignored');
+    expect(message).toContain('(a.ttf, b.ttf)');
+    expect(buildLockedFontsMessage(['a.ttf'], 1)).toContain('1 textbox was ignored');
   });
 });
