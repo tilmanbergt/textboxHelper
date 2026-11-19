@@ -1,3 +1,4 @@
+import {plural} from './plural';
 import {cloneRect, rectHeight, rectOverlapHeight} from './geometry';
 import type {
   EditMarkerCalibration,
@@ -11,7 +12,7 @@ import type {
   TextMutationRange,
   WordCandidate,
 } from './markerTypes';
-import type {NativeDetailedLine} from './textboxLayout';
+import {textLeftX, type NativeDetailedLine} from './textboxLayout';
 import {
   ELEMENT_TYPE_GEO,
   ELEMENT_TYPE_STROKE,
@@ -79,26 +80,15 @@ export function buildSummaryMessage(
   selectedMarkerCount: number,
 ): string {
   if (selectedMarkerCount === 0) {
-    return 'Select one or more handwritten edit markers.';
+    return 'No edit markers found.';
   }
-
   if (operationCount === 0) {
-    if (ignoredCount > 0) {
-      return ignoredCount === 1
-        ? 'No operations recognized. 1 selected marker was ignored.'
-        : `No operations recognized. ${ignoredCount} selected markers were ignored.`;
-    }
-
-    return 'No operations recognized yet.';
+    return ignoredCount > 0
+      ? `No changes recognized; ${plural(ignoredCount, 'marker')} could not be used (see Ignored).`
+      : 'No changes recognized yet.';
   }
-
-  if (ignoredCount === 0) {
-    return operationCount === 1
-      ? 'Recognized 1 operation.'
-      : `Recognized ${operationCount} operations.`;
-  }
-
-  return `Recognized ${operationCount} operations. Ignored ${ignoredCount} markers.`;
+  const ignored = ignoredCount > 0 ? ` ${plural(ignoredCount, 'marker')} ignored.` : '';
+  return `${plural(operationCount, 'change')} recognized.${ignored}`;
 }
 
 export function shortenSnippet(text: string, limit = 44): string {
@@ -209,8 +199,8 @@ export function buildLineLogSummary(
     index: line.index,
     start: line.start,
     end: line.end,
-    left: roundNumber(textRect.left + calibration.offsetX + line.left),
-    right: roundNumber(textRect.left + calibration.offsetX + line.right),
+    left: roundNumber(textLeftX(textRect.left, calibration) + line.left),
+    right: roundNumber(textLeftX(textRect.left, calibration) + line.right),
     top: roundNumber(textRect.top + calibration.offsetY + line.top),
     bottom: roundNumber(textRect.top + calibration.offsetY + line.bottom),
     width: roundNumber(line.width),
@@ -252,7 +242,7 @@ function normalizeTextAfterEdit(text: string): string {
     .trim();
 }
 
-function getUniqueTextMutationRanges(ranges: TextMutationRange[]): TextMutationRange[] {
+export function getUniqueTextMutationRanges(ranges: TextMutationRange[]): TextMutationRange[] {
   return [...ranges]
     .sort((left, right) => {
       if (left.start !== right.start) {
@@ -358,16 +348,18 @@ export function createEmptyPreview(
     selectionMessage: buildSelectionMessage(selectedMarkerCount, selectedTextboxCount),
     summaryMessage:
       selectedMarkerCount === 0
-        ? 'Select one or more handwritten edit markers.'
-        : 'No operations recognized yet.',
-    beforePreviewBlocks: [],
-    afterPreviewBlocks: [],
-    beforeBlocks: [],
-    afterBlocks: [],
+        ? 'No edit markers found.'
+        : 'No changes recognized yet.',
+    textboxes: [],
+    fontWarning: null,
     operations: [],
     ignoredMarkers: [],
     canApply: false,
     applyPlan: null,
+    base: null,
+    penEdits: [],
+    pendingCount: 0,
+    skippedCount: 0,
   };
 }
 

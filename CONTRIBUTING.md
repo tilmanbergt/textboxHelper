@@ -1,13 +1,13 @@
-# Contributing to Textbox Helper
+# Contributing to Textbox Tools
 
-Thanks for your interest! Textbox Helper is a hobby project, maintained by one person in spare
+Thanks for your interest! Textbox Tools is a hobby project, maintained by one person in spare
 time, so response times vary.
 
 ## Reporting bugs
 
 Open an issue with:
 
-- the Textbox Helper version (Settings → Apps → Plugins)
+- the Textbox Tools version (Settings → Apps → Plugins)
 - your device model and firmware version
 - exact steps to reproduce, what you expected and what happened, and the exact message shown
 - a screenshot if the problem is about layout or recognition

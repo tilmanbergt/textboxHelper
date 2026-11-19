@@ -1,4 +1,4 @@
-# Textbox Helper - design overview
+# Textbox Tools - design overview
 
 > **About this document.** How the plugin is built and why: the flow from a button press to a
 > changed note, the layers, the features and where they live. Living document:
@@ -36,9 +36,9 @@ import which (`DEVELOPMENT-POLICY.md` §3).
 | `domain/` | Pure logic and its types: text splitting, edit plans, marker recognition math, pagination, import planning, export classification, backup payloads. No React Native, no SDK, no I/O. | `domain/` only |
 | `utils/` | Cross-cutting helpers: the edit-marker diagnostics trace (`editMarkerLog.ts`). | `domain/` |
 | `supernote/` | Everything that talks to the device: `sn-plugin-lib` calls (`noteElements.ts`, `noteTextInsertion.ts`, `markerStrokeRead.ts`, `exportNoteContext.ts`), the native measurement (`textboxMetrics.ts`), routing and permissions. | `domain/`, `utils/` |
-| `storage/` | File I/O: backups (`backupFile.ts`), JSON into EXPORT (`exportFile.ts`), the import text file (`importFile.ts`), DOCX (`docxExport.ts`). | the three above |
+| `storage/` | File I/O: backups (`backupFile.ts`), JSON into EXPORT (`exportFile.ts`), the import text file (`importFile.ts`), DOCX (`docxExport.ts`), pen edits (`penEditStore.ts`). | the three above |
 | `actions/` | The flows behind the buttons: preview, backup, change. | everything above |
-| `ui/` | Shared building blocks of the screens (`pluginUiStyles.ts`). | everything above |
+| `ui/` | Shared building blocks of the screens: `ScreenFrame`, `PillButton`, `Segmented`, `Checkbox`, `CountTabs`, paging (`pagination.ts`, `PagedSection`, `PagedText`), `HelpOverlay`, `NumberField`, `theme.ts` (technical-design-calmer-screens.md). | everything above |
 | `screens/` | One file per screen or dialog. | everything |
 
 An action has three parts: what changes (`domain/`), reading and changing the note
@@ -54,19 +54,29 @@ check fail if the SDK types drift away from them.
 
 ### Screens and `App.tsx`
 
-`App.tsx` owns the user flow: permissions, routing, previews, progress, cancellation, status and
-result messages. `src/screens/` holds the views and dialogs (`TextboxToolsView`,
-`DirectActionDialog`, `EditMarkerReviewView`, `ImportTextFileView`, `ExportScreen`);
-`src/ui/pluginUiStyles.ts` their styles. `ACTION_LABELS` in `src/domain/textboxActionKinds.ts`
-is the one label per action kind.
+`App.tsx` owns permissions and button routing; it opens one screen per button, keyed by the press,
+so a screen opened again starts fresh. The button listener subscribes once and calls the latest
+router through a ref. Screens are built on `ui/ScreenFrame.tsx` and own their state in a hook next
+to them: `screens/markers/` (edit-marker review and Details), `screens/tools/` (the lasso screen,
+its Details with "Log All Textboxes"), `screens/direct/` (the toolbar actions' progress card),
+`screens/import/` (Import with its Layout sub-screen and the page drawing), `screens/export/`
+(Export with its Rules sub-screen). Every sub-screen (Details, Layout, Rules) is local state of its
+screen, whose hook stays mounted underneath, so going back keeps the preview.
+
+What the plugin remembers between sessions - the import settings, the export scope and rules,
+the edit-marker calibration - is `domain/settingsModel.ts`, stored by `storage/settingsFile.ts`
+as `settings.json` in the plugin folder: read once at start (before the first screen), written
+1 s after the last change, read field by field so a bad value never resets the rest.
+`src/domain/textboxActionKinds.ts` holds one label and one progress text per action kind
+(`ACTION_LABELS`, `ACTION_PROGRESS_LABELS`) and the lasso screen's order (`ACTION_ORDER`).
 
 ### Textbox actions (`actions/textboxEdits.ts`)
 
 Direct textbox editing: split by sentence, split by paragraph, join in reading order, clean
 repeated spaces, remove manual line breaks, and "Log All Textboxes". The flow finds the textboxes
 in the lasso, `domain/textSplitting.ts` computes the new texts, `domain/textboxEditPlan.ts` the
-preview, the new textboxes and the checks that the result fits the page without colliding with
-other elements; the new textboxes are sized through the native measurement.
+preview of every action at once (with the reason an action can't be chosen), the new textboxes
+and the checks that the result fits the page without colliding with other elements; the new textboxes are sized through the native measurement.
 
 ### Edit markers (`actions/editMarkers.ts`, `actions/editMarkerAnalysis.ts`)
 
@@ -77,26 +87,32 @@ Freehand strokes and the Supernote straight-line tool are both recognized.
 marker to words through the hit-testing core and the native measurement;
 `actions/editMarkers.ts` pairs replace marks, resolves replacement sources, builds the preview
 and applies the plan - for the lasso selection or the whole page. The pure parts are in
-`domain/markerStrokes.ts`, `domain/markerText.ts` and `domain/markerTypes.ts`.
+`domain/markerStrokes.ts`, `domain/markerText.ts` and `domain/markerTypes.ts`. The preview
+shows each affected textbox as diff segments (`domain/markerDiff.ts`): the original text with the
+removed ranges struck through and replacements in bold, built from the same ranges the apply step
+uses, so the review shows exactly what will change.
 Every stage of a marker preview is also recorded in memory (`utils/editMarkerLog.ts`); "Save
-Diagnostics" in the review screen writes that trace, with the stroke's raw sample points next to
+Diagnostics" (review → Details) writes that trace, with the stroke's raw sample points next to
 the points recognition used, as JSON to the EXPORT folder - only when the user taps it.
 
 ### Text import (`actions/textImport.ts`)
 
-Import of a UTF-8 text file from `INBOX` (the folder's exact name on the device) into textboxes:
+Import of a UTF-8 text file from `INBOX` (the folder's exact name on the device), chosen with the
+Supernote file selector (`supernote/fileSelector.ts`, limited to INBOX and `.txt`), into textboxes:
 paragraphs split by blank lines (by default), markdown headings detected and set in larger bold
 text, the text paginated over the current page and new pages as needed. Settings and paths are
 in `domain/importSettings.ts`, parsing in `domain/importParsing.ts`, the page plan in
 `domain/importPlan.ts`, the pagination in `domain/*Pagination.ts` (the height measurement is
-passed in, so it is tested without the device).
+passed in, so it is tested without the device). The preview carries the first planned pages, which
+the Import screen draws to scale; it runs by itself 500 ms after a settings change.
 
 ### DOCX export (`actions/textboxScan.ts`, `storage/docxExport.ts`)
 
 Reads the note context, scans the textboxes of the current page, the whole note or a page range,
 classifies them (heading, paragraph, comment, meta) by configurable rules
 (`domain/exportConfig.ts`, `domain/exportClassification.ts`), and writes a DOCX file (library
-`docx`) to the EXPORT folder through a temporary file.
+`docx`) to the EXPORT folder through a temporary file. The Export screen scans by itself on open
+and 500 ms after the scope, page range or rules change.
 
 ## 4. Native measurement (`TextboxMetricsModule.kt`)
 

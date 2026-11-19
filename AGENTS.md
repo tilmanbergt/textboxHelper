@@ -1,6 +1,6 @@
-# Textbox Helper - notes for agents and reviewers
+# Textbox Tools - notes for agents and reviewers
 
-Textbox Helper is a Supernote NOTE plugin (React Native + `sn-plugin-lib`, one native Kotlin
+Textbox Tools is a Supernote NOTE plugin (React Native + `sn-plugin-lib`, one native Kotlin
 module). The rules for every change are in `docs/dev/DEVELOPMENT-POLICY.md`; this file doesn't
 repeat them: it says what a code review looks for.
 
@@ -10,7 +10,8 @@ repeat them: it says what a code review looks for.
 
 - **Preview before every change to a note.** Flag a split, join, cleanup, marker, import or other
   action that changes page elements without showing what will change first. Instead: build the
-  plan, show it, apply only after the user confirms.
+  plan, show it, apply only after the user confirms. The lasso toolbar's direct actions are the
+  one documented exception (DEVELOPMENT-POLICY §2).
 - **Backup before the page is touched.** Flag a destructive action whose backup
   (`writeBackupFile`) is written after the first change to the page, or whose failure doesn't
   stop the action. Instead: read, back up, then change; a failed backup stops with a message

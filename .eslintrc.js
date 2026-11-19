@@ -1,5 +1,14 @@
 // Layers (DEVELOPMENT-POLICY §3, design-overview §3): what each folder under src/ may import.
-const layer = (forbidden, message) => ({'no-restricted-imports': ['error', {patterns: [{group: forbidden, message}]}]});
+// No screen scrolls (DEVELOPMENT-POLICY §4): long content pages instead. Part of every layer rule
+// below, because an override's no-restricted-imports replaces the top-level one.
+const NO_SCROLL = {
+  name: 'react-native',
+  importNames: ['ScrollView', 'FlatList', 'SectionList'],
+  message: 'Page instead of scrolling: ui/PagedSection for lists, ui/PagedText for long text.',
+};
+const layer = (forbidden, message) => ({
+  'no-restricted-imports': ['error', {paths: [NO_SCROLL], patterns: [{group: forbidden, message}]}],
+});
 const RN_AND_SDK = ['react', 'react-native', 'react-native-*', '@react-native*/**', 'sn-plugin-lib'];
 
 module.exports = {
@@ -9,6 +18,7 @@ module.exports = {
   rules: {
     // `void promise` marks a deliberate fire-and-forget call (same rule as Kept GTD).
     'no-void': ['warn', {allowAsStatement: true}],
+    'no-restricted-imports': ['error', {paths: [NO_SCROLL]}],
   },
   overrides: [
     {

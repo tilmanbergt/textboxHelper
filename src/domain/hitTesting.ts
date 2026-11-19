@@ -1,8 +1,9 @@
 import type {Rect} from './textboxModel';
-import type {
-  NativeDetailedMeasurement,
-  NativeDetailedWord,
-  TextboxMeasurementCalibration,
+import {
+  textLeftX,
+  type NativeDetailedMeasurement,
+  type NativeDetailedWord,
+  type TextboxMeasurementCalibration,
 } from './textboxLayout';
 
 /**
@@ -31,11 +32,11 @@ export function buildPageWordCandidates(
   projectY: (absoluteCenterX: number) => number,
 ): PageWordCandidate[] {
   return measurement.words.map(word => {
-    const absoluteLeft = textRect.left + calibration.offsetX + word.left;
-    const absoluteRight = textRect.left + calibration.offsetX + word.right;
+    const absoluteLeft = textLeftX(textRect.left, calibration) + word.left;
+    const absoluteRight = textLeftX(textRect.left, calibration) + word.right;
     const absoluteTop = textRect.top + calibration.offsetY + word.top;
     const absoluteBottom = textRect.top + calibration.offsetY + word.bottom;
-    const absoluteCenterX = textRect.left + calibration.offsetX + word.centerX;
+    const absoluteCenterX = textLeftX(textRect.left, calibration) + word.centerX;
     const absoluteCenterY = textRect.top + calibration.offsetY + word.centerY;
     const overlapLeft = Math.max(absoluteLeft, markerRect.left);
     const overlapRight = Math.min(absoluteRight, markerRect.right);

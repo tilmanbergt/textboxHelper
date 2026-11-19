@@ -11,7 +11,11 @@ export const PLUGIN_BUTTON_EVENT = 'pluginButton';
 let pendingButtonId: number | null = null;
 let isRoutingInitialized = false;
 
-export function initPluginRouting(): void {
+/**
+ * `backgroundButtons`: buttons registered with `showType: 0` that run without a plugin screen
+ * (the pen-edit tags); they never reach App, which may not be mounted at all.
+ */
+export function initPluginRouting(backgroundButtons: Record<number, () => void> = {}): void {
   if (isRoutingInitialized) {
     return;
   }
@@ -20,6 +24,11 @@ export function initPluginRouting(): void {
 
   PluginManager.registerButtonListener({
     onButtonPress(event) {
+      const background = backgroundButtons[event.id];
+      if (background) {
+        background();
+        return;
+      }
       pendingButtonId = event.id;
       DeviceEventEmitter.emit(PLUGIN_BUTTON_EVENT, {id: event.id});
     },

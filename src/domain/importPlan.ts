@@ -182,6 +182,7 @@ export function countPlannedTextboxes(pages: PlannedTextboxPage[]): number {
 export function wrapContinuousChunks(params: {
   chunks: Array<{text: string; rect: Rect}>;
   fontSize: number;
+  fontPath?: string;
 }): PlannedTextboxPage[] {
   return params.chunks.map(chunk => ({
     chunks: [
@@ -189,6 +190,7 @@ export function wrapContinuousChunks(params: {
         text: chunk.text,
         rect: chunk.rect,
         fontSize: params.fontSize,
+        ...(params.fontPath ? {fontPath: params.fontPath} : {}),
         bold: false,
       },
     ],

@@ -1,0 +1,212 @@
+import {PluginCommAPI, PluginFileAPI, type Element} from 'sn-plugin-lib';
+import {
+  buildRecognizeRect,
+  buildStrokeStats,
+  isStraightLineGeometryElement,
+  isSupportedEditMarkerElement,
+} from '../domain/markerStrokes';
+import {
+  LOOK_BACK_WINDOW,
+  strokeStatsFromRect,
+  type WindowStroke,
+} from '../domain/penEditPairing';
+import {
+  analyzeCaret,
+  analyzeTwoStrokeCaret,
+  isCaretSizedRect,
+  type CaretShape,
+  type Point,
+} from '../domain/penEditCaret';
+import {isTakenStrike} from '../domain/penEditMatching';
+import {isStepSizedRect} from '../domain/paragraphMarks';
+import {isPenEditDecoration} from '../domain/penEditTags';
+import type {Rect} from '../domain/textboxModel';
+import {readAccessorRange} from './markerStrokeRead';
+
+/**
+ * The look-back reads of a replacement tag (technical-design-pen-edits.md §3.5): the elements
+ * numbered just before the snippet, one `getElement` each, until LOOK_BACK_WINDOW elements that
+ * aren't Textbox Tools' badges or numbers were seen. Only the element's own rect is used (the host's recognize
+ * rect, or a straight line's points): no stroke points are read. Never throws; an unreadable
+ * number is skipped. `isComplete` ends the reads early, once the window holds a whole mark.
+ */
+
+type Response<T> = {success?: boolean; result?: T} | null | undefined;
+
+function windowStroke(element: Element): WindowStroke | null {
+  if (isStraightLineGeometryElement(element)) {
+    const stats = buildStrokeStats(element.geometry?.points ?? []);
+    return stats
+      ? {
+          uuid: element.uuid,
+          numInPage: element.numInPage,
+          isStraightLine: true,
+          stats,
+        }
+      : null;
+  }
+  const rect = buildRecognizeRect(element.recognizeResult);
+  const stats = rect ? strokeStatsFromRect(rect) : null;
+  return stats
+    ? {
+        uuid: element.uuid,
+        numInPage: element.numInPage,
+        isStraightLine: false,
+        stats,
+      }
+    : null;
+}
+
+export async function readLookBackWindow(
+  notePath: string,
+  page: number,
+  numbers: number[],
+  isComplete?: (window: WindowStroke[]) => boolean,
+): Promise<{
+  window: WindowStroke[];
+  elements: Map<string, Element>;
+  read: number;
+  ms: number;
+}> {
+  const start = Date.now();
+  const window: WindowStroke[] = [];
+  // The window's elements stay alive so the tag can be written onto the chosen mark; the caller
+  // recycles them with `recycleWindow`.
+  const elements = new Map<string, Element>();
+  let read = 0;
+  let counted = 0;
+  for (const num of numbers) {
+    if (counted >= LOOK_BACK_WINDOW) {
+      break;
+    }
+    let element: Element | null = null;
+    try {
+      const response = (await PluginFileAPI.getElement(
+        notePath,
+        page,
+        num,
+      )) as Response<Element>;
+      element = response?.success && response.result ? response.result : null;
+      if (!element) {
+        continue;
+      }
+      read += 1;
+      if (isPenEditDecoration(element)) {
+        continue;
+      }
+      counted += 1;
+      if (!isSupportedEditMarkerElement(element)) {
+        continue;
+      }
+      const stroke = windowStroke(element);
+      if (stroke) {
+        window.push(stroke);
+        elements.set(element.uuid, element);
+        element = null;
+        if (isComplete?.(window)) {
+          break;
+        }
+      }
+    } catch (error) {
+      console.warn(
+        '[PenEditPageRead] element not read',
+        JSON.stringify({page, num, error: String(error)}),
+      );
+    } finally {
+      if (element) {
+        recycle(element);
+      }
+    }
+  }
+  return {window, elements, read, ms: Date.now() - start};
+}
+
+function recycle(element: Element): void {
+  try {
+    PluginCommAPI.recycleElement(element.uuid);
+  } catch {
+    // silent: a failed recycle only keeps a cached element a little longer
+  }
+}
+
+export function recycleWindow(elements: Map<string, Element>): void {
+  elements.forEach(recycle);
+  elements.clear();
+}
+
+/**
+ * The caret of an insertion among the window's strokes, newest first: one stroke shaped like a
+ * V, ∧, <, > or a step mark (`analyzeCaret`), or two strokes drawn one after the other whose ends meet at the
+ * tip (`analyzeTwoStrokeCaret`), not already paired. Only caret-sized candidates have their points
+ * read. Never throws.
+ */
+export async function findCaretInWindow(
+  window: WindowStroke[],
+  elements: Map<string, Element>,
+  taken: Rect[],
+): Promise<{strokes: WindowStroke[]; rect: Rect; shape: CaretShape} | null> {
+  const byNum = [...window].sort((a, b) => b.numInPage - a.numInPage);
+  const candidates: Array<{strokes: WindowStroke[]; rect: Rect}> = [];
+  byNum.forEach((stroke, index) => {
+    const older = byNum[index + 1];
+    if (older && older.numInPage === stroke.numInPage - 1) {
+      const rect = unionRect(older.stats.rect, stroke.stats.rect);
+      if (isCaretSizedRect(rect) && !isTakenStrike(rect, taken)) {
+        candidates.push({strokes: [older, stroke], rect});
+      }
+    }
+    const markSized =
+      isCaretSizedRect(stroke.stats.rect) || isStepSizedRect(stroke.stats.rect);
+    if (
+      !stroke.isStraightLine &&
+      markSized &&
+      !isTakenStrike(stroke.stats.rect, taken)
+    ) {
+      candidates.push({strokes: [stroke], rect: stroke.stats.rect});
+    }
+  });
+
+  const pointsOf = new Map<string, Point[] | null>();
+  const readPoints = async (stroke: WindowStroke): Promise<Point[] | null> => {
+    if (pointsOf.has(stroke.uuid)) {
+      return pointsOf.get(stroke.uuid) ?? null;
+    }
+    const element = elements.get(stroke.uuid);
+    let points: Point[] | null = null;
+    if (element?.stroke?.points) {
+      try {
+        points = (await readAccessorRange<Point>(element.stroke.points)).filter(
+          point => typeof point?.x === 'number' && typeof point?.y === 'number',
+        );
+      } catch (error) {
+        console.warn('[PenEditPageRead] caret points not read', String(error));
+      }
+    }
+    pointsOf.set(stroke.uuid, points);
+    return points;
+  };
+
+  for (const candidate of candidates) {
+    const legs = await Promise.all(candidate.strokes.map(readPoints));
+    if (legs.some(points => !points)) {
+      continue;
+    }
+    const shape =
+      legs.length === 2
+        ? analyzeTwoStrokeCaret(legs[0] as Point[], legs[1] as Point[])
+        : analyzeCaret(legs[0] as Point[]);
+    if (shape) {
+      return {strokes: candidate.strokes, rect: candidate.rect, shape};
+    }
+  }
+  return null;
+}
+
+function unionRect(a: Rect, b: Rect): Rect {
+  return {
+    left: Math.min(a.left, b.left),
+    top: Math.min(a.top, b.top),
+    right: Math.max(a.right, b.right),
+    bottom: Math.max(a.bottom, b.bottom),
+  };
+}

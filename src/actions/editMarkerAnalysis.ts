@@ -35,6 +35,7 @@ import type {
   WordCandidate,
 } from '../domain/markerTypes';
 import {DEFAULT_FONT_SIZE, type Rect} from '../domain/textboxModel';
+import {textLeftX} from '../domain/textboxLayout';
 import {loadMarkerStrokeStats} from '../supernote/markerStrokeRead';
 import {measureDetailedTextLayout} from '../supernote/textboxMetrics';
 import {logEditMarker} from '../utils/editMarkerLog';
@@ -56,6 +57,7 @@ export function buildRejectedResult(
   marker: Element,
   reason: string,
   extra?: Record<string, unknown>,
+  landedOnTextbox = true,
 ): {ignored: IgnoredEditMarker} {
   logEditMarker('markerRejected', {
     markerUuid: marker.uuid,
@@ -64,8 +66,9 @@ export function buildRejectedResult(
     ...(extra || {}),
   });
 
+  const ignored = buildIgnoredMarker(marker, reason);
   return {
-    ignored: buildIgnoredMarker(marker, reason),
+    ignored: landedOnTextbox ? {...ignored, removableNums: [marker.numInPage]} : ignored,
   };
 }
 
@@ -80,6 +83,8 @@ export async function analyzeDeleteMarker(
     return buildRejectedResult(
       marker,
       'No usable page-coordinate marker geometry was available.',
+      undefined,
+      false,
     );
   }
 
@@ -107,6 +112,8 @@ export async function analyzeDeleteMarker(
         centeredTextboxCount: centeredTextboxes.length,
         overlappingTextboxCount: overlappingTextboxes.length,
       },
+      // Strokes away from every textbox may be ordinary handwriting: never offered for removal.
+      centeredTextboxes.length > 0,
     );
   }
 
@@ -204,8 +211,8 @@ export async function analyzeDeleteMarker(
   }
 
   const lineRect: Rect = {
-    left: textboxRect.left + currentEditMarkerCalibration.offsetX + measurementLine.left,
-    right: textboxRect.left + currentEditMarkerCalibration.offsetX + measurementLine.right,
+    left: textLeftX(textboxRect.left, currentEditMarkerCalibration) + measurementLine.left,
+    right: textLeftX(textboxRect.left, currentEditMarkerCalibration) + measurementLine.right,
     top: textboxRect.top + currentEditMarkerCalibration.offsetY + measurementLine.top,
     bottom: textboxRect.top + currentEditMarkerCalibration.offsetY + measurementLine.bottom,
   };

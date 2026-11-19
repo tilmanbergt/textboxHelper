@@ -1,0 +1,334 @@
+import {PluginCommAPI, type Element} from 'sn-plugin-lib';
+import {
+  activePenEditsOnPage,
+  takenCaretRects,
+  takenStrikeRects,
+  upsertPenEdit,
+  WAITING_RECOGNITION,
+  type PenEditEntry,
+} from '../domain/penEditModel';
+import {findReplaceMarkInWindow, lookBackNumbers, storedMark, type WindowMark} from '../domain/penEditPairing';
+import {
+  BADGE_SIZE_PX,
+  badgeNumberRect,
+  circlePolygon,
+  markBadgeRect,
+  newPenEditId,
+  nextPenEditNumber,
+  snippetBadgePolygon,
+  snippetBadgeRect,
+  type PenEditKind,
+} from '../domain/penEditTags';
+import type {Rect} from '../domain/textboxModel';
+import {
+  changePenEditIndex,
+  deletePenEditData,
+  readPenEditIndex,
+  savePenEditData,
+  temporaryPicturePath,
+} from '../storage/penEditStore';
+import {readLasso, type LassoSnapshot} from '../supernote/lassoRead';
+import {hideLassoBox} from '../supernote/noteElements';
+import {insertTagElements, tagUserStrokes, type TagBadge, type TagNumber} from '../supernote/penEditElements';
+import {findCaretInWindow, readLookBackWindow, recycleWindow} from '../supernote/penEditPageRead';
+import {caretNumberCenter, type CaretShape} from '../domain/penEditCaret';
+import type {WindowStroke} from '../domain/penEditPairing';
+import {ensurePermissions} from '../supernote/permissions';
+
+/**
+ * The "Replacement" and "Insertion" lasso buttons (technical-design-pen-edits.md §3.4): store the
+ * lassoed handwriting, pair a replacement with the replace mark written just before it, put the
+ * badges and numbers on the page, and write the tag onto the user's strokes. No recognition here, and no plugin screen unless something
+ * went wrong: the outcome is kept here for App's small result screen.
+ */
+
+export type PenEditTagOutcome =
+  | {kind: 'tagged'; tagKind: PenEditKind; number: number}
+  | {kind: 'noMark'; tagKind: PenEditKind; number: number}
+  | {kind: 'empty'}
+  | {kind: 'busy'}
+  | {kind: 'failed'; detail: string};
+
+let outcome: PenEditTagOutcome | null = null;
+const listeners = new Set<() => void>();
+
+export function getPenEditOutcome(): PenEditTagOutcome | null {
+  return outcome;
+}
+
+export function setPenEditOutcome(next: PenEditTagOutcome | null): void {
+  outcome = next;
+  Array.from(listeners).forEach(listener => listener());
+}
+
+export function subscribePenEditOutcome(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** Success shows nothing but the icon on the page; everything else opens the result screen. */
+export function outcomeNeedsScreen(result: PenEditTagOutcome): boolean {
+  return result.kind !== 'tagged' && result.kind !== 'busy';
+}
+
+function boundsOfFlatPoints(points: number[][]): Rect | null {
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const flat of points) {
+    for (let index = 0; index + 1 < flat.length; index += 2) {
+      left = Math.min(left, flat[index]);
+      right = Math.max(right, flat[index]);
+      top = Math.min(top, flat[index + 1]);
+      bottom = Math.max(bottom, flat[index + 1]);
+    }
+  }
+  return Number.isFinite(left) ? {left, top, right, bottom} : null;
+}
+
+let running = false;
+
+/**
+ * How long after closing the lasso the first page change waits. NOTE's reload after the lasso
+ * closes took about 0.3 s on the A5 X2; builds that waited about 1 s there never crashed.
+ */
+export const LASSO_SETTLE_MS = 900;
+
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+export async function tagPenEdit(tagKind: PenEditKind): Promise<PenEditTagOutcome> {
+  if (running) {
+    console.warn('[PenEdit] tag already running - press ignored');
+    return {kind: 'busy'};
+  }
+  running = true;
+  const start = Date.now();
+  const steps: Record<string, number> = {};
+  let last = start;
+  const step = (name: string) => {
+    const now = Date.now();
+    steps[name] = now - last;
+    last = now;
+  };
+  const id = newPenEditId(new Date());
+  let snap: LassoSnapshot | null = null;
+  let windowElements: Map<string, Element> | null = null;
+  // Plugin-file work runs while the host works: the index is read during the lasso read, and the
+  // strokes and picture are stored during inserting. Only the index entry waits for
+  // the badge to be on the page.
+  let storing: Promise<{kept: boolean; error: string | null; failure: unknown}> | null = null;
+  let stored = false;
+  const indexRead = readPenEditIndex().catch(error => {
+    console.warn('[PenEdit] early index read failed', String(error));
+    return null;
+  });
+  try {
+    snap = await readLasso({picturePath: await temporaryPicturePath(id), keepStrokeElements: true});
+    step('lasso');
+    if (!snap.path || snap.page === null) {
+      return {kind: 'failed', detail: 'Could not tell which note and page the lasso is on.'};
+    }
+    if (snap.strokes.length === 0) {
+      return {kind: 'empty'};
+    }
+    const notePath = snap.path;
+    const page = snap.page;
+
+    await hideLassoBox('[PenEdit]');
+    const lassoHiddenAt = Date.now();
+    step('lassoGone');
+
+    if (!(await ensurePermissions())) {
+      return {kind: 'failed', detail: 'Missing permission: allow file read and write access for this plugin.'};
+    }
+    step('permissions');
+
+    // Settled into a value at once, so a failing write is never an unhandled rejection meanwhile.
+    storing = savePenEditData({version: 1, id, pageSize: snap.pageSize, strokes: snap.strokes}, snap.picture).then(
+      result => ({...result, failure: null}),
+      failure => ({kept: false, error: String(failure), failure: failure ?? 'write failed'}),
+    );
+
+    const {index} = (await indexRead) ?? (await readPenEditIndex());
+    const number = nextPenEditNumber(activePenEditsOnPage(index, notePath, page).map(entry => entry.number));
+    step('index');
+
+    let found: WindowMark | null = null;
+    let caret: {strokes: WindowStroke[]; rect: Rect; shape: CaretShape} | null = null;
+    let lookBack = {read: 0, ms: 0};
+    if (tagKind === 'replacement') {
+      const lowest = Math.min(...snap.strokeNums);
+      const taken = takenStrikeRects(index, notePath, page);
+      // Stops as soon as a mark is complete: its strike is read after its loop or verticals.
+      const result = await readLookBackWindow(notePath, page, lookBackNumbers(lowest), window =>
+        findReplaceMarkInWindow(window, taken) !== null,
+      );
+      windowElements = result.elements;
+      lookBack = {read: result.read, ms: result.ms};
+      found = findReplaceMarkInWindow(result.window, taken);
+      step('lookBack');
+    } else {
+      // An insertion's caret: the newest V or ∧ just before the snippet. The whole window is read
+      // (its points only for caret-sized strokes); this runs inside the wait after the lasso.
+      const lowest = Math.min(...snap.strokeNums);
+      const result = await readLookBackWindow(notePath, page, lookBackNumbers(lowest));
+      windowElements = result.elements;
+      caret = await findCaretInWindow(result.window, result.elements, takenCaretRects(index, notePath, page));
+      lookBack = {read: result.read, ms: Date.now() - last};
+      step('lookBack');
+    }
+
+    const lassoRect = snap.rect ?? boundsOfFlatPoints(snap.strokes.map(stroke => stroke.points));
+    if (!lassoRect) {
+      return {kind: 'failed', detail: 'Could not tell where the lassoed handwriting is.'};
+    }
+
+    // The tag goes onto the user's strokes before anything is inserted: inserting renumbers the
+    // page, and the elements read so far belong to this moment.
+    const strokesToTag: Array<{element: Element; role: 'stroke' | 'mark'}> = snap.strokeElements.map(element => ({
+      element,
+      role: 'stroke' as const,
+    }));
+    if (caret && windowElements) {
+      for (const stroke of caret.strokes) {
+        const element = windowElements.get(stroke.uuid);
+        if (element) {
+          strokesToTag.push({element, role: 'mark'});
+        }
+      }
+    }
+    if (found && windowElements) {
+      for (const item of [found.strike, ...found.modifiers]) {
+        const element = windowElements.get(item.uuid);
+        if (element) {
+          strokesToTag.push({element, role: 'mark'});
+        }
+      }
+    }
+    // Closing the lasso makes NOTE reload and redraw the page. A page change sent while it does
+    // that crashed NOTE twice (a native crash in NOTE, once in the redraw, once in the change):
+    // the first change waits until the redraw is surely over.
+    const settle = LASSO_SETTLE_MS - (Date.now() - lassoHiddenAt);
+    if (settle > 0) {
+      await sleep(settle);
+    }
+    step('settle');
+    const tagged = await tagUserStrokes(page, id, strokesToTag);
+    step('tagStrokes');
+
+    const badge = snippetBadgeRect(lassoRect);
+    const badges: TagBadge[] = [{role: 'snippet', points: snippetBadgePolygon(tagKind, badge)}];
+    const numbers: TagNumber[] = [{role: 'snippetnum', rect: badgeNumberRect(badge, number), number}];
+    if (caret) {
+      // The caret's number sits between the ends of its legs, on its open side.
+      const center = caretNumberCenter(caret.shape);
+      const half = BADGE_SIZE_PX / 2;
+      const box = {left: center.x - half, top: center.y - half, right: center.x + half, bottom: center.y + half};
+      numbers.push({role: 'marknum', rect: badgeNumberRect(box, number), number});
+    } else if (found?.loop) {
+      // The user drew the circle: the number goes inside it.
+      numbers.push({role: 'marknum', rect: badgeNumberRect(found.loop.stats.rect, number), number});
+    } else if (found) {
+      const markBadge = markBadgeRect(
+        found.modifiers.map(item => item.stats.rect),
+        found.strike.stats.rect,
+        snap.pageSize?.width ?? 0,
+      );
+      badges.push({role: 'markring', points: circlePolygon(markBadge)});
+      numbers.push({role: 'marknum', rect: badgeNumberRect(markBadge, number), number});
+    }
+    const placed = await insertTagElements({page, id, badges, numbers});
+    step('elements');
+    if (!placed.placed) {
+      // Without its badge the entry would never be found on the page again: store nothing.
+      return {kind: 'failed', detail: `Could not put the tag on the page (${placed.error ?? 'unknown error'}). Nothing was tagged; please try again.`};
+    }
+
+    const picture = await storing;
+    if (picture.failure) {
+      // Without its strokes the entry could never be recognized.
+      throw picture.failure instanceof Error ? picture.failure : new Error(String(picture.failure));
+    }
+    const hasPicture = picture.kept;
+    const entry: PenEditEntry = {
+      id,
+      kind: tagKind,
+      notePath,
+      page,
+      number,
+      createdAt: new Date().toISOString(),
+      rect: lassoRect,
+      strokeRects: snap.strokeRects,
+      iconRect: badge,
+      strokesTagged: tagged.tagged,
+      mark: caret
+        ? {kind: 'caret', caretRect: {...caret.rect}, tip: {...caret.shape.tip}, direction: caret.shape.direction}
+        : found
+          ? storedMark(found)
+          : null,
+      hasPicture,
+      recognition: WAITING_RECOGNITION,
+      correctedText: null,
+      review: 'open',
+      state: 'active',
+    };
+    await changePenEditIndex(current => upsertPenEdit(current, entry));
+    stored = true;
+    step('stored');
+
+    console.log(
+      '[PenEdit] tag',
+      JSON.stringify({
+        id,
+        kind: tagKind,
+        page,
+        number,
+        strokes: snap.strokes.length,
+        strokeNums: [Math.min(...snap.strokeNums), Math.max(...snap.strokeNums)],
+        paired: !!found || !!caret,
+        markKind: caret ? `caret-${caret.shape.direction}` : found ? (found.loop ? 'loop' : 'verticals') : null,
+        lookBack,
+        strokesTagged: tagged.tagged,
+        tagError: tagged.error,
+        tagMs: tagged.ms,
+        hasPicture,
+        pictureError: picture.error,
+        saved: placed.saved,
+        createMs: placed.createMs,
+        insertMs: placed.insertMs,
+        saveMs: placed.saveMs,
+        retried: placed.retried,
+        lassoTimings: snap.timingsMs,
+        steps,
+        totalMs: Date.now() - start,
+      }),
+    );
+    if ((tagKind === 'replacement' && !found) || (tagKind === 'insertion' && !caret)) {
+      return {kind: 'noMark', tagKind, number};
+    }
+    return {kind: 'tagged', tagKind, number};
+  } catch (error) {
+    console.error('[PenEdit] tag failed', JSON.stringify({id, steps, error: String(error)}));
+    return {kind: 'failed', detail: error instanceof Error ? error.message : 'The tag could not be saved.'};
+  } finally {
+    if (storing && !stored) {
+      // Nothing was tagged: the stored handwriting would belong to no entry.
+      await storing;
+      await deletePenEditData(id).catch(error => console.warn('[PenEdit] stored data not removed', String(error)));
+    }
+    running = false;
+    snap?.strokeElements.forEach(element => {
+      try {
+        PluginCommAPI.recycleElement(element.uuid);
+      } catch {
+        // silent: a failed recycle only keeps a cached element a little longer
+      }
+    });
+    if (windowElements) {
+      recycleWindow(windowElements);
+    }
+  }
+}

@@ -39,7 +39,7 @@
   "engines": {
     "node": ">=18"
   },
-  "description": "Textbox Helper is an experimental Supernote NOTE plugin for structured text editing inside notes.",
+  "description": "Textbox Tools is an experimental Supernote NOTE plugin for structured text editing inside notes.",
   "main": "index.js",
   "directories": {
     "doc": "docs"

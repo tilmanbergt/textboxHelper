@@ -48,42 +48,65 @@ const picture = (uuid: string, pictureRect: Rect): PageElementData => ({
 });
 
 describe('action preview', () => {
-  it('offers split, clean and remove line breaks for one textbox', () => {
-    const preview = buildActionPreview([textbox('a', 'One sentence here. Two sentences here.', rect(0, 0, 500, 100))], 'split');
+  it('offers the one-textbox actions for one textbox, with every result at once', () => {
+    const preview = buildActionPreview([textbox('a', 'One sentence here. Two sentences here.', rect(0, 0, 500, 100))]);
     expect(preview.availableActions).toEqual({
       split: true,
       join: false,
       clean: true,
       unwrap: true,
-      splitParagraphs: false,
+      splitParagraphs: true,
       log: true,
     });
-    expect(preview.afterBlocks).toEqual(['One sentence here.', 'Two sentences here.']);
+    expect(preview.afterBlocksByAction.split).toEqual(['One sentence here.', 'Two sentences here.']);
     expect(preview.selectionMessage).toBe('1 textbox selected');
   });
 
+  it('gives a reason for every action the lasso screen greys out', () => {
+    const preview = buildActionPreview([textbox('a', 'One sentence only.', rect(0, 0, 500, 100))]);
+    expect(preview.reasons).toEqual({
+      split: 'only one sentence',
+      splitParagraphs: 'only one paragraph',
+      clean: 'nothing to clean',
+      unwrap: 'no line breaks',
+      join: 'needs 2 or more textboxes',
+    });
+  });
+
+  it('keeps clean and remove line breaks when they change something', () => {
+    const preview = buildActionPreview([textbox('a', 'Two  spaces.\n\nNew paragraph.', rect(0, 0, 500, 100))]);
+    expect(preview.reasons.clean).toBeUndefined();
+    expect(preview.reasons.unwrap).toBeUndefined();
+    expect(preview.afterBlocksByAction.splitParagraphs).toEqual(['Two  spaces.', 'New paragraph.']);
+  });
+
   it('offers join for textboxes in one column, in reading order', () => {
-    const preview = buildActionPreview(
-      [textbox('b', 'second', rect(0, 200, 500, 300)), textbox('a', 'first', rect(0, 0, 500, 100))],
-      'join',
-    );
+    const preview = buildActionPreview([
+      textbox('b', 'second', rect(0, 200, 500, 300)),
+      textbox('a', 'first', rect(0, 0, 500, 100)),
+    ]);
     expect(preview.availableActions.join).toBe(true);
-    expect(preview.afterBlocks).toEqual(['first second']);
+    expect(preview.afterBlocksByAction.join).toEqual(['first second']);
+    expect(preview.reasons.split).toBe('needs exactly 1 textbox');
+    expect(preview.selectionMessage).toBe('2 textboxes selected');
   });
 
   it('refuses join for textboxes side by side', () => {
-    const preview = buildActionPreview(
-      [textbox('a', 'left', rect(0, 0, 200, 100)), textbox('b', 'right', rect(300, 0, 500, 100))],
-      'join',
-    );
+    const preview = buildActionPreview([
+      textbox('a', 'left', rect(0, 0, 200, 100)),
+      textbox('b', 'right', rect(300, 0, 500, 100)),
+    ]);
     expect(preview.availableActions.join).toBe(false);
-    expect(preview.afterBlocks).toEqual([]);
+    expect(preview.reasons.join).toBe('textboxes are not in one column');
+    expect(preview.afterBlocksByAction.join).toBeUndefined();
   });
 
-  it('offers nothing when the selection holds more than textboxes', () => {
-    const preview = buildActionPreview([textbox('a', 'text', rect(0, 0, 500, 100)), picture('p', rect(0, 200, 100, 300))], 'clean');
-    expect(preview.hasOnlyTextboxes).toBe(false);
-    expect(preview.availableActions.clean).toBe(false);
+  it('offers nothing when the selection holds more than textboxes, or nothing', () => {
+    const mixed = buildActionPreview([textbox('a', 'text', rect(0, 0, 500, 100)), picture('p', rect(0, 200, 100, 300))]);
+    expect(mixed.hasOnlyTextboxes).toBe(false);
+    expect(mixed.availableActions.clean).toBe(false);
+    expect(mixed.reasons.clean).toBe('only textboxes can be in the lasso');
+    expect(buildActionPreview([]).reasons.join).toBe('select textboxes with the lasso');
   });
 });
 

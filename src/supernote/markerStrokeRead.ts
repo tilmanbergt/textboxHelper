@@ -51,17 +51,29 @@ export async function readAccessorRange<T>(
  * that recognition uses below. With sn-plugin-lib 0.2.x the raw points are page pixels
  * (`docs/dev/supernote-host-facts.md`), so the two can be compared directly.
  */
-async function logRawStrokePoints(element: Element): Promise<void> {
+/** A stroke's drawn path in page pixels, in drawing order; empty when it has none. */
+export async function readStrokePath(
+  element: Element,
+): Promise<Array<{x: number; y: number}>> {
   if (!element.stroke) {
-    return;
+    return [];
   }
-  const rawPoints = (await readAccessorRange<{x?: unknown; y?: unknown}>(element.stroke.points))
+  return (
+    await readAccessorRange<{x?: unknown; y?: unknown}>(element.stroke.points)
+  )
     .map(point =>
       typeof point?.x === 'number' && typeof point?.y === 'number'
         ? {x: point.x, y: point.y}
         : null,
     )
     .filter((point): point is {x: number; y: number} => !!point);
+}
+
+async function logRawStrokePoints(element: Element): Promise<void> {
+  if (!element.stroke) {
+    return;
+  }
+  const rawPoints = await readStrokePath(element);
   const rawStats = buildStrokeStats(rawPoints);
   logEditMarker('markerRawStrokePoints', {
     markerUuid: element.uuid,
@@ -74,14 +86,22 @@ async function logRawStrokePoints(element: Element): Promise<void> {
           height: roundNumber(rawStats.height),
           straightness: roundNumber(rawStats.straightness),
           angleDeg: roundNumber(rawStats.angleDeg),
-          firstPoint: {x: roundNumber(rawStats.firstPoint.x), y: roundNumber(rawStats.firstPoint.y)},
-          lastPoint: {x: roundNumber(rawStats.lastPoint.x), y: roundNumber(rawStats.lastPoint.y)},
+          firstPoint: {
+            x: roundNumber(rawStats.firstPoint.x),
+            y: roundNumber(rawStats.firstPoint.y),
+          },
+          lastPoint: {
+            x: roundNumber(rawStats.lastPoint.x),
+            y: roundNumber(rawStats.lastPoint.y),
+          },
         }
       : null,
   });
 }
 
-export async function loadMarkerStrokeStats(element: Element): Promise<StrokeStats | null> {
+export async function loadMarkerStrokeStats(
+  element: Element,
+): Promise<StrokeStats | null> {
   await logRawStrokePoints(element);
   if (isStraightLineGeometryElement(element)) {
     const geometryPoints = element.geometry?.points
@@ -106,7 +126,9 @@ export async function loadMarkerStrokeStats(element: Element): Promise<StrokeSta
     }
   }
 
-  const recognPoints = await readAccessorRange<RecognPointLike>(element.stroke?.recognPoints);
+  const recognPoints = await readAccessorRange<RecognPointLike>(
+    element.stroke?.recognPoints,
+  );
   const points = recognPoints
     .map(point =>
       typeof point?.X === 'number' && typeof point?.Y === 'number'
@@ -132,9 +154,9 @@ export async function loadMarkerStrokeStats(element: Element): Promise<StrokeSta
     return recognPointStats;
   }
 
-  const contourGroups = await readAccessorRange<Array<{x?: unknown; y?: unknown}>>(
-    element.contoursSrc,
-  );
+  const contourGroups = await readAccessorRange<
+    Array<{x?: unknown; y?: unknown}>
+  >(element.contoursSrc);
   const contourPoints = contourGroups
     .flat()
     .map(point =>

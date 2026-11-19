@@ -4,6 +4,7 @@ import {
   buildFontFallbackPaths,
   buildFontWarning,
   isDefaultTypefaceStatus,
+  NOTE_SYSTEM_FONT_PATH,
 } from '../domain/fontPaths';
 import {rectWidth} from '../domain/geometry';
 import type {MeasureTextboxHeight} from '../domain/paginationCore';
@@ -68,10 +69,16 @@ function noteTypefaceStatus(fontPath: string | undefined, typefaceStatus?: strin
 
 /**
  * The font options for a native measurement: the textbox's font path and the readable places to
- * try when that path can't be opened (`fontPaths.ts`).
+ * try when that path can't be opened (`fontPaths.ts`). A textbox without a font is measured in
+ * NOTE's system font, which is what NOTE writes for "system font".
  */
 function buildFontOptions(fontPath?: string): {fontPath?: string; fontFallbackPaths?: string[]} {
-  return fontPath ? {fontPath, fontFallbackPaths: buildFontFallbackPaths(fontPath)} : {};
+  const effective = effectiveFontPath(fontPath);
+  return {fontPath: effective, fontFallbackPaths: buildFontFallbackPaths(effective)};
+}
+
+function effectiveFontPath(fontPath?: string): string {
+  return fontPath || NOTE_SYSTEM_FONT_PATH;
 }
 
 export async function measureTextLayout(
@@ -93,7 +100,7 @@ export async function measureTextLayout(
       includePad: true,
       ...buildFontOptions(fontPath),
     });
-    noteTypefaceStatus(fontPath, measurement?.typefaceStatus);
+    noteTypefaceStatus(effectiveFontPath(fontPath), measurement?.typefaceStatus);
     return measurement;
   } catch {
     return null;
@@ -119,7 +126,7 @@ export async function measureDetailedTextLayout(
       includePad: true,
       ...buildFontOptions(fontPath),
     });
-    noteTypefaceStatus(fontPath, measurement?.typefaceStatus);
+    noteTypefaceStatus(effectiveFontPath(fontPath), measurement?.typefaceStatus);
     return measurement;
   } catch {
     return null;

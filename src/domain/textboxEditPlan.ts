@@ -1,4 +1,6 @@
 import {CLIPBOARD_PREVIEW_LIMIT} from './backupPayload';
+import {isPenEditElement, looksLikePenEditNumber} from './penEditTags';
+import {plural} from './plural';
 import {
   cloneRect,
   intersectionRect,
@@ -12,6 +14,7 @@ import {
   countWords,
   normalizeJoinBoundary,
   removeLineBreaks,
+  splitIntoParagraphCandidates,
   splitIntoSentenceCandidates,
 } from './textSplitting';
 import {
@@ -39,8 +42,12 @@ import {
 export type TextboxActionPreview = {
   selectedCount: number;
   beforeBlocks: string[];
-  afterBlocks: string[];
+  /** The result of each action that applies to the selection. */
+  afterBlocksByAction: Partial<Record<TextboxActionKind, string[]>>;
+  /** For the toolbar (direct) actions: the selection has the right textboxes for the action. */
   availableActions: TextboxActionAvailability;
+  /** Why an action can't be chosen on the lasso screen ("needs exactly 1 textbox"). */
+  reasons: Partial<Record<TextboxActionKind, string>>;
   selectionMessage: string;
   hasOnlyTextboxes: boolean;
 };
@@ -109,7 +116,21 @@ export function isNormalTextElement<T extends PageElementData>(
     element.type === TEXT_TYPE_NORMAL &&
     element.layerNum === MAIN_LAYER &&
     !!element.textBox?.textContentFull &&
-    !!element.textBox?.textRect
+    !!element.textBox?.textRect &&
+    !isPenEditNumberElement(element)
+  );
+}
+
+/**
+ * The small number textboxes pen edits put on the page (technical-design-pen-edits.md §3.2) are
+ * not text: every textbox tool, the edit markers and the export skip them. Recognized by their
+ * `userData`, and by their look in case the host dropped it.
+ */
+export function isPenEditNumberElement(element: PageElementData): boolean {
+  return (
+    isPenEditElement(element) ||
+    (element.type === TEXT_TYPE_NORMAL &&
+      looksLikePenEditNumber(element.textBox?.textContentFull, element.textBox?.fontSize))
   );
 }
 
@@ -272,110 +293,97 @@ function getTextboxText(element: TextElementData): string {
   return element.textBox.textContentFull || '';
 }
 
+/** The actions the lasso screen offers, each with its result for the current selection. */
+type ScreenAction = Exclude<TextboxActionKind, 'log'>;
+
+/**
+ * Every action's result for one selection, plus why an action can't be chosen on the lasso screen.
+ * `availableActions` keeps the meaning the toolbar (direct) actions use: the selection has the
+ * right number and layout of textboxes. A reason is also given when an action would change
+ * nothing (one sentence, nothing to clean), so the screen greys it out
+ * (technical-design-calmer-screens.md §3.5).
+ */
 function computeActionOutputs(textElements: TextElementData[]): {
   beforeBlocks: string[];
-  splitBlocks: string[];
-  joinBlocks: string[];
-  cleanBlocks: string[];
-  unwrapBlocks: string[];
-  logBlocks: string[];
+  afterBlocksByAction: Partial<Record<TextboxActionKind, string[]>>;
   availableActions: TextboxActionAvailability;
+  reasons: Partial<Record<TextboxActionKind, string>>;
 } {
   const sortedTextElements = sortTextElements(textElements);
   const beforeBlocks = sortedTextElements.map(getTextboxText);
   const availableActions = createEmptyAvailability();
-
-  let splitBlocks: string[] = [];
-  let joinBlocks: string[] = [];
-  let cleanBlocks: string[] = [];
-  let unwrapBlocks: string[] = [];
-  const logBlocks = ['Execute to log every textbox on this page.'];
+  const afterBlocksByAction: Partial<Record<TextboxActionKind, string[]>> = {};
+  const reasons: Partial<Record<TextboxActionKind, string>> = {};
+  const single: ScreenAction[] = ['split', 'splitParagraphs', 'clean', 'unwrap'];
 
   if (sortedTextElements.length === 1) {
-    const sourceText = getTextboxText(sortedTextElements[0]);
-    splitBlocks = splitIntoSentenceCandidates(sourceText);
-    availableActions.split = true;
-
-    cleanBlocks = [cleanupTextboxWhitespace(sourceText)];
-    availableActions.clean = true;
-
-    unwrapBlocks = [removeLineBreaks(sourceText)];
-    availableActions.unwrap = true;
+    const sourceText = beforeBlocks[0];
+    const outputs: Record<Exclude<ScreenAction, 'join'>, string[]> = {
+      split: splitIntoSentenceCandidates(sourceText),
+      splitParagraphs: splitIntoParagraphCandidates(sourceText),
+      clean: [cleanupTextboxWhitespace(sourceText)],
+      unwrap: [removeLineBreaks(sourceText)],
+    };
+    for (const action of single as Array<Exclude<ScreenAction, 'join'>>) {
+      availableActions[action] = true;
+      afterBlocksByAction[action] = outputs[action];
+    }
+    if (outputs.split.length < 2) {
+      reasons.split = 'only one sentence';
+    }
+    if (outputs.splitParagraphs.length < 2) {
+      reasons.splitParagraphs = 'only one paragraph';
+    }
+    if (outputs.clean[0] === sourceText) {
+      reasons.clean = 'nothing to clean';
+    }
+    if (outputs.unwrap[0] === sourceText) {
+      reasons.unwrap = 'no line breaks';
+    }
+  } else {
+    for (const action of single) {
+      reasons[action] = 'needs exactly 1 textbox';
+    }
   }
 
   if (sortedTextElements.length >= 2) {
     try {
       ensureClearlyOrderedColumn(sortedTextElements);
-      joinBlocks = [buildJoinedTextboxText(sortedTextElements)];
+      afterBlocksByAction.join = [buildJoinedTextboxText(sortedTextElements)];
       availableActions.join = true;
     } catch {
-      availableActions.join = false;
+      reasons.join = 'textboxes are not in one column';
     }
+  } else {
+    reasons.join = 'needs 2 or more textboxes';
   }
 
-  return {
-    beforeBlocks,
-    splitBlocks,
-    joinBlocks,
-    cleanBlocks,
-    unwrapBlocks,
-    logBlocks,
-    availableActions,
-  };
+  return {beforeBlocks, afterBlocksByAction, availableActions, reasons};
 }
 
-export function buildActionPreview(
-  lassoElements: PageElementData[],
-  action: TextboxActionKind | null,
-): TextboxActionPreview {
+/** The preview of every action for the lasso selection (one read, then switching is instant). */
+export function buildActionPreview(lassoElements: PageElementData[]): TextboxActionPreview {
   const textElements = lassoElements.filter(isNormalTextElement);
   const selectedCount = textElements.length;
-  const selectionMessage =
-    selectedCount === 1 ? '1 textbox selected' : `${selectedCount} textboxes selected`;
+  const selectionMessage = plural(selectedCount, 'textbox', 'textboxes') + ' selected';
 
-  if (lassoElements.length === 0) {
-    return {
-      selectedCount: 0,
-      beforeBlocks: [],
-      afterBlocks: [],
-      availableActions: createEmptyAvailability(),
-      selectionMessage: '0 textboxes selected',
-      hasOnlyTextboxes: true,
-    };
-  }
-
-  if (textElements.length !== lassoElements.length) {
+  if (lassoElements.length === 0 || textElements.length !== lassoElements.length) {
+    const reason =
+      lassoElements.length === 0 ? 'select textboxes with the lasso' : 'only textboxes can be in the lasso';
     return {
       selectedCount,
       beforeBlocks: sortTextElements(textElements).map(getTextboxText),
-      afterBlocks: [],
+      afterBlocksByAction: {},
       availableActions: createEmptyAvailability(),
+      reasons: {split: reason, splitParagraphs: reason, join: reason, clean: reason, unwrap: reason},
       selectionMessage,
-      hasOnlyTextboxes: false,
+      hasOnlyTextboxes: lassoElements.length === textElements.length,
     };
-  }
-
-  const outputs = computeActionOutputs(textElements);
-  let afterBlocks: string[] = [];
-
-  if (action === 'split' && outputs.availableActions.split) {
-    afterBlocks =
-      outputs.splitBlocks.length >= 2 ? outputs.splitBlocks : outputs.beforeBlocks;
-  } else if (action === 'join' && outputs.availableActions.join) {
-    afterBlocks = outputs.joinBlocks;
-  } else if (action === 'clean' && outputs.availableActions.clean) {
-    afterBlocks = outputs.cleanBlocks.length > 0 ? outputs.cleanBlocks : outputs.beforeBlocks;
-  } else if (action === 'unwrap' && outputs.availableActions.unwrap) {
-    afterBlocks = outputs.unwrapBlocks.length > 0 ? outputs.unwrapBlocks : outputs.beforeBlocks;
-  } else if (action === 'log' && outputs.availableActions.log) {
-    afterBlocks = outputs.logBlocks;
   }
 
   return {
     selectedCount,
-    beforeBlocks: outputs.beforeBlocks,
-    afterBlocks,
-    availableActions: outputs.availableActions,
+    ...computeActionOutputs(textElements),
     selectionMessage,
     hasOnlyTextboxes: true,
   };

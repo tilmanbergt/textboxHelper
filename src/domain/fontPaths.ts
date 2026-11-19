@@ -10,6 +10,13 @@
  * so word positions and textbox sizes can be wrong.
  */
 
+/**
+ * The font NOTE writes for a textbox set to "system font" (seen on the A5 X). The plugin gives new
+ * textboxes this path and measures textboxes without a font in it, so measuring, drawing and the
+ * textbox height agree.
+ */
+export const NOTE_SYSTEM_FONT_PATH = '/system/fonts/DroidSansFallbackFull.ttf';
+
 export const USER_FONT_DIR = '/storage/emulated/0/MyStyle/fonts';
 export const PLUGIN_FONT_DIR = '/storage/emulated/0/MyStyle/TextboxHelper/fonts';
 export const PLUGIN_FONT_DIR_LABEL = 'MyStyle/TextboxHelper/fonts';

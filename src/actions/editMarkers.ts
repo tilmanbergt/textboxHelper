@@ -1,27 +1,26 @@
 import type {Element, TextBox} from 'sn-plugin-lib';
 import {createEditMarkerBackupPayload} from '../domain/backupPayload';
-import {appendFontWarning} from '../domain/fontPaths';
+import {NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
+import {assembleMarkerPreview} from '../domain/markerAssembly';
+import {plural} from '../domain/plural';
 import {cloneRect} from '../domain/geometry';
 import {
   buildRecognizeRect,
   findBestReplaceModifierPair,
+  findReplaceLoop,
+  isStraightLineGeometryElement,
   isSupportedEditMarkerElement,
   orderTextboxMarkerCandidates,
 } from '../domain/markerStrokes';
 import {
-  applyTextMutationRanges,
-  applyTextMutationRangesDetailed,
   buildIgnoredMarker,
   buildOperationDetailWithReplacement,
   buildReplacementLineLogSummary,
-  buildSelectionMessage,
-  buildSummaryMessage,
   buildTextboxLogSummary,
   cloneTextElementForMutation,
   countElementTypes,
   createEmptyPreview,
   formatOperationSnippet,
-  mergeHighlightRanges,
 } from '../domain/markerText';
 import type {
   EditMarkerCalibration,
@@ -29,18 +28,40 @@ import type {
   EditMarkerPreview,
   EditMarkerPreviewScope,
   IgnoredEditMarker,
+  MarkerPreviewBase,
   MarkerStrokeAnalysis,
-  RecognizedEditOperation,
+  MarkerTextboxBase,
+  OperationDraft,
   TextMutationPlan,
-  TextMutationRange,
-  WordCandidate,
 } from '../domain/markerTypes';
+import type {PenEditEntry} from '../domain/penEditModel';
 import {DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION} from '../domain/textboxLayout';
-import {DEFAULT_FONT_SIZE} from '../domain/textboxModel';
+import {
+  DEFAULT_FONT_SIZE,
+  type Rect,
+  type TextboxData,
+} from '../domain/textboxModel';
+import {isPenEditElement, parsePenEditUserData} from '../domain/penEditTags';
+import {SPLIT_SIGN, splitParagraphParts} from '../domain/paragraphMarks';
+import {
+  analyzeCaret,
+  placeGapParagraphs,
+  planReflow,
+  type CaretDirection,
+  type CaretTextbox,
+  type ReflowEvent,
+  type ReflowItem,
+} from '../domain/penEditCaret';
+import {shiftRect} from '../domain/penEditMatching';
+import {rectHeight, rectWidth} from '../domain/geometry';
+import {insertTextboxesIntoFile} from '../supernote/noteTextInsertion';
 import {isNormalTextElement, sortTextElements} from '../domain/textboxEditPlan';
 import {writeBackupFile} from '../storage/backupFile';
 import {writeJsonExportFile} from '../storage/exportFile';
-import {loadMarkerStrokeStats} from '../supernote/markerStrokeRead';
+import {
+  loadMarkerStrokeStats,
+  readStrokePath,
+} from '../supernote/markerStrokeRead';
 import {
   deletePageElements,
   getPreviewContext,
@@ -51,13 +72,27 @@ import {
   recycleElements,
   saveCurrentNoteForConsistency,
 } from '../supernote/noteElements';
-import {buildResizedTextboxRect, getFontWarning, resetFontWarnings} from '../supernote/textboxMetrics';
+import {
+  buildResizedTextboxRect,
+  estimateTextboxHeight,
+  getFontWarning,
+  resetFontWarnings,
+} from '../supernote/textboxMetrics';
 import {logEditMarker, markerDiagnostics} from '../utils/editMarkerLog';
 import {
   analyzeDeleteMarker,
   findReplacementLinesForTextbox,
   type MarkerCandidate,
 } from './editMarkerAnalysis';
+import {
+  loadPenEditContext,
+  markPenEditsApplied,
+  markPenEditsDropped,
+  penEditBackupData,
+  locateMarkOnPage,
+  penEditElementNums,
+  placeCaretInsertions,
+} from './penEditReview';
 
 /**
  * Edit marker flow.
@@ -148,7 +183,10 @@ export async function saveEditMarkerDiagnostics(): Promise<string> {
     throw new Error('There is no marker preview to save diagnostics for yet.');
   }
   const createdAt = new Date().toISOString();
-  const fileName = `textboxhelper-marker-diagnostics-${createdAt.replace(/[:.]/g, '-')}.json`;
+  const fileName = `textboxhelper-marker-diagnostics-${createdAt.replace(
+    /[:.]/g,
+    '-',
+  )}.json`;
   return writeJsonExportFile(fileName, {
     kind: 'edit-marker-diagnostics',
     createdAt,
@@ -173,7 +211,19 @@ export async function getEditMarkerPreview(
     return preview;
   }
   logEditMarker('fontWarning', {fontWarning});
-  return {...preview, summaryMessage: appendFontWarning(preview.summaryMessage, fontWarning)};
+  return {...preview, fontWarning};
+}
+
+function replaceModifiers(
+  candidate: MarkerCandidate,
+  strokeAnalyses: MarkerStrokeAnalysis<Element>[],
+): MarkerStrokeAnalysis<Element>[] {
+  const pair = findBestReplaceModifierPair(candidate, strokeAnalyses);
+  if (pair.length === 2) {
+    return pair;
+  }
+  const loop = findReplaceLoop(candidate, strokeAnalyses);
+  return loop ? [loop] : [];
 }
 
 async function buildEditMarkerPreview(
@@ -193,39 +243,56 @@ async function buildEditMarkerPreview(
     lassoElements = context.lassoElements;
     pageElements = context.pageElements;
     const effectiveSelection = context.effectiveSelection;
+    const pen = await loadPenEditContext(
+      context.notePath,
+      context.page,
+      pageElements,
+      previewScope === 'lasso' ? lassoElements : null,
+    );
 
-    const selectedMarkers = effectiveSelection.filter(isSupportedEditMarkerElement);
-    const selectedTextboxes = sortTextElements(effectiveSelection.filter(isNormalTextElement));
+    // Tagged snippets' handwriting and Textbox Tools' own badges and numbers are never markers.
+    const selectedMarkers = effectiveSelection.filter(
+      element =>
+        isSupportedEditMarkerElement(element) && !pen.isExcluded(element),
+    );
+    const selectedTextboxes = sortTextElements(
+      effectiveSelection.filter(isNormalTextElement),
+    );
     logEditMarker('previewContext', {
       page: context.page,
-      pageSize: await readPageSizeForDiagnostics(context.notePath, context.page),
+      pageSize: await readPageSizeForDiagnostics(
+        context.notePath,
+        context.page,
+      ),
       lassoElementCount: lassoElements.length,
       pageElementCount: pageElements.length,
       elementTypes: countElementTypes(effectiveSelection),
       selectedMarkerCount: selectedMarkers.length,
       selectedTextboxCount: selectedTextboxes.length,
+      // Pen-edit icons and numbers on the page: whether userData survives moves (pen-edits §5).
+      penEditElements: pageElements
+        .map(element => ({
+          element,
+          tag: parsePenEditUserData(element.userData),
+        }))
+        .filter(item => item.tag !== null)
+        .map(({element, tag}) => ({
+          id: tag?.id,
+          role: tag?.role,
+          uuid: element.uuid,
+          numInPage: element.numInPage,
+          rect: element.textBox?.textRect ?? null,
+        })),
     });
 
     if (effectiveSelection.length === 0) {
       return createEmptyPreview();
     }
 
-    if (selectedMarkers.length === 0) {
+    if (selectedMarkers.length === 0 && pen.entries.length === 0) {
       return {
         ...createEmptyPreview(0, selectedTextboxes.length),
-        summaryMessage: 'Select one or more handwritten edit markers.',
-        beforePreviewBlocks: selectedTextboxes.map(textbox => ({
-          id: textbox.uuid,
-          text: textbox.textBox.textContentFull || '',
-          highlightRanges: [],
-        })),
-        afterPreviewBlocks: selectedTextboxes.map(textbox => ({
-          id: textbox.uuid,
-          text: textbox.textBox.textContentFull || '',
-          highlightRanges: [],
-        })),
-        beforeBlocks: selectedTextboxes.map(textbox => textbox.textBox.textContentFull || ''),
-        afterBlocks: selectedTextboxes.map(textbox => textbox.textBox.textContentFull || ''),
+        summaryMessage: 'No edit markers in the selection.',
       };
     }
 
@@ -257,21 +324,86 @@ async function buildEditMarkerPreview(
           return strokeStats ? {marker, strokeStats} : null;
         }),
       )
-    ).filter((analysis): analysis is MarkerStrokeAnalysis<Element> => !!analysis);
-
-    const strokeStatsByUuid = new Map(
-      strokeAnalyses.map(analysis => [analysis.marker.uuid, analysis.strokeStats]),
+    ).filter(
+      (analysis): analysis is MarkerStrokeAnalysis<Element> => !!analysis,
     );
 
-    const candidateResults = await Promise.all(
-      selectedMarkers.map(marker =>
-        analyzeDeleteMarker(
+    const strokeStatsByUuid = new Map(
+      strokeAnalyses.map(analysis => [
+        analysis.marker.uuid,
+        analysis.strokeStats,
+      ]),
+    );
+
+    // Paragraph marks on their own (< or > between two lines, a step mark): a paragraph break,
+    // never a delete candidate (technical-design-paragraph-marks.md).
+    const measuredForMarks = new Map<string, CaretTextbox>();
+    const paragraphMarks: Array<{
+      marker: Element;
+      textbox: TextElement;
+      offset: number;
+      direction: CaretDirection;
+    }> = [];
+    const paragraphMarkIgnored: IgnoredEditMarker[] = [];
+    const paragraphMarkNums = new Set<number>();
+    for (const marker of selectedMarkers) {
+      if (isStraightLineGeometryElement(marker)) {
+        continue;
+      }
+      const shape = analyzeCaret(await readStrokePath(marker));
+      if (!shape || shape.direction === 'down' || shape.direction === 'up') {
+        continue;
+      }
+      paragraphMarkNums.add(marker.numInPage);
+      const {near, target} = await locateMarkOnPage(
+        shape.tip,
+        shape.direction,
+        pageTextboxes,
+        currentEditMarkerCalibration,
+        measuredForMarks,
+      );
+      const textbox =
+        target?.kind === 'split'
+          ? near.find(item => item.uuid === target.uuid)
+          : undefined;
+      logEditMarker('paragraphMark', {
+        markerNumInPage: marker.numInPage,
+        direction: shape.direction,
+        tip: shape.tip,
+        target,
+      });
+      if (target?.kind === 'split' && textbox) {
+        paragraphMarks.push({
           marker,
-          pageTextboxes,
-          currentEditMarkerCalibration,
-          strokeStatsByUuid.get(marker.uuid),
+          textbox,
+          offset: target.offset,
+          direction: shape.direction,
+        });
+        continue;
+      }
+      const reason =
+        target?.kind === 'unclear'
+          ? target.reason
+          : target?.kind === 'gap'
+          ? "It is at a paragraph's start or end, which is already a paragraph break."
+          : "It doesn't point between two lines of a paragraph.";
+      paragraphMarkIgnored.push({
+        ...buildIgnoredMarker(marker, reason),
+        removableNums: [marker.numInPage],
+      });
+    }
+
+    const candidateResults = await Promise.all(
+      selectedMarkers
+        .filter(marker => !paragraphMarkNums.has(marker.numInPage))
+        .map(marker =>
+          analyzeDeleteMarker(
+            marker,
+            pageTextboxes,
+            currentEditMarkerCalibration,
+            strokeStatsByUuid.get(marker.uuid),
+          ),
         ),
-      ),
     );
 
     const markerCandidates = candidateResults
@@ -285,24 +417,25 @@ async function buildEditMarkerPreview(
         return left.markerSortLeft - right.markerSortLeft;
       });
 
-    const ignoredMarkers = candidateResults
-      .map(result => result.ignored)
-      .filter((ignored): ignored is IgnoredEditMarker => !!ignored);
+    const ignoredMarkers = [
+      ...paragraphMarkIgnored,
+      ...candidateResults
+        .map(result => result.ignored)
+        .filter((ignored): ignored is IgnoredEditMarker => !!ignored),
+    ];
 
     const usedRangesByTextbox = new Map<string, Set<string>>();
-    const operations: RecognizedEditOperation[] = [];
-    const groupedWords = new Map<string, WordCandidate[]>();
     const groupedTextboxes = new Map<string, TextElement>();
-    const groupedRanges = new Map<string, TextMutationRange[]>();
     const replacementSourceTextboxNums = new Set<number>();
 
-    const targetTextboxesByOrder = sortTextElements(
-      [
-        ...new Map(
-          markerCandidates.map(candidate => [candidate.targetTextbox.uuid, candidate.targetTextbox]),
-        ).values(),
-      ],
-    );
+    const targetTextboxesByOrder = sortTextElements([
+      ...new Map(
+        markerCandidates.map(candidate => [
+          candidate.targetTextbox.uuid,
+          candidate.targetTextbox,
+        ]),
+      ).values(),
+    ]);
 
     const replaceCandidateInfoByMarkerUuid = new Map<
       string,
@@ -311,23 +444,30 @@ async function buildEditMarkerPreview(
         replacementText?: string;
         replacementSourceTextboxNum?: number;
         mismatchReason?: string;
+        penEdit?: PenEditEntry;
       }
     >();
+    const pairedPenEditIds = new Set<string>();
 
     targetTextboxesByOrder.forEach(targetTextbox => {
       const textboxCandidates = orderTextboxMarkerCandidates(
-        markerCandidates.filter(candidate => candidate.targetTextbox.uuid === targetTextbox.uuid),
+        markerCandidates.filter(
+          candidate => candidate.targetTextbox.uuid === targetTextbox.uuid,
+        ),
       );
       const usedModifierMarkerUuids = new Set<string>();
       const replaceCandidates = textboxCandidates
         .map(candidate => ({
           candidate,
-          pair: findBestReplaceModifierPair(candidate, strokeAnalyses),
+          // Two short vertical lines across the strike, or a small loop right after it.
+          pair: replaceModifiers(candidate, strokeAnalyses),
         }))
         .filter(entry => {
           if (
-            entry.pair.length !== 2 ||
-            entry.pair.some(pairEntry => usedModifierMarkerUuids.has(pairEntry.marker.uuid))
+            entry.pair.length === 0 ||
+            entry.pair.some(pairEntry =>
+              usedModifierMarkerUuids.has(pairEntry.marker.uuid),
+            )
           ) {
             return false;
           }
@@ -338,24 +478,39 @@ async function buildEditMarkerPreview(
           return true;
         });
 
-      if (replaceCandidates.length === 0) {
+      // A replace mark with a tagged snippet takes its text from the snippet; the others look for
+      // typed "#" lines as before.
+      const typedReplaceCandidates = replaceCandidates.filter(entry => {
+        const penEdit = pen.strikeOwner(entry.candidate.marker);
+        if (!penEdit) {
+          return true;
+        }
+        pairedPenEditIds.add(penEdit.id);
+        replaceCandidateInfoByMarkerUuid.set(entry.candidate.markerUuid, {
+          pair: entry.pair,
+          penEdit,
+        });
+        return false;
+      });
+
+      if (typedReplaceCandidates.length === 0) {
         return;
       }
 
       const replacementLines = findReplacementLinesForTextbox(
         targetTextbox,
-        replaceCandidates.length,
+        typedReplaceCandidates.length,
         selectedTextboxes,
         targetTextboxesByOrder,
       );
 
-      if (replacementLines.length !== replaceCandidates.length) {
+      if (replacementLines.length !== typedReplaceCandidates.length) {
         const mismatchReason =
           replacementLines.length === 0
-            ? 'Replace markers were found, but no matching replacement lines starting with "#" were found below the paragraph.'
-            : `Replace markers were found, but ${replaceCandidates.length} marker(s) need ${replaceCandidates.length} replacement line(s) and only ${replacementLines.length} were found.`;
+            ? 'Replace mark without new text: tag the new words with "Replacement" right after the mark, or write them below the paragraph in a line starting with #.'
+            : `Replace markers were found, but ${typedReplaceCandidates.length} marker(s) need ${typedReplaceCandidates.length} replacement line(s) and only ${replacementLines.length} were found.`;
 
-        replaceCandidates.forEach(entry => {
+        typedReplaceCandidates.forEach(entry => {
           replaceCandidateInfoByMarkerUuid.set(entry.candidate.markerUuid, {
             pair: entry.pair,
             mismatchReason,
@@ -364,49 +519,64 @@ async function buildEditMarkerPreview(
 
         logEditMarker('replaceResolutionMismatch', {
           targetTextbox: buildTextboxLogSummary(targetTextbox),
-          replaceMarkerCount: replaceCandidates.length,
+          replaceMarkerCount: typedReplaceCandidates.length,
           replacementLineCount: replacementLines.length,
-          replacementLines: replacementLines.map(buildReplacementLineLogSummary),
+          replacementLines: replacementLines.map(
+            buildReplacementLineLogSummary,
+          ),
           reason: mismatchReason,
         });
         return;
       }
 
-      replaceCandidates.forEach((entry, index) => {
+      typedReplaceCandidates.forEach((entry, index) => {
         replaceCandidateInfoByMarkerUuid.set(entry.candidate.markerUuid, {
           pair: entry.pair,
           replacementText: replacementLines[index].text,
-          replacementSourceTextboxNum: replacementLines[index].sourceTextboxNumInPage,
+          replacementSourceTextboxNum:
+            replacementLines[index].sourceTextboxNumInPage,
         });
       });
 
       logEditMarker('replaceResolutionMatched', {
         targetTextbox: buildTextboxLogSummary(targetTextbox),
-        replaceMarkers: replaceCandidates.map(entry => ({
+        replaceMarkers: typedReplaceCandidates.map(entry => ({
           markerUuid: entry.candidate.markerUuid,
           markerNumInPage: entry.candidate.markerNumInPage,
-          modifierMarkerNums: entry.pair.map(pairEntry => pairEntry.marker.numInPage),
+          modifierMarkerNums: entry.pair.map(
+            pairEntry => pairEntry.marker.numInPage,
+          ),
         })),
         replacementLines: replacementLines.map(buildReplacementLineLogSummary),
       });
     });
 
+    const drafts: OperationDraft[] = [];
     markerCandidates.forEach(candidate => {
-      const replaceInfo = replaceCandidateInfoByMarkerUuid.get(candidate.markerUuid);
+      const replaceInfo = replaceCandidateInfoByMarkerUuid.get(
+        candidate.markerUuid,
+      );
       if (replaceInfo?.mismatchReason) {
-        ignoredMarkers.push(
-          buildIgnoredMarker(candidate.marker, replaceInfo.mismatchReason),
-        );
+        ignoredMarkers.push({
+          ...buildIgnoredMarker(candidate.marker, replaceInfo.mismatchReason),
+          removableNums: [
+            candidate.markerNumInPage,
+            ...replaceInfo.pair.map(pairEntry => pairEntry.marker.numInPage),
+          ],
+        });
         return;
       }
 
       const textboxUuid = candidate.targetTextbox.uuid;
-      const usedRanges = usedRangesByTextbox.get(textboxUuid) || new Set<string>();
-      const nextWords = candidate.words.filter(word => !usedRanges.has(`${word.start}-${word.end}`));
+      const usedRanges =
+        usedRangesByTextbox.get(textboxUuid) || new Set<string>();
+      const nextWords = candidate.words.filter(
+        word => !usedRanges.has(`${word.start}-${word.end}`),
+      );
 
       if (nextWords.length === 0) {
-        ignoredMarkers.push(
-          buildIgnoredMarker(
+        ignoredMarkers.push({
+          ...buildIgnoredMarker(
             {
               ...candidate.targetTextbox,
               uuid: candidate.markerUuid,
@@ -414,7 +584,8 @@ async function buildEditMarkerPreview(
             } as Element,
             'This marker duplicates text already covered by another recognized marker.',
           ),
-        );
+          removableNums: [candidate.markerNumInPage],
+        });
         return;
       }
 
@@ -424,175 +595,199 @@ async function buildEditMarkerPreview(
 
       usedRangesByTextbox.set(textboxUuid, usedRanges);
       groupedTextboxes.set(textboxUuid, candidate.targetTextbox);
-      groupedWords.set(textboxUuid, [...(groupedWords.get(textboxUuid) || []), ...nextWords]);
 
       const wordTexts = nextWords.map(word => word.text);
-      const kind: EditMarkerOperationKind = replaceInfo?.replacementText ? 'replace' : 'delete';
+      const penEdit = replaceInfo?.penEdit;
+      const kind: EditMarkerOperationKind =
+        penEdit || replaceInfo?.replacementText ? 'replace' : 'delete';
       if (replaceInfo?.replacementSourceTextboxNum !== undefined) {
-        replacementSourceTextboxNums.add(replaceInfo.replacementSourceTextboxNum);
+        replacementSourceTextboxNums.add(
+          replaceInfo.replacementSourceTextboxNum,
+        );
       }
-      groupedRanges.set(textboxUuid, [
-        ...(groupedRanges.get(textboxUuid) || []),
-        {
+      drafts.push({
+        range: {
           kind,
           start: nextWords[0].start,
           end: nextWords[nextWords.length - 1].end,
           replacementText: replaceInfo?.replacementText,
         },
-      ]);
-      operations.push({
-        id: `${candidate.markerUuid}:${candidate.targetTextbox.uuid}`,
-        kind,
-        markerUuid: candidate.markerUuid,
-        markerNumInPage: candidate.markerNumInPage,
-        consumedMarkerNums: [
-          candidate.markerNumInPage,
-          ...(replaceInfo?.pair.map(pairEntry => pairEntry.marker.numInPage) || []),
-        ],
-        targetTextboxUuid: candidate.targetTextbox.uuid,
-        targetTextboxNumInPage: candidate.targetTextbox.numInPage,
-        lineIndex: candidate.lineIndex,
-        summary: formatOperationSnippet(kind, wordTexts, replaceInfo?.replacementText),
-        detail: buildOperationDetailWithReplacement(
-          candidate.targetTextbox,
-          candidate.lineIndex,
-          nextWords,
-          replaceInfo?.replacementText,
-        ),
-        words: wordTexts,
-        replacementText: replaceInfo?.replacementText,
+        operation: {
+          id: `${candidate.markerUuid}:${candidate.targetTextbox.uuid}`,
+          kind,
+          markerUuid: candidate.markerUuid,
+          markerNumInPage: candidate.markerNumInPage,
+          consumedMarkerNums: [
+            candidate.markerNumInPage,
+            ...(replaceInfo?.pair.map(
+              pairEntry => pairEntry.marker.numInPage,
+            ) || []),
+          ],
+          targetTextboxUuid: candidate.targetTextbox.uuid,
+          targetTextboxNumInPage: candidate.targetTextbox.numInPage,
+          lineIndex: candidate.lineIndex,
+          summary: formatOperationSnippet(
+            kind,
+            wordTexts,
+            replaceInfo?.replacementText,
+          ),
+          detail: buildOperationDetailWithReplacement(
+            candidate.targetTextbox,
+            candidate.lineIndex,
+            nextWords,
+            replaceInfo?.replacementText,
+          ),
+          words: wordTexts,
+          replacementText: replaceInfo?.replacementText,
+          textStart: nextWords[0].start,
+          ...(penEdit
+            ? {penEditId: penEdit.id, penEditNumber: penEdit.number}
+            : {}),
+        },
       });
     });
 
-    const mutationTargets = sortTextElements([...groupedTextboxes.values()]);
-    const textMutations: TextMutationPlan[] = (
-      await Promise.all(mutationTargets.map(async textbox => {
-        const originalText = textbox.textBox.textContentFull || '';
-        const nextText = applyTextMutationRanges(
-          originalText,
-          groupedRanges.get(textbox.uuid) || [],
-        );
-
-        if (nextText === originalText) {
-          return null;
-        }
-
-        return {
-          uuid: textbox.uuid,
-          numInPage: textbox.numInPage,
-          layerNum: textbox.layerNum,
-          originalText,
-          nextText,
-          textRect: cloneRect(textbox.textBox.textRect),
-          nextTextRect: await buildResizedTextboxRect(
-            textbox.textBox.textRect,
-            nextText,
-            textbox.textBox.fontSize || DEFAULT_FONT_SIZE,
-            textbox.textBox.fontPath || undefined,
-            currentEditMarkerCalibration,
-          ),
-          fontSize: textbox.textBox.fontSize || DEFAULT_FONT_SIZE,
-          fontPath: textbox.textBox.fontPath,
-          textAlign: textbox.textBox.textAlign ?? 0,
-          textBold: textbox.textBox.textBold ?? 0,
-          textItalics: textbox.textBox.textItalics ?? 0,
-          textFrameWidthType: textbox.textBox.textFrameWidthType ?? 0,
-          textFrameStyle: textbox.textBox.textFrameStyle ?? 0,
-          textEditable: textbox.textBox.textEditable ?? 0,
-        };
-      }))
-    ).filter((mutation): mutation is TextMutationPlan => !!mutation);
-
-    const relevantTextboxes =
-      textMutations.length > 0
-        ? textMutations
-        : selectedTextboxes.map(textbox => ({
-            uuid: textbox.uuid,
-            numInPage: textbox.numInPage,
-            layerNum: textbox.layerNum,
-            originalText: textbox.textBox.textContentFull || '',
-            nextText: textbox.textBox.textContentFull || '',
-            textRect: cloneRect(textbox.textBox.textRect),
-            nextTextRect: cloneRect(textbox.textBox.textRect),
-            fontSize: textbox.textBox.fontSize || DEFAULT_FONT_SIZE,
-            fontPath: textbox.textBox.fontPath,
-            textAlign: textbox.textBox.textAlign ?? 0,
-            textBold: textbox.textBox.textBold ?? 0,
-            textItalics: textbox.textBox.textItalics ?? 0,
-            textFrameWidthType: textbox.textBox.textFrameWidthType ?? 0,
-            textFrameStyle: textbox.textBox.textFrameStyle ?? 0,
-            textEditable: textbox.textBox.textEditable ?? 0,
-          }));
-
-    const beforePreviewBlocks = relevantTextboxes.map(textbox => ({
-      id: textbox.uuid,
-      text: textbox.originalText,
-      highlightRanges: mergeHighlightRanges(
-        (groupedWords.get(textbox.uuid) || []).map(word => ({
-          start: word.start,
-          end: word.end,
-        })),
-      ),
-    }));
-    const afterPreviewBlocks = relevantTextboxes.map(textbox => {
-      const detailedMutation = applyTextMutationRangesDetailed(
-        textbox.originalText,
-        groupedRanges.get(textbox.uuid) || [],
-      );
-
-      return {
-        id: textbox.uuid,
-        text: detailedMutation.text,
-        highlightRanges: detailedMutation.insertedRanges,
-      };
+    // Tagged replacements whose mark wasn't recognized on the page.
+    pen.entries
+      .filter(
+        entry =>
+          entry.kind === 'replacement' && !pairedPenEditIds.has(entry.id),
+      )
+      .forEach(entry => {
+        ignoredMarkers.push({
+          markerUuid: entry.id,
+          markerNumInPage: 0,
+          summary: `Replacement ${entry.number}`,
+          reason: entry.mark
+            ? 'Its replace mark was not recognized on the page (erased, or not over a textbox).'
+            : 'No replace mark was found just before it when it was tagged.',
+          penEditNumber: entry.number,
+          penEditId: entry.id,
+        });
+      });
+    // Insertions: into the paragraph their caret points to, or as a new paragraph between two.
+    const placed = await placeCaretInsertions(
+      pen.entries,
+      pen.carets,
+      pageTextboxes,
+      currentEditMarkerCalibration,
+    );
+    placed.ignored.forEach(({entry, reason}) => {
+      ignoredMarkers.push({
+        markerUuid: entry.id,
+        markerNumInPage: 0,
+        summary: `Insertion ${entry.number}`,
+        reason,
+        penEditNumber: entry.number,
+        penEditId: entry.id,
+      });
+    });
+    paragraphMarks.forEach(({marker, textbox, offset, direction}) => {
+      groupedTextboxes.set(textbox.uuid, textbox);
+      drafts.push({
+        range: {kind: 'replace', start: offset, end: offset},
+        operation: {
+          id: `split:${marker.uuid}`,
+          kind: 'split',
+          markerUuid: marker.uuid,
+          markerNumInPage: marker.numInPage,
+          consumedMarkerNums: [marker.numInPage],
+          targetTextboxUuid: textbox.uuid,
+          targetTextboxNumInPage: textbox.numInPage,
+          lineIndex: 0,
+          summary: 'Paragraph break',
+          detail: `Textbox ${textbox.numInPage} · ${
+            direction === 'step' ? 'at a word gap' : 'between two lines'
+          }`,
+          words: [],
+          textStart: offset,
+        },
+      });
     });
 
-    const recognizedMarkerNums = [
-      ...new Set(operations.flatMap(operation => operation.consumedMarkerNums)),
-    ];
-    const recognizedMarkerNumSet = new Set(recognizedMarkerNums);
-    const visibleIgnoredMarkers = ignoredMarkers.filter(
-      marker => !recognizedMarkerNumSet.has(marker.markerNumInPage),
-    );
-    const applyPlan =
-      operations.length > 0 && textMutations.length > 0
-        ? {
-            notePath: context.notePath,
-            page: context.page,
-            selectedMarkerCount: selectedMarkers.length,
-            operations,
-            recognizedMarkerNums,
-            replacementSourceTextboxNums: [...replacementSourceTextboxNums],
-            textMutations,
-          }
-        : null;
+    placed.inline.forEach(({entry, textbox, offset, mode}) => {
+      groupedTextboxes.set(textbox.uuid, textbox);
+      drafts.push({
+        range: {kind: 'replace', start: offset, end: offset},
+        operation: {
+          id: `insert:${entry.id}`,
+          kind: 'insert',
+          markerUuid: entry.id,
+          markerNumInPage: 0,
+          consumedMarkerNums: [],
+          targetTextboxUuid: textbox.uuid,
+          targetTextboxNumInPage: textbox.numInPage,
+          lineIndex: 0,
+          summary: `Insert ${entry.number}`,
+          detail: `Textbox ${textbox.numInPage} · ${
+            mode === 'inWord'
+              ? 'inside a word'
+              : mode === 'blankLine' || mode === 'paragraph'
+              ? 'new paragraph'
+              : 'between words'
+          }`,
+          words: [],
+          textStart: offset,
+          penEditId: entry.id,
+          penEditNumber: entry.number,
+          insertMode: mode,
+        },
+      });
+    });
+    const insertedIds = new Set([
+      ...placed.inline.map(item => item.entry.id),
+      ...placed.gaps.map(gap => gap.penEditId),
+    ]);
+
+    const textboxBases: MarkerTextboxBase[] = sortTextElements([
+      ...groupedTextboxes.values(),
+    ]).map(textbox => ({
+      uuid: textbox.uuid,
+      numInPage: textbox.numInPage,
+      layerNum: textbox.layerNum,
+      originalText: textbox.textBox.textContentFull || '',
+      textRect: cloneRect(textbox.textBox.textRect),
+      fontSize: textbox.textBox.fontSize || DEFAULT_FONT_SIZE,
+      fontPath: textbox.textBox.fontPath,
+      textAlign: textbox.textBox.textAlign ?? 0,
+      textBold: textbox.textBox.textBold ?? 0,
+      textItalics: textbox.textBox.textItalics ?? 0,
+      textFrameWidthType: textbox.textBox.textFrameWidthType ?? 0,
+      textFrameStyle: textbox.textBox.textFrameStyle ?? 0,
+      textEditable: textbox.textBox.textEditable ?? 0,
+    }));
+
+    const base: MarkerPreviewBase = {
+      notePath: context.notePath,
+      page: context.page,
+      selectedMarkerCount: selectedMarkers.length,
+      selectedTextboxCount: selectedTextboxes.length,
+      drafts,
+      ignored: ignoredMarkers,
+      textboxes: textboxBases,
+      replacementSourceTextboxNums: [...replacementSourceTextboxNums],
+      insertions: placed.gaps,
+      penEdits: pen.views.filter(
+        view => pairedPenEditIds.has(view.id) || insertedIds.has(view.id),
+      ),
+      penStates: pen.states,
+    };
+    const preview = assembleMarkerPreview(base, pen.states);
 
     logEditMarker('previewResult', {
       selectedMarkerCount: selectedMarkers.length,
-      recognizedOperationCount: operations.length,
-      ignoredMarkerCount: visibleIgnoredMarkers.length,
-      ignoredReasons: visibleIgnoredMarkers.map(marker => marker.reason),
+      recognizedOperationCount: preview.operations.length,
+      penEdits: pen.entries.map(entry => ({
+        id: entry.id,
+        kind: entry.kind,
+        number: entry.number,
+        paired: pairedPenEditIds.has(entry.id),
+      })),
+      ignoredMarkerCount: preview.ignoredMarkers.length,
+      ignoredReasons: preview.ignoredMarkers.map(marker => marker.reason),
     });
 
-    return {
-      selectedMarkerCount: selectedMarkers.length,
-      selectedTextboxCount: selectedTextboxes.length,
-      recognizedOperationCount: operations.length,
-      selectionMessage: buildSelectionMessage(selectedMarkers.length, selectedTextboxes.length),
-      summaryMessage: buildSummaryMessage(
-        operations.length,
-        visibleIgnoredMarkers.length,
-        selectedMarkers.length,
-      ),
-      beforePreviewBlocks,
-      afterPreviewBlocks,
-      beforeBlocks: relevantTextboxes.map(textbox => textbox.originalText),
-      afterBlocks: relevantTextboxes.map(textbox => textbox.nextText),
-      operations,
-      ignoredMarkers: visibleIgnoredMarkers,
-      canApply: !!applyPlan,
-      applyPlan,
-    };
+    return pen.warning ? {...preview, fontWarning: pen.warning} : preview;
   } finally {
     await recycleElements(lassoElements);
     await recycleElements(pageElements);
@@ -619,7 +814,9 @@ export async function applyEditMarkerPreview(
     );
 
     const pageTextboxByNum = new Map(
-      pageElements.filter(isNormalTextElement).map(element => [element.numInPage, element]),
+      pageElements
+        .filter(isNormalTextElement)
+        .map(element => [element.numInPage, element]),
     );
 
     plan.textMutations.forEach(mutation => {
@@ -638,49 +835,345 @@ export async function applyEditMarkerPreview(
       }
     });
 
+    // Paragraph breaks: a textbox's new text is cut at the split signs; the first part stays,
+    // every further part becomes a new paragraph right below it (technical-design-paragraph-marks.md).
+    const splitTails = new Map<number, string[]>();
+    const cutMutations = plan.textMutations.map(mutation => {
+      if (!mutation.nextText.includes(SPLIT_SIGN)) {
+        return mutation;
+      }
+      const [head = '', ...tail] = splitParagraphParts(mutation.nextText);
+      splitTails.set(mutation.numInPage, tail);
+      return {...mutation, nextText: head};
+    });
+
+    // The new heights are measured now, once the pen edits' text is final.
+    const textMutations: TextMutationPlan[] = await Promise.all(
+      cutMutations.map(async mutation => ({
+        ...mutation,
+        nextTextRect: await buildResizedTextboxRect(
+          mutation.textRect,
+          mutation.nextText,
+          mutation.fontSize,
+          mutation.fontPath || undefined,
+          currentEditMarkerCalibration,
+        ),
+      })),
+    );
+
     reportProgress(options, 'Creating backup...', true);
-    const backupPayload = createEditMarkerBackupPayload(plan);
+    const penBackup =
+      plan.penEditIds.length > 0
+        ? await penEditBackupData(plan.penEditIds)
+        : null;
+    const backupPayload = {
+      ...createEditMarkerBackupPayload({...plan, textMutations}),
+      ...(penBackup ? {penEdits: penBackup} : {}),
+    };
     const {backupPath, clipboardSummary} = await writeBackupFile(backupPayload);
 
     reportProgress(options, 'Saving current note...', false);
     await saveCurrentNoteForConsistency('applying edit markers');
 
     reportProgress(options, 'Applying recognized markers...', false);
-    const currentTextboxesByNum = new Map(
-      pageElements.filter(isNormalTextElement).map(element => [element.numInPage, element]),
+    // New paragraphs, measured now: insertions in the gaps between paragraphs, and the parts of
+    // split paragraphs, which follow their paragraph's new (shorter) text.
+    type NewParagraph = {
+      key: string;
+      group: string;
+      text: string;
+      left: number;
+      width: number;
+      style: TextboxData;
+      above: Rect | null;
+      below: Rect | null;
+    };
+    const textboxBelow = (rect: Rect): Rect | null =>
+      [...pageTextboxByNum.values()]
+        .map(textbox => textbox.textBox.textRect)
+        .filter(
+          other =>
+            other.top >= rect.bottom - 2 &&
+            Math.min(other.right, rect.right) > Math.max(other.left, rect.left),
+        )
+        .sort((left, right) => left.top - right.top)[0] ?? null;
+    const newParagraphs: NewParagraph[] = [
+      ...plan.insertions.map(insertion => ({
+        key: `new:${insertion.penEditId}`,
+        group: `${insertion.aboveRect?.bottom ?? 'top'}:${
+          insertion.belowRect?.top ?? 'end'
+        }:${insertion.left}`,
+        text: insertion.text,
+        left: insertion.left,
+        width: insertion.width,
+        style: insertion.style,
+        above: insertion.aboveRect,
+        below: insertion.belowRect,
+      })),
+      ...textMutations.flatMap(mutation => {
+        const textbox = pageTextboxByNum.get(mutation.numInPage);
+        return (splitTails.get(mutation.numInPage) ?? []).map(
+          (text, index) => ({
+            key: `split:${mutation.numInPage}:${index}`,
+            group: `split:${mutation.numInPage}`,
+            text,
+            left: mutation.textRect.left,
+            width: rectWidth(mutation.textRect),
+            style: {
+              ...(textbox?.textBox ?? {}),
+              fontSize: mutation.fontSize,
+              fontPath: mutation.fontPath,
+            } as TextboxData,
+            above: mutation.nextTextRect,
+            below: textboxBelow(mutation.textRect),
+          }),
+        );
+      }),
+    ];
+    const gapParagraphs = await Promise.all(
+      newParagraphs.map(async paragraph => {
+        const style = {
+          ...paragraph.style,
+          fontPath: paragraph.style.fontPath || NOTE_SYSTEM_FONT_PATH,
+        };
+        const height = await estimateTextboxHeight(
+          paragraph.text,
+          paragraph.width,
+          style.fontSize || DEFAULT_FONT_SIZE,
+          style.fontPath,
+          currentEditMarkerCalibration,
+        );
+        return {paragraph, style, height};
+      }),
     );
-    const modifiedTextboxes = plan.textMutations
-      .filter(mutation => mutation.nextText.length > 0)
-      .map(mutation => {
-        const currentTextbox = currentTextboxesByNum.get(mutation.numInPage);
-        if (!currentTextbox) {
-          throw new Error(
-            `Textbox ${mutation.numInPage} is no longer available. Refresh the preview and try again.`,
+    const placedGaps = placeGapParagraphs(
+      gapParagraphs.map(({paragraph, height}) => ({
+        key: paragraph.key,
+        group: paragraph.group,
+        left: paragraph.left,
+        width: paragraph.width,
+        height,
+        above: paragraph.above,
+        below: paragraph.below,
+      })),
+    );
+
+    // Paragraphs that got longer, and new paragraphs, push the paragraphs below them down.
+    const mutationByNum = new Map(
+      textMutations.map(mutation => [mutation.numInPage, mutation]),
+    );
+    const growthEvents: ReflowEvent[] = textMutations.map(mutation => ({
+      y: mutation.textRect.bottom,
+      left: mutation.textRect.left,
+      right: mutation.textRect.right,
+      delta: rectHeight(mutation.nextTextRect) - rectHeight(mutation.textRect),
+      sourceKeys: [`n:${mutation.numInPage}`],
+    }));
+    const reflowItems: ReflowItem[] = [
+      ...[...pageTextboxByNum.values()].map(textbox => ({
+        key: `n:${textbox.numInPage}`,
+        rect: textbox.textBox.textRect,
+      })),
+      ...[...placedGaps.rects].map(([key, rect]) => ({key, rect})),
+    ];
+    const shifts = planReflow(reflowItems, [
+      ...growthEvents,
+      ...placedGaps.events,
+    ]);
+
+    const modifiedTextboxes: Element[] = [];
+    for (const textbox of pageTextboxByNum.values()) {
+      const mutation = mutationByNum.get(textbox.numInPage);
+      const dy = shifts.get(`n:${textbox.numInPage}`) ?? 0;
+      if (mutation) {
+        if (mutation.nextText.length > 0) {
+          modifiedTextboxes.push(
+            cloneTextElementForMutation(textbox, {
+              ...mutation,
+              nextTextRect: shiftRect(mutation.nextTextRect, 0, dy),
+            }),
           );
         }
-
-        return cloneTextElementForMutation(currentTextbox, mutation);
-      });
-    const emptyTargetTextboxNums = plan.textMutations
+      } else if (dy > 0) {
+        modifiedTextboxes.push({
+          ...textbox,
+          textBox: {
+            ...textbox.textBox,
+            textRect: shiftRect(textbox.textBox.textRect, 0, dy),
+          },
+        } as Element);
+      }
+    }
+    const emptyTargetTextboxNums = textMutations
       .filter(mutation => mutation.nextText.length === 0)
       .map(mutation => mutation.numInPage);
+    const penEditNums = penEditElementNums(
+      plan.penEditIds,
+      penBackup?.entries ?? [],
+      pageElements,
+    );
+    logEditMarker('applyReflow', {
+      shifts: Object.fromEntries(shifts),
+      newParagraphs: Object.fromEntries(placedGaps.rects),
+    });
 
     await modifyPageElements(plan.notePath, plan.page, modifiedTextboxes);
     await deletePageElements(plan.notePath, plan.page, [
       ...plan.recognizedMarkerNums,
       ...plan.replacementSourceTextboxNums,
       ...emptyTargetTextboxNums,
+      ...penEditNums,
     ]);
+
+    // New textboxes last, into the file like the changes above: inserting may renumber elements.
+    if (gapParagraphs.length > 0) {
+      reportProgress(options, 'Inserting new paragraphs...', false);
+      await insertTextboxesIntoFile(
+        plan.notePath,
+        plan.page,
+        gapParagraphs.map(({paragraph, style}) => {
+          const key = paragraph.key;
+          const rect = placedGaps.rects.get(key) as Rect;
+          return {
+            text: paragraph.text,
+            rect: shiftRect(rect, 0, shifts.get(key) ?? 0),
+            style: {
+              fontSize: style.fontSize || DEFAULT_FONT_SIZE,
+              fontPath: style.fontPath,
+              textAlign: style.textAlign ?? 0,
+              textBold: style.textBold ?? 0,
+              textItalics: style.textItalics ?? 0,
+              textFrameWidthType: style.textFrameWidthType ?? 0,
+              textFrameStyle: style.textFrameStyle ?? 0,
+              textEditable: style.textEditable ?? 0,
+            },
+          };
+        }),
+      );
+    }
+
+    try {
+      await markPenEditsApplied(plan.penEditIds);
+    } catch (error) {
+      console.warn(
+        '[EditMarkerActions] pen edits not marked applied',
+        String(error),
+      );
+    }
 
     await hideLassoBox('[EditMarkerActions]');
 
+    const movedCount = [...shifts.keys()].filter(key =>
+      key.startsWith('n:'),
+    ).length;
+    const movedNote =
+      movedCount > 0
+        ? ` Moved ${plural(movedCount, 'paragraph')} below down to make room.`
+        : '';
+    const left = preview.pendingCount + preview.skippedCount;
+    const leftNote =
+      left > 0 ? ` ${plural(left, 'pen edit')} left for later.` : '';
     return {
-      message: `Applied ${plan.operations.length} recognized edit operations and removed ${plan.recognizedMarkerNums.length} marker(s).`,
+      message: `Applied ${plural(
+        plan.operations.length,
+        'change',
+      )} and removed ${plural(
+        plan.recognizedMarkerNums.length,
+        'marker',
+      )}.${leftNote}${movedNote}`,
       backupPath,
       clipboardSummary,
       appliedOperationCount: plan.operations.length,
       removedMarkerCount: plan.recognizedMarkerNums.length,
-      affectedTextboxCount: plan.textMutations.length,
+      affectedTextboxCount: textMutations.length,
+    };
+  } finally {
+    await recycleElements(pageElements);
+  }
+}
+
+/** Whether "Remove" is offered for an ignored item: tagged pen edits and markers on a textbox. */
+export function isRemovableIgnored(item: IgnoredEditMarker): boolean {
+  return item.penEditId !== undefined || (item.removableNums?.length ?? 0) > 0;
+}
+
+/**
+ * Removes ignored markers and unused pen edits from the page: the marker strokes (with a replace
+ * mark's verticals or loop), and a pen edit's handwriting, mark, badge and number. Reads the page
+ * fresh and deletes only strokes that are still there under a unique number; never textboxes.
+ */
+export async function removeIgnoredItems(
+  preview: EditMarkerPreview,
+  items: IgnoredEditMarker[],
+): Promise<{message: string}> {
+  const base = preview.base;
+  const removable = items.filter(isRemovableIgnored);
+  if (!base || removable.length === 0) {
+    throw new Error('Nothing here can be removed.');
+  }
+  let pageElements: Element[] = [];
+  try {
+    pageElements = await readPageElements(
+      base.notePath,
+      base.page,
+      `Could not read page ${base.page} elements before removing markers.`,
+    );
+    const counts = new Map<number, number>();
+    pageElements.forEach(element =>
+      counts.set(element.numInPage, (counts.get(element.numInPage) ?? 0) + 1),
+    );
+    const byNum = new Map(
+      pageElements.map(element => [element.numInPage, element]),
+    );
+    const markerNums = removable
+      .flatMap(item => item.removableNums ?? [])
+      .filter(num => {
+        const element = byNum.get(num);
+        return (
+          !!element &&
+          counts.get(num) === 1 &&
+          isSupportedEditMarkerElement(element) &&
+          !isPenEditElement(element)
+        );
+      });
+
+    const penIds = removable
+      .map(item => item.penEditId)
+      .filter((id): id is string => !!id);
+    const penEntries =
+      penIds.length > 0 ? (await penEditBackupData(penIds)).entries : [];
+    const penNums = penEditElementNums(penIds, penEntries, pageElements);
+
+    const nums = [...new Set([...markerNums, ...penNums])];
+    logEditMarker('removeIgnored', {
+      items: removable.map(item => item.penEditId ?? item.markerNumInPage),
+      markerNums,
+      penNums,
+    });
+    // As in apply: save first, so the file the delete works on holds the latest strokes.
+    await saveCurrentNoteForConsistency('removing ignored markers');
+    await deletePageElements(base.notePath, base.page, nums);
+    try {
+      await markPenEditsDropped(penIds);
+    } catch (error) {
+      console.warn(
+        '[EditMarkerActions] pen edits not marked dropped',
+        String(error),
+      );
+    }
+    await hideLassoBox('[EditMarkerActions]');
+
+    const parts = [
+      markerNums.length > 0
+        ? plural(removable.filter(item => !item.penEditId).length, 'marker')
+        : null,
+      penIds.length > 0 ? plural(penIds.length, 'pen edit') : null,
+    ].filter(Boolean);
+    return {
+      message:
+        nums.length > 0
+          ? `Removed ${parts.join(' and ')} from the page.`
+          : 'Nothing was removed: the strokes are no longer on the page.',
     };
   } finally {
     await recycleElements(pageElements);

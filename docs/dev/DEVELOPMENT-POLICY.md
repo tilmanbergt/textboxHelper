@@ -1,4 +1,4 @@
-# Textbox Helper development policy
+# Textbox Tools development policy
 
 > **About this document.** The one document that says what has to be true after every change and
 > before every release. It applies to everyone who changes the code - in practice mostly Claude,
@@ -29,9 +29,10 @@ or code comment) and why. Silent exceptions are not allowed.
 ## 2. Product principles
 
 - **Your text is never lost.** Every action that changes a note shows a preview first and asks
-  for confirmation. Before the first change to a page, the affected text is written to a backup
-  file in the plugin folder and summarized on the clipboard. If the backup fails, nothing is
-  changed.
+  for confirmation. The one exception are the lasso toolbar's actions (Split, Join, Clean Spaces,
+  Remove Line Breaks): they apply right away, because the tap on the lasso selection is the
+  explicit act. Before the first change to a page, the affected text is written to a backup file
+  in the plugin folder and summarized on the clipboard. If the backup fails, nothing is changed.
 - **Built on Supernote features.** The plugin works with the NOTE app's own textboxes, pages,
   lasso and toolbar, and with plain files (text import, DOCX export) - no data of its own that
   only the plugin can read.
@@ -60,10 +61,10 @@ The architecture as built is described in `design-overview.md`. These rules are 
   `supernote/textboxMetrics.ts` with the native `TextboxMetrics` module. SDK calls go through
   `src/supernote/` (`noteElements.ts`, `sdkResult.ts`) rather than being repeated in flows.
 - **Device paths** are joined with `/` only. The plugin writes only to its own folder
-  (`PluginManager.getPluginDirPath()`: backups), the app's document folder
+  (`PluginManager.getPluginDirPath()`: backups, `settings.json`, `pen-edits/`), the app's document folder
   (`RNFS.DocumentDirectoryPath`: temporary files) and the EXPORT folder
-  (`FileUtils.getExportPath()`: DOCX and JSON exports). It reads text files from `INBOX` or
-  `MyStyle/TextboxHelper/inbox`, and font files from `MyStyle/fonts` and
+  (`FileUtils.getExportPath()`: DOCX and JSON exports). It reads text files from `INBOX` (chosen
+  with the Supernote file selector), and font files from `/system/fonts`, `MyStyle/fonts` and
   `MyStyle/TextboxHelper/fonts`. A new place needs a line in the README and in
   `supernote-host-facts.md` if the host restricts it.
 - **Host calls are checked.** Every `sn-plugin-lib` call's result is checked for success; a
@@ -74,10 +75,17 @@ The architecture as built is described in `design-overview.md`. These rules are 
 ## 4. UI and logging rules
 
 - **Target:** the Supernote NOTE app, developed and tested on the A5 X. Grayscale only: color never carries meaning.
-- **Destructive actions** go through a review screen or the direct-action dialog with an explicit
-  confirmation; the result message names the backup.
+- **No scrolling.** Every screen is a bounded flex column in `src/ui/ScreenFrame.tsx` (header,
+  body, footer with the status line and one primary button). Long lists page with
+  `ui/PagedSection.tsx`, long text with `ui/PagedText.tsx`; arrows show only when there is more.
+  ESLint forbids `ScrollView`, `FlatList` and `SectionList`. Styles come from `ui/theme.ts`;
+  meaning is carried by weight, underline and strikethrough, never by colour.
+- **Destructive actions** go through a review screen whose primary button names the change
+  ("Apply 4 changes", "Apply Join Text Boxes"), or are a lasso toolbar action (§2); the result
+  message names the backup file. A review screen stays open after the change with the result,
+  its primary button turning into Close; a toolbar action closes 0.7 s after success.
 - **Labels** are short, English and the same everywhere (toolbar button, dialog title, status
-  text). `ACTION_LABELS` in `src/domain/textboxActionKinds.ts` holds one label per action kind.
+  text). `src/domain/textboxActionKinds.ts` holds one label and one progress text per action kind.
 - **Logging:** log lines start with the module in brackets, e.g. `[EditMarkerActions] stage`.
   Every caught error is either shown to the user or logged, with enough context to find the
   cause. Logs never contain more of the user's text than the diagnosis needs; prefer counts and

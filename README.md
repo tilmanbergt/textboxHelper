@@ -1,12 +1,12 @@
-# Textbox Helper
+# Textbox Tools
 
-Textbox Helper is an experimental Supernote NOTE plugin for structured text editing inside notes.
+Textbox Tools is an experimental Supernote NOTE plugin for structured text editing inside notes.
 
 It targets the Android-based Supernote plugin runtime only. It does not support iOS.
 
 ## Status
 
-Textbox Helper is experimental and in beta.
+Textbox Tools is experimental and in beta.
 
 The plugin directly modifies NOTE page elements. Please test it on copied notes before using it on important notebooks.
 
@@ -14,18 +14,27 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 
 ### Textbox Tools
 
-- Split one textbox into sentence-based textboxes
+- Split one textbox into sentence-based or paragraph-based textboxes
 - Join selected textboxes in reading order
 - Clean repeated spaces
 - Remove manual line breaks
+- See every action's result before applying it; actions that don't fit the selection say why
 
 ### Edit Markers
 
 - Recognize handwritten delete markers
 - Recognize replace markers as a delete line plus two crossing modifier lines
 - Support both freehand strokes and Supernote straight-line geometry
-- Preview all changes before applying them
-- Save diagnostics of a marker preview to the EXPORT folder (Recognition Details → Save Diagnostics), for bug reports
+- Review all changes before applying them: removed words struck through, replacements in bold, one textbox at a time
+- Calibrate the text measurement and save diagnostics of a marker preview to the EXPORT folder (Details), for bug reports
+
+### Replacement and Insertion
+
+- Tag handwritten new text with the lasso buttons "Replacement" or "Insertion" instead of converting it to text first
+- A replacement is written right after its replace mark; a small number at both shows which belong together
+- An insertion is written right after a caret (a V on the line or a ∧ under it): between words, inside a word, or between paragraphs; paragraphs below move down to make room
+- The review recognizes the tagged text while you read, shows a picture of the handwriting, and lets you correct it with the Supernote's handwriting pad or skip it for later
+- The handwriting and its picture are kept in the plugin folder (`pen-edits/`)
 
 ### Apply All Edit Markers
 
@@ -34,12 +43,13 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 
 ### Import Text File
 
-- Import plain text into NOTE textboxes, from a `.txt` file in the Supernote's `INBOX` folder
+- Import plain text into NOTE textboxes, from a `.txt` file in the Supernote's `INBOX` folder (or a folder inside it), chosen with the Supernote file selector
 - Split imported text into paragraph-based textboxes
+- See the planned pages drawn to scale before importing; the preview updates by itself
 
 ### Export DOCX
 
-- Scan textbox content from the current note
+- See which textboxes of the page, the note or a page range will be exported, as a list that updates by itself
 - Export recognized textbox content into a DOCX file
 
 ## Fonts
@@ -56,12 +66,18 @@ free font by 8:51:22 pm (http://pm85122.onamae.jp/); rename the downloaded
 Without a readable font, the plugin shows a warning, because word positions and textbox sizes may
 be wrong.
 
+## Settings
+
+The plugin remembers the import settings, the export pages and rules, and the edit-marker
+calibration in `settings.json` in its own plugin folder. Tagged replacements and insertions are
+kept in `pen-edits/` in the same folder.
+
 ## Installation
 
 1. Download the latest `.snplg` file from GitHub Releases.
 2. Copy the `.snplg` file to the `MyStyle/` folder on your Supernote device.
 3. On the device, open Settings → Apps → Plugins.
-4. Install `Textbox Helper`.
+4. Install `Textbox Tools`.
 5. Open a NOTE file and use the plugin toolbar buttons.
 
 ## Project Structure

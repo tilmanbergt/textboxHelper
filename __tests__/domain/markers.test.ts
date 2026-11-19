@@ -166,6 +166,8 @@ describe('edit-marker backup', () => {
       operations: [],
       recognizedMarkerNums: [],
       replacementSourceTextboxNums: [],
+      penEditIds: [],
+      insertions: [],
       textMutations: [
         {
           uuid: 't',

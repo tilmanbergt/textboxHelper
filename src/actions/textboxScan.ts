@@ -10,7 +10,8 @@ import {
   type TextRole,
 } from '../domain/exportClassification';
 import type {ExportClassificationConfig} from '../domain/exportConfig';
-import type {Rect} from '../domain/textboxModel';
+import {isPenEditNumberElement} from '../domain/textboxEditPlan';
+import type {PageElementData, Rect} from '../domain/textboxModel';
 import {assertApiSuccess, tryApiResult} from '../supernote/sdkResult';
 
 /**
@@ -21,6 +22,7 @@ import {assertApiSuccess, tryApiResult} from '../supernote/sdkResult';
 
 type RawElement = {
   type?: number;
+  userData?: string | null;
   textBox?: {
     textContentFull?: string | null;
     textRect?: Rect | null;
@@ -138,6 +140,10 @@ export async function scanTextBoxes(params: ScanParams): Promise<ScanSummary> {
       ) ?? [];
 
     for (const element of elements) {
+      // Pen-edit numbers are marks on the page, not text (technical-design-pen-edits.md §3.2).
+      if (isPenEditNumberElement(element as PageElementData)) {
+        continue;
+      }
       const rawTextBox = element.textBox;
       const text = rawTextBox?.textContentFull?.trim() ?? '';
       if (!text) {

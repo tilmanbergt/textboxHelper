@@ -1,6 +1,9 @@
 import type {PageWordCandidate} from './hitTesting';
 import type {TextboxMeasurementCalibration} from './textboxLayout';
-import type {PageElementData, Rect, TextElementData} from './textboxModel';
+import type {TextSegment} from './textPages';
+import type {CaretInsertMode} from './penEditCaret';
+import type {PenEditReview, RecognitionStatus} from './penEditModel';
+import type {PageElementData, Rect, TextElementData, TextboxData} from './textboxModel';
 
 /**
  * Types of the edit-marker recognition: what the preview shows, the plan that is applied, and the
@@ -11,20 +14,24 @@ import type {PageElementData, Rect, TextElementData} from './textboxModel';
 
 export type EditMarkerOperationKind = 'delete' | 'replace';
 
+/** What a change in the review does; an insertion comes only from a pen edit. */
+/** 'split': a paragraph break from a < or > or a step mark on its own. */
+export type ReviewOperationKind = EditMarkerOperationKind | 'insert' | 'split';
+
+/**
+ * Where a pen edit's text stands in the review (technical-design-pen-edits.md §3.6): recognizing
+ * (or waiting for it), ready to apply, skipped for later, or recognized without usable text.
+ */
+export type PenOperationStatus = 'recognizing' | 'ready' | 'skipped' | 'failed' | 'empty';
+
 export type EditMarkerHighlightRange = {
   start: number;
   end: number;
 };
 
-export type EditMarkerPreviewBlock = {
-  id: string;
-  text: string;
-  highlightRanges: EditMarkerHighlightRange[];
-};
-
 export type RecognizedEditOperation = {
   id: string;
-  kind: EditMarkerOperationKind;
+  kind: ReviewOperationKind;
   markerUuid: string;
   markerNumInPage: number;
   consumedMarkerNums: number[];
@@ -35,6 +42,14 @@ export type RecognizedEditOperation = {
   detail: string;
   words: string[];
   replacementText?: string;
+  /** Where the operation's first range starts in the textbox's original text (review jumps there). */
+  textStart: number;
+  /** Set for a change whose new text comes from a tagged snippet. */
+  penEditId?: string;
+  penEditNumber?: number;
+  penStatus?: PenOperationStatus;
+  /** An insertion at a caret: how its text joins the words around it. */
+  insertMode?: CaretInsertMode;
 };
 
 export type IgnoredEditMarker = {
@@ -42,6 +57,24 @@ export type IgnoredEditMarker = {
   markerNumInPage: number;
   summary: string;
   reason: string;
+  /** Set when the ignored item is a tagged snippet, not a marker stroke. */
+  penEditNumber?: number;
+  penEditId?: string;
+  /**
+   * The stroke numbers "Remove" deletes for a marker that landed on a textbox (with a replace
+   * mark's verticals or loop). Unset for strokes that may be ordinary handwriting: those are
+   * never offered for removal.
+   */
+  removableNums?: number[];
+};
+
+export type EditMarkerTextboxPreview = {
+  uuid: string;
+  numInPage: number;
+  segments: TextSegment[];
+  changeCount: number;
+  /** Header for a textbox that doesn't exist yet (an insertion). */
+  title?: string;
 };
 
 export type EditMarkerPreview = {
@@ -50,14 +83,90 @@ export type EditMarkerPreview = {
   recognizedOperationCount: number;
   selectionMessage: string;
   summaryMessage: string;
-  beforePreviewBlocks: EditMarkerPreviewBlock[];
-  afterPreviewBlocks: EditMarkerPreviewBlock[];
-  beforeBlocks: string[];
-  afterBlocks: string[];
+  /** The affected textboxes in reading order, as diff segments (domain/markerDiff.ts). */
+  textboxes: EditMarkerTextboxPreview[];
+  /** Set when a textbox font couldn't be read and word positions were measured in a standard font. */
+  fontWarning: string | null;
   operations: RecognizedEditOperation[];
   ignoredMarkers: IgnoredEditMarker[];
   canApply: boolean;
   applyPlan: EditMarkerApplyPlan | null;
+  /** The analysis the preview is assembled from; re-assembled when a pen edit's text changes. */
+  base: MarkerPreviewBase | null;
+  /** The pen edits in this review, in list order. */
+  penEdits: PenEditView[];
+  /** Pen edits still waiting for text, and those skipped for later. */
+  pendingCount: number;
+  skippedCount: number;
+};
+
+/** A pen edit's text as the review knows it. */
+export type PenTextState = {
+  status: RecognitionStatus | 'recognizing';
+  text: string;
+  correctedText: string | null;
+  review: PenEditReview;
+};
+
+/** A tagged snippet as the review shows it. */
+export type PenEditView = {
+  id: string;
+  kind: 'replacement' | 'insertion';
+  number: number;
+  pictureUri: string | null;
+};
+
+/** A recognized change before its pen-edit text is known: the operation and its text range. */
+export type OperationDraft = {
+  operation: RecognizedEditOperation;
+  range: TextMutationRange;
+};
+
+/** An affected textbox as read for the preview (a TextMutationPlan without the new text). */
+export type MarkerTextboxBase = Omit<TextMutationPlan, 'nextText' | 'nextTextRect'>;
+
+/**
+ * An insertion whose caret is in the space between two paragraphs: a new textbox there, styled
+ * like the paragraph above (or below). Its top and the push of the paragraphs below are worked out
+ * at apply, once its height is measured.
+ */
+export type InsertionDraft = {
+  penEditId: string;
+  number: number;
+  left: number;
+  width: number;
+  style: TextboxData;
+  aboveNumInPage: number | null;
+  belowNumInPage: number | null;
+  aboveRect: Rect | null;
+  belowRect: Rect | null;
+};
+
+/** Everything the review needs that doesn't change while pen edits are recognized or corrected. */
+export type MarkerPreviewBase = {
+  notePath: string;
+  page: number;
+  selectedMarkerCount: number;
+  selectedTextboxCount: number;
+  drafts: OperationDraft[];
+  ignored: IgnoredEditMarker[];
+  textboxes: MarkerTextboxBase[];
+  replacementSourceTextboxNums: number[];
+  insertions: InsertionDraft[];
+  penEdits: PenEditView[];
+  /** The pen edits' text as stored when the page was read. */
+  penStates: Record<string, PenTextState>;
+};
+
+/** A ready new paragraph as applied. */
+export type InsertionPlan = {
+  penEditId: string;
+  text: string;
+  left: number;
+  width: number;
+  style: TextboxData;
+  aboveRect: Rect | null;
+  belowRect: Rect | null;
 };
 
 export type EditMarkerPreviewScope = 'lasso' | 'page';
@@ -102,6 +211,9 @@ export type EditMarkerApplyPlan = {
   recognizedMarkerNums: number[];
   replacementSourceTextboxNums: number[];
   textMutations: TextMutationPlan[];
+  /** Pen edits applied with this plan (their snippets, icons and numbers are removed). */
+  penEditIds: string[];
+  insertions: InsertionPlan[];
 };
 
 /**
@@ -146,6 +258,8 @@ export type TextMutationRange = {
   start: number;
   end: number;
   replacementText?: string;
+  /** Shown only: a placeholder for a pen edit's text that isn't there yet. */
+  pending?: boolean;
 };
 
 export type WordCandidate = PageWordCandidate;

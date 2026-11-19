@@ -19,3 +19,30 @@ export function buildBackupPath(pluginDir: string, name: string, createdAtIso: s
   const safeTimestamp = createdAtIso.replace(/[:.]/g, '-');
   return `${buildBackupDir(pluginDir)}/${name}-${safeTimestamp}.json`;
 }
+
+/** The settings file the plugin remembers its settings in (domain/settingsModel.ts). */
+export const SETTINGS_FILE_NAME = 'settings.json';
+
+export function buildSettingsPath(pluginDir: string): string {
+  return `${pluginDir.replace(/\/+$/, '')}/${SETTINGS_FILE_NAME}`;
+}
+
+/** Pen edits (technical-design-pen-edits.md §3.3): one index, one folder per entry. */
+export const PEN_EDIT_DIR_NAME = 'pen-edits';
+
+export function buildPenEditDir(pluginDir: string): string {
+  return `${pluginDir.replace(/\/+$/, '')}/${PEN_EDIT_DIR_NAME}`;
+}
+
+export function buildPenEditIndexPath(pluginDir: string): string {
+  return `${buildPenEditDir(pluginDir)}/index.json`;
+}
+
+export function buildPenEditEntryDir(pluginDir: string, id: string): string {
+  return `${buildPenEditDir(pluginDir)}/${id}`;
+}
+
+/** Where an unreadable index is kept aside: `index.broken-<ISO time with ":" and "." replaced>.json`. */
+export function buildBrokenPenEditIndexPath(pluginDir: string, createdAtIso: string): string {
+  return `${buildPenEditDir(pluginDir)}/index.broken-${createdAtIso.replace(/[:.]/g, '-')}.json`;
+}
