@@ -1,5 +1,10 @@
 import {buildDiffSegments} from './markerDiff';
-import {applyTextMutationRanges, buildSummaryMessage, buildSelectionMessage, formatOperationSnippet} from './markerText';
+import {
+  applyTextMutationRanges,
+  buildSummaryMessage,
+  buildSelectionMessage,
+  formatOperationSnippet,
+} from './markerText';
 import type {
   EditMarkerApplyPlan,
   EditMarkerPreview,
@@ -14,6 +19,12 @@ import type {
 } from './markerTypes';
 import {cloneRect} from './geometry';
 import {caretInsertionText} from './penEditCaret';
+import {
+  SPLIT_SHOWN,
+  SPLIT_SIGN,
+  showSplits,
+  splitChangeText,
+} from './paragraphMarks';
 
 /**
  * The edit-marker preview assembled from the analysis and the pen edits' current text
@@ -27,7 +38,9 @@ import {caretInsertionText} from './penEditCaret';
 
 export type {PenTextState};
 
-export function penOperationStatus(state: PenTextState | undefined): PenOperationStatus {
+export function penOperationStatus(
+  state: PenTextState | undefined,
+): PenOperationStatus {
   if (!state) {
     return 'recognizing';
   }
@@ -56,7 +69,11 @@ export function penTextOf(state: PenTextState | undefined): string {
   return (state.correctedText ?? state.text).trim();
 }
 
-function placeholder(kind: 'replacement' | 'insertion', number: number, status: PenOperationStatus): string {
+function placeholder(
+  kind: 'replacement' | 'insertion',
+  number: number,
+  status: PenOperationStatus,
+): string {
   const what = `${kind} ${number}`;
   switch (status) {
     case 'recognizing':
@@ -83,11 +100,17 @@ export function assembleMarkerPreview(
   let pendingCount = 0;
   let skippedCount = 0;
 
-  const add = (map: Map<string, TextMutationRange[]>, uuid: string, range: TextMutationRange) => {
+  const add = (
+    map: Map<string, TextMutationRange[]>,
+    uuid: string,
+    range: TextMutationRange,
+  ) => {
     map.set(uuid, [...(map.get(uuid) ?? []), range]);
   };
 
-  const originalTextOf = new Map(base.textboxes.map(textbox => [textbox.uuid, textbox.originalText]));
+  const originalTextOf = new Map(
+    base.textboxes.map(textbox => [textbox.uuid, textbox.originalText]),
+  );
 
   for (const {operation, range} of base.drafts) {
     const uuid = operation.targetTextboxUuid;
@@ -98,9 +121,15 @@ export function assembleMarkerPreview(
       const number = operation.penEditNumber ?? 0;
       const text = status === 'ready' ? penTextOf(state) : '';
       const joined = text
-        ? caretInsertionText(originalTextOf.get(uuid) ?? '', range.start, text, operation.insertMode ?? 'betweenWords')
+        ? caretInsertionText(
+            originalTextOf.get(uuid) ?? '',
+            range.start,
+            text,
+            operation.insertMode ?? 'betweenWords',
+          )
         : '';
       const shown = text || placeholder('insertion', number, status);
+      const isParagraph = operation.insertMode === 'paragraph';
       const assembled: RecognizedEditOperation = {
         ...operation,
         penStatus: status,
@@ -111,16 +140,48 @@ export function assembleMarkerPreview(
       if (status === 'ready' && joined) {
         readyOperations.push(assembled);
         readyPenIds.push(operation.penEditId);
-        add(displayRanges, uuid, {...range, kind: 'replace', replacementText: joined});
-        add(applyRanges, uuid, {...range, kind: 'replace', replacementText: joined});
+        add(displayRanges, uuid, {
+          ...range,
+          kind: 'replace',
+          replacementText: showSplits(joined),
+        });
+        add(applyRanges, uuid, {
+          ...range,
+          kind: 'replace',
+          replacementText: joined,
+        });
       } else {
         if (status === 'skipped') {
           skippedCount += 1;
         } else {
           pendingCount += 1;
         }
-        add(displayRanges, uuid, {...range, kind: 'replace', replacementText: ` ${shown} `, pending: true});
+        const pendingText = isParagraph
+          ? showSplits(splitChangeText(shown))
+          : ` ${shown} `;
+        add(displayRanges, uuid, {
+          ...range,
+          kind: 'replace',
+          replacementText: pendingText,
+          pending: true,
+        });
       }
+      continue;
+    }
+    if (operation.kind === 'split') {
+      // A paragraph break on its own: the split sign, shown as a paragraph end.
+      operations.push(operation);
+      readyOperations.push(operation);
+      add(displayRanges, uuid, {
+        ...range,
+        kind: 'replace',
+        replacementText: SPLIT_SHOWN,
+      });
+      add(applyRanges, uuid, {
+        ...range,
+        kind: 'replace',
+        replacementText: SPLIT_SIGN,
+      });
       continue;
     }
     if (!operation.penEditId) {
@@ -145,15 +206,28 @@ export function assembleMarkerPreview(
     if (status === 'ready') {
       readyOperations.push(assembled);
       readyPenIds.push(operation.penEditId);
-      add(displayRanges, uuid, {...range, kind: 'replace', replacementText: text});
-      add(applyRanges, uuid, {...range, kind: 'replace', replacementText: text});
+      add(displayRanges, uuid, {
+        ...range,
+        kind: 'replace',
+        replacementText: text,
+      });
+      add(applyRanges, uuid, {
+        ...range,
+        kind: 'replace',
+        replacementText: text,
+      });
     } else {
       if (status === 'skipped') {
         skippedCount += 1;
       } else {
         pendingCount += 1;
       }
-      add(displayRanges, uuid, {...range, kind: 'replace', replacementText: shown, pending: true});
+      add(displayRanges, uuid, {
+        ...range,
+        kind: 'replace',
+        replacementText: shown,
+        pending: true,
+      });
     }
   }
 
@@ -168,12 +242,21 @@ export function assembleMarkerPreview(
       uuid: textbox.uuid,
       numInPage: textbox.numInPage,
       segments: buildDiffSegments(textbox.originalText, shownRanges),
-      changeCount: operations.filter(operation => operation.targetTextboxUuid === textbox.uuid).length,
+      changeCount: operations.filter(
+        operation => operation.targetTextboxUuid === textbox.uuid,
+      ).length,
     });
-    const nextText = applyTextMutationRanges(textbox.originalText, applyRanges.get(textbox.uuid) ?? []);
+    const nextText = applyTextMutationRanges(
+      textbox.originalText,
+      applyRanges.get(textbox.uuid) ?? [],
+    );
     if (nextText !== textbox.originalText) {
       // The new height is measured when the change is applied.
-      textMutations.push({...textbox, nextText, nextTextRect: cloneRect(textbox.textRect)});
+      textMutations.push({
+        ...textbox,
+        nextText,
+        nextTextRect: cloneRect(textbox.textRect),
+      });
     }
   }
 
@@ -194,7 +277,10 @@ export function assembleMarkerPreview(
       targetTextboxNumInPage: insertion.aboveNumInPage ?? 0,
       lineIndex: 0,
       summary: `New paragraph "${shown}"`,
-      detail: insertion.aboveNumInPage !== null ? `After textbox ${insertion.aboveNumInPage}` : `Before textbox ${insertion.belowNumInPage ?? ''}`.trim(),
+      detail:
+        insertion.aboveNumInPage !== null
+          ? `After textbox ${insertion.aboveNumInPage}`
+          : `Before textbox ${insertion.belowNumInPage ?? ''}`.trim(),
       words: [],
       replacementText: text || undefined,
       textStart: 0,
@@ -209,7 +295,9 @@ export function assembleMarkerPreview(
       title:
         insertion.aboveNumInPage !== null
           ? `New paragraph after textbox ${insertion.aboveNumInPage}`
-          : `New paragraph before textbox ${insertion.belowNumInPage ?? ''}`.trim(),
+          : `New paragraph before textbox ${
+              insertion.belowNumInPage ?? ''
+            }`.trim(),
       segments: [{text: shown, style: text ? 'inserted' : 'muted'}],
       changeCount: 1,
     });
@@ -232,11 +320,19 @@ export function assembleMarkerPreview(
     }
   }
 
-  const shownMarkerNums = new Set(operations.flatMap(operation => operation.consumedMarkerNums));
-  const ignoredMarkers = base.ignored.filter(
-    marker => marker.penEditId !== undefined || !shownMarkerNums.has(marker.markerNumInPage),
+  const shownMarkerNums = new Set(
+    operations.flatMap(operation => operation.consumedMarkerNums),
   );
-  const recognizedMarkerNums = [...new Set(readyOperations.flatMap(operation => operation.consumedMarkerNums))];
+  const ignoredMarkers = base.ignored.filter(
+    marker =>
+      marker.penEditId !== undefined ||
+      !shownMarkerNums.has(marker.markerNumInPage),
+  );
+  const recognizedMarkerNums = [
+    ...new Set(
+      readyOperations.flatMap(operation => operation.consumedMarkerNums),
+    ),
+  ];
   const hasWork = textMutations.length > 0 || insertions.length > 0;
   const applyPlan: EditMarkerApplyPlan | null = hasWork
     ? {
@@ -256,7 +352,10 @@ export function assembleMarkerPreview(
     selectedMarkerCount: base.selectedMarkerCount,
     selectedTextboxCount: base.selectedTextboxCount,
     recognizedOperationCount: operations.length,
-    selectionMessage: buildSelectionMessage(base.selectedMarkerCount, base.selectedTextboxCount),
+    selectionMessage: buildSelectionMessage(
+      base.selectedMarkerCount,
+      base.selectedTextboxCount,
+    ),
     summaryMessage: buildSummaryMessage(
       operations.length,
       ignoredMarkers.length,

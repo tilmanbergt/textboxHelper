@@ -1,3 +1,4 @@
+import {SPLIT_SIGN} from '../../src/domain/paragraphMarks';
 import {assembleMarkerPreview, penOperationStatus} from '../../src/domain/markerAssembly';
 import type {MarkerPreviewBase, OperationDraft, PenTextState} from '../../src/domain/markerTypes';
 
@@ -184,6 +185,38 @@ describe('assembleMarkerPreview', () => {
     };
     const ready = assembleMarkerPreview(base({drafts: [inWord]}), {pe4: state({text: 'b'})});
     expect(ready.applyPlan?.textMutations[0].nextText).toBe('This can feel humbble, but not because');
+  });
+
+  it('makes a paragraph break on its own a split sign, shown as a paragraph end', () => {
+    const split: OperationDraft = {
+      range: {kind: 'replace', start: 22, end: 22},
+      operation: {...draft('s', 22, 22).operation, kind: 'split', id: 'split:m', consumedMarkerNums: [41]},
+    };
+    const preview = assembleMarkerPreview(base({drafts: [split]}), {});
+    expect(preview.applyPlan?.textMutations[0].nextText).toBe(`This can feel humble, ${SPLIT_SIGN}but not because`);
+    expect(preview.applyPlan?.recognizedMarkerNums).toEqual([41]);
+    expect(preview.textboxes[0].segments.map(segment => segment.text).join('')).toContain('¶\n');
+  });
+
+  it('puts an insertion at a paragraph caret between two split signs', () => {
+    const caret: OperationDraft = {
+      range: {kind: 'replace', start: 22, end: 22},
+      operation: {
+        ...draft('p', 22, 22).operation,
+        kind: 'insert',
+        id: 'insert:pe9',
+        penEditId: 'pe9',
+        penEditNumber: 9,
+        consumedMarkerNums: [],
+        insertMode: 'paragraph',
+      },
+    };
+    const ready = assembleMarkerPreview(base({drafts: [caret]}), {pe9: state({text: 'A new thought.'})});
+    expect(ready.applyPlan?.textMutations[0].nextText).toBe(
+      `This can feel humble, ${SPLIT_SIGN}A new thought.${SPLIT_SIGN}but not because`,
+    );
+    const waiting = assembleMarkerPreview(base({drafts: [caret]}), {});
+    expect(waiting.applyPlan).toBeNull();
   });
 
   it('hides marker strokes used by a change from Ignored, but keeps ignored pen edits', () => {

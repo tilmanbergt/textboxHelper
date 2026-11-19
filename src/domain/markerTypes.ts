@@ -15,7 +15,8 @@ import type {PageElementData, Rect, TextElementData, TextboxData} from './textbo
 export type EditMarkerOperationKind = 'delete' | 'replace';
 
 /** What a change in the review does; an insertion comes only from a pen edit. */
-export type ReviewOperationKind = EditMarkerOperationKind | 'insert';
+/** 'split': a paragraph break from a < or > or a step mark on its own. */
+export type ReviewOperationKind = EditMarkerOperationKind | 'insert' | 'split';
 
 /**
  * Where a pen edit's text stands in the review (technical-design-pen-edits.md §3.6): recognizing

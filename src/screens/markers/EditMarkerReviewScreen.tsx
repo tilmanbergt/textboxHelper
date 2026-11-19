@@ -39,7 +39,10 @@ interface Props {
   onClose: () => void;
 }
 
-export default function EditMarkerReviewScreen({scope, onClose}: Props): React.JSX.Element {
+export default function EditMarkerReviewScreen({
+  scope,
+  onClose,
+}: Props): React.JSX.Element {
   const review = useEditMarkerReview(scope);
   const {preview, loading, busy, applied} = review;
   const [view, setView] = useState<'review' | 'details' | 'correct'>('review');
@@ -49,7 +52,10 @@ export default function EditMarkerReviewScreen({scope, onClose}: Props): React.J
 
   const operations = useMemo(() => preview?.operations ?? [], [preview]);
   const ignored = useMemo(() => preview?.ignoredMarkers ?? [], [preview]);
-  const removable = useMemo(() => ignored.filter(isRemovableIgnored), [ignored]);
+  const removable = useMemo(
+    () => ignored.filter(isRemovableIgnored),
+    [ignored],
+  );
   // Removing is destructive: the first tap arms the button, the second removes.
   const [armedRemove, setArmedRemove] = useState<string | null>(null);
   useEffect(() => setArmedRemove(null), [ignored, tab]);
@@ -74,13 +80,22 @@ export default function EditMarkerReviewScreen({scope, onClose}: Props): React.J
     setJumpKey(key => key + 1);
   }, [changeKey, firstId, onlyIgnored]);
 
-  const selected = operations.find(operation => operation.id === selectedId) ?? operations[0] ?? null;
+  const selected =
+    operations.find(operation => operation.id === selectedId) ??
+    operations[0] ??
+    null;
   const textboxIndex = selected
-    ? Math.max(0, textboxes.findIndex(textbox => textbox.uuid === selected.targetTextboxUuid))
+    ? Math.max(
+        0,
+        textboxes.findIndex(
+          textbox => textbox.uuid === selected.targetTextboxUuid,
+        ),
+      )
     : 0;
   const textbox = textboxes[textboxIndex] ?? null;
   const selectedPen: PenEditView | null = selected?.penEditId
-    ? preview?.penEdits.find(penEdit => penEdit.id === selected.penEditId) ?? null
+    ? preview?.penEdits.find(penEdit => penEdit.id === selected.penEditId) ??
+      null
     : null;
   const {setSelectedPenEdit} = review;
 
@@ -96,14 +111,23 @@ export default function EditMarkerReviewScreen({scope, onClose}: Props): React.J
 
   const showNextTextbox = () => {
     const next = textboxes[(textboxIndex + 1) % textboxes.length];
-    const first = operations.find(operation => operation.targetTextboxUuid === next.uuid);
+    const first = operations.find(
+      operation => operation.targetTextboxUuid === next.uuid,
+    );
     if (first) {
       selectOperation(first);
     }
   };
 
   if (view === 'details') {
-    return <MarkerDetailsScreen review={review} scope={scope} onBack={() => setView('review')} onClose={onClose} />;
+    return (
+      <MarkerDetailsScreen
+        review={review}
+        scope={scope}
+        onBack={() => setView('review')}
+        onClose={onClose}
+      />
+    );
   }
 
   if (view === 'correct' && selectedPen) {
@@ -111,7 +135,7 @@ export default function EditMarkerReviewScreen({scope, onClose}: Props): React.J
     return (
       <PenEditCorrectionScreen
         view={selectedPen}
-        initialText={state ? (state.correctedText ?? state.text) : ''}
+        initialText={state ? state.correctedText ?? state.text : ''}
         onSave={text => {
           review.correct(selectedPen.id, text);
           setView('review');
@@ -136,7 +160,10 @@ export default function EditMarkerReviewScreen({scope, onClose}: Props): React.J
   const primary = applied
     ? {label: 'Close', onPress: onClose}
     : {
-        label: readyCount > 0 ? `Apply ${plural(readyCount, 'change')}` : 'Nothing to apply',
+        label:
+          readyCount > 0
+            ? `Apply ${plural(readyCount, 'change')}`
+            : 'Nothing to apply',
         onPress: review.apply,
         disabled: !preview?.canApply || loading,
         busy,
@@ -158,7 +185,12 @@ export default function EditMarkerReviewScreen({scope, onClose}: Props): React.J
           <CountTabs
             tabs={[
               {key: 'changes', label: 'Changes', count: operations.length},
-              {key: 'ignored', label: 'Ignored', count: ignored.length, hideWhenZero: true},
+              {
+                key: 'ignored',
+                label: 'Ignored',
+                count: ignored.length,
+                hideWhenZero: true,
+              },
             ]}
             activeKey={tab}
             onChange={setTab}
@@ -169,7 +201,9 @@ export default function EditMarkerReviewScreen({scope, onClose}: Props): React.J
               rows={operations}
               rowHeight={() => ROW_HEIGHT}
               resetKey={preview ? operations.length : undefined}
-              emptyHint={loading ? 'Reading markers…' : 'No changes recognized.'}
+              emptyHint={
+                loading ? 'Reading markers…' : 'No changes recognized.'
+              }
               renderRow={operation => (
                 <ChangeRow
                   key={operation.id}
@@ -186,7 +220,11 @@ export default function EditMarkerReviewScreen({scope, onClose}: Props): React.J
                 removable.length > 1 && !applied ? (
                   <PillButton
                     size="small"
-                    label={armedRemove === 'all' ? 'Tap again to remove' : `Remove all (${removable.length})`}
+                    label={
+                      armedRemove === 'all'
+                        ? 'Tap again to remove'
+                        : `Remove all (${removable.length})`
+                    }
                     onPress={() => removeTapped('all', removable)}
                     disabled={busy || loading}
                   />
@@ -216,21 +254,39 @@ export default function EditMarkerReviewScreen({scope, onClose}: Props): React.J
           {textbox ? (
             <>
               <PagedText
-                header={textbox.title ?? `Textbox ${textbox.numInPage} · ${plural(textbox.changeCount, 'change')}`}
+                header={
+                  textbox.title ??
+                  `Textbox ${textbox.numInPage} · ${plural(
+                    textbox.changeCount,
+                    'change',
+                  )}`
+                }
                 headerAccessory={
                   textboxes.length > 1 ? (
                     <PillButton
                       size="small"
-                      label={`Next textbox (${textboxIndex + 1}/${textboxes.length})`}
+                      label={`Next textbox (${textboxIndex + 1}/${
+                        textboxes.length
+                      })`}
                       onPress={showNextTextbox}
                     />
                   ) : undefined
                 }
                 segments={textbox.segments}
                 resetKey={textbox.uuid}
-                jumpTo={selected ? {key: `${jumpKey}-${selected.id}`, index: selected.textStart} : null}
+                jumpTo={
+                  selected
+                    ? {
+                        key: `${jumpKey}-${selected.id}`,
+                        index: selected.textStart,
+                      }
+                    : null
+                }
               />
-              <Text style={styles.legend}>Struck through: removed. Bold: new text. Grey: new text not there yet.</Text>
+              <Text style={styles.legend}>
+                Struck through: removed. Bold: new text. Grey: new text not
+                there yet.
+              </Text>
               {selected && selectedPen ? (
                 <PenEditPanel
                   view={selectedPen}
@@ -243,7 +299,10 @@ export default function EditMarkerReviewScreen({scope, onClose}: Props): React.J
               ) : null}
             </>
           ) : (
-            <EmptyState loading={loading} message={preview?.summaryMessage ?? ''} />
+            <EmptyState
+              loading={loading}
+              message={preview?.summaryMessage ?? ''}
+            />
           )}
         </View>
       </View>
@@ -261,9 +320,17 @@ function ChangeRow({
   onPress: () => void;
 }): React.JSX.Element {
   const words = operation.words.join(' ');
-  const newText = operation.replacementText ?? (operation.penStatus ? STATUS_TEXT[operation.penStatus] : '');
+  const newText =
+    operation.replacementText ??
+    (operation.penStatus ? STATUS_TEXT[operation.penStatus] : '');
   const text =
-    operation.kind === 'insert' ? newText : operation.kind === 'replace' ? `${words} → ${newText}` : words;
+    operation.kind === 'insert'
+      ? newText
+      : operation.kind === 'split'
+      ? 'New paragraph from here'
+      : operation.kind === 'replace'
+      ? `${words} → ${newText}`
+      : words;
   return (
     <Pressable
       accessibilityRole="button"
@@ -275,7 +342,11 @@ function ChangeRow({
         {text}
       </Text>
       <Text style={styles.rowMeta} numberOfLines={1}>
-        {operation.kind === 'insert' ? operation.detail : `Textbox ${operation.targetTextboxNumInPage} · line ${operation.lineIndex + 1}`}
+        {operation.kind === 'insert' || operation.kind === 'split'
+          ? operation.detail
+          : `Textbox ${operation.targetTextboxNumInPage} · line ${
+              operation.lineIndex + 1
+            }`}
       </Text>
     </Pressable>
   );
@@ -293,8 +364,13 @@ function kindLabel(operation: RecognizedEditOperation): string {
   if (operation.kind === 'insert') {
     return `Insert ${operation.penEditNumber ?? ''}`.trim();
   }
+  if (operation.kind === 'split') {
+    return 'Paragraph break';
+  }
   if (operation.kind === 'replace') {
-    return operation.penEditNumber !== undefined ? `Replace ${operation.penEditNumber}` : 'Replace';
+    return operation.penEditNumber !== undefined
+      ? `Replace ${operation.penEditNumber}`
+      : 'Replace';
   }
   return 'Delete';
 }
@@ -319,13 +395,29 @@ function PenEditPanel({
   return (
     <View style={styles.penPanel}>
       {view.pictureUri ? (
-        <Image source={{uri: view.pictureUri}} style={styles.penPicture} resizeMode="contain" />
+        <Image
+          source={{uri: view.pictureUri}}
+          style={styles.penPicture}
+          resizeMode="contain"
+        />
       ) : (
-        <Text style={styles.rowMeta}>No picture of the handwriting was kept.</Text>
+        <Text style={styles.rowMeta}>
+          No picture of the handwriting was kept.
+        </Text>
       )}
       <View style={styles.penButtons}>
-        <PillButton size="small" label="Correct" onPress={onCorrect} disabled={busy} />
-        <PillButton size="small" label={skipped ? 'Include' : 'Skip for later'} onPress={() => onSkip(!skipped)} disabled={busy} />
+        <PillButton
+          size="small"
+          label="Correct"
+          onPress={onCorrect}
+          disabled={busy}
+        />
+        <PillButton
+          size="small"
+          label={skipped ? 'Include' : 'Skip for later'}
+          onPress={() => onSkip(!skipped)}
+          disabled={busy}
+        />
         <PillButton
           size="small"
           label="Recognize again"
@@ -353,10 +445,17 @@ function IgnoredRow({
     <View style={styles.row}>
       <View style={styles.ignoredHead}>
         <Text style={styles.kind}>
-          {marker.penEditNumber !== undefined ? marker.summary : `Marker ${marker.markerNumInPage}`}
+          {marker.penEditNumber !== undefined
+            ? marker.summary
+            : `Marker ${marker.markerNumInPage}`}
         </Text>
         {removeLabel ? (
-          <PillButton size="small" label={removeLabel} onPress={onRemove} disabled={disabled} />
+          <PillButton
+            size="small"
+            label={removeLabel}
+            onPress={onRemove}
+            disabled={disabled}
+          />
         ) : null}
       </View>
       <Text style={styles.rowMeta} numberOfLines={removeLabel ? 2 : 3}>
@@ -366,7 +465,13 @@ function IgnoredRow({
   );
 }
 
-function EmptyState({loading, message}: {loading: boolean; message: string}): React.JSX.Element {
+function EmptyState({
+  loading,
+  message,
+}: {
+  loading: boolean;
+  message: string;
+}): React.JSX.Element {
   if (loading) {
     return <Text style={styles.emptyText}>Reading markers…</Text>;
   }
@@ -374,8 +479,9 @@ function EmptyState({loading, message}: {loading: boolean; message: string}): Re
     <View style={styles.empty}>
       <Text style={styles.emptyText}>{message || 'No changes to show.'}</Text>
       <Text style={styles.emptyHint}>
-        Delete: draw a line through the words. Replace: add two short vertical lines across it, write
-        the new words right after, lasso them and tap Replacement. ? has the details.
+        Delete: draw a line through the words. Replace: add two short vertical
+        lines across it, write the new words right after, lasso them and tap
+        Replacement. ? has the details.
       </Text>
     </View>
   );

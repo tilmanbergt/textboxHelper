@@ -212,11 +212,9 @@ describe('locateCaret', () => {
     });
   });
 
-  it('takes a sideways caret just below the last line to that line, at its end', () => {
+  it('a sideways caret just below the last line means the gap after the paragraph', () => {
     // Device case: a < right of "permission." a few pixels below the paragraph.
-    expect(locateCaret({x: 760, y: 252}, 'left', [box, nextBox])).toMatchObject(
-      {uuid: 'a', offset: 28, mode: 'betweenWords'},
-    );
+    expect(locateCaret({x: 760, y: 252}, 'left', [box, nextBox])).toEqual({kind: 'gap', above: 'a', below: 'b'});
   });
 
   it('measures words from where NOTE draws the text (device case: "One" on page 27)', () => {

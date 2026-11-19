@@ -1,6 +1,15 @@
 import {PluginCommAPI, PluginFileAPI, type Element} from 'sn-plugin-lib';
-import {buildRecognizeRect, buildStrokeStats, isStraightLineGeometryElement, isSupportedEditMarkerElement} from '../domain/markerStrokes';
-import {LOOK_BACK_WINDOW, strokeStatsFromRect, type WindowStroke} from '../domain/penEditPairing';
+import {
+  buildRecognizeRect,
+  buildStrokeStats,
+  isStraightLineGeometryElement,
+  isSupportedEditMarkerElement,
+} from '../domain/markerStrokes';
+import {
+  LOOK_BACK_WINDOW,
+  strokeStatsFromRect,
+  type WindowStroke,
+} from '../domain/penEditPairing';
 import {
   analyzeCaret,
   analyzeTwoStrokeCaret,
@@ -9,6 +18,7 @@ import {
   type Point,
 } from '../domain/penEditCaret';
 import {isTakenStrike} from '../domain/penEditMatching';
+import {isStepSizedRect} from '../domain/paragraphMarks';
 import {isPenEditDecoration} from '../domain/penEditTags';
 import type {Rect} from '../domain/textboxModel';
 import {readAccessorRange} from './markerStrokeRead';
@@ -26,11 +36,25 @@ type Response<T> = {success?: boolean; result?: T} | null | undefined;
 function windowStroke(element: Element): WindowStroke | null {
   if (isStraightLineGeometryElement(element)) {
     const stats = buildStrokeStats(element.geometry?.points ?? []);
-    return stats ? {uuid: element.uuid, numInPage: element.numInPage, isStraightLine: true, stats} : null;
+    return stats
+      ? {
+          uuid: element.uuid,
+          numInPage: element.numInPage,
+          isStraightLine: true,
+          stats,
+        }
+      : null;
   }
   const rect = buildRecognizeRect(element.recognizeResult);
   const stats = rect ? strokeStatsFromRect(rect) : null;
-  return stats ? {uuid: element.uuid, numInPage: element.numInPage, isStraightLine: false, stats} : null;
+  return stats
+    ? {
+        uuid: element.uuid,
+        numInPage: element.numInPage,
+        isStraightLine: false,
+        stats,
+      }
+    : null;
 }
 
 export async function readLookBackWindow(
@@ -38,7 +62,12 @@ export async function readLookBackWindow(
   page: number,
   numbers: number[],
   isComplete?: (window: WindowStroke[]) => boolean,
-): Promise<{window: WindowStroke[]; elements: Map<string, Element>; read: number; ms: number}> {
+): Promise<{
+  window: WindowStroke[];
+  elements: Map<string, Element>;
+  read: number;
+  ms: number;
+}> {
   const start = Date.now();
   const window: WindowStroke[] = [];
   // The window's elements stay alive so the tag can be written onto the chosen mark; the caller
@@ -52,7 +81,11 @@ export async function readLookBackWindow(
     }
     let element: Element | null = null;
     try {
-      const response = (await PluginFileAPI.getElement(notePath, page, num)) as Response<Element>;
+      const response = (await PluginFileAPI.getElement(
+        notePath,
+        page,
+        num,
+      )) as Response<Element>;
       element = response?.success && response.result ? response.result : null;
       if (!element) {
         continue;
@@ -75,7 +108,10 @@ export async function readLookBackWindow(
         }
       }
     } catch (error) {
-      console.warn('[PenEditPageRead] element not read', JSON.stringify({page, num, error: String(error)}));
+      console.warn(
+        '[PenEditPageRead] element not read',
+        JSON.stringify({page, num, error: String(error)}),
+      );
     } finally {
       if (element) {
         recycle(element);
@@ -100,7 +136,7 @@ export function recycleWindow(elements: Map<string, Element>): void {
 
 /**
  * The caret of an insertion among the window's strokes, newest first: one stroke shaped like a
- * V, ∧, < or > (`analyzeCaret`), or two strokes drawn one after the other whose ends meet at the
+ * V, ∧, <, > or a step mark (`analyzeCaret`), or two strokes drawn one after the other whose ends meet at the
  * tip (`analyzeTwoStrokeCaret`), not already paired. Only caret-sized candidates have their points
  * read. Never throws.
  */
@@ -119,7 +155,13 @@ export async function findCaretInWindow(
         candidates.push({strokes: [older, stroke], rect});
       }
     }
-    if (!stroke.isStraightLine && isCaretSizedRect(stroke.stats.rect) && !isTakenStrike(stroke.stats.rect, taken)) {
+    const markSized =
+      isCaretSizedRect(stroke.stats.rect) || isStepSizedRect(stroke.stats.rect);
+    if (
+      !stroke.isStraightLine &&
+      markSized &&
+      !isTakenStrike(stroke.stats.rect, taken)
+    ) {
       candidates.push({strokes: [stroke], rect: stroke.stats.rect});
     }
   });
