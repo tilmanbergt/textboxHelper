@@ -17,7 +17,6 @@ import {
   dropItemOfOperation,
   type DropItem,
 } from '../../actions/editMarkerDrop';
-import {EDIT_MARKERS_HELP} from '../../domain/helpTexts';
 import type {
   EditMarkerPreviewScope,
   IgnoredEditMarker,
@@ -203,7 +202,7 @@ export default function EditMarkerReviewScreen({
       title="Edit markers"
       context={context}
       actions={[{label: 'Details', onPress: () => setView('details')}]}
-      help={{title: 'Edit markers', text: EDIT_MARKERS_HELP}}
+      help={{title: 'Edit markers', marks: true}}
       onClose={onClose}
       status={review.status ?? (focusNote ? {text: focusNote} : null)}
       primary={primary}

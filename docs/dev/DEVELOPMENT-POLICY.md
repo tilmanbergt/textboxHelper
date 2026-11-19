@@ -117,8 +117,8 @@ A change is not done while the docs describe the old behavior.
 
 ## 6. Checks and tests
 
-- **`npm run check`** runs the type check, ESLint and Jest. It passes with zero errors and zero
-  warnings after every step and before every commit.
+- **`npm run check`** checks the help pictures, then runs the type check, ESLint and Jest. It
+  passes with zero errors and zero warnings after every step and before every commit.
 - **Jest tests** live in `__tests__/`. New pure logic gets tests, including edge cases; a fixed bug
   gets a test that would have caught it, where its cause is testable without the device.
 - **On the device**, for every change that touches UI, notes, files or device APIs: build with
