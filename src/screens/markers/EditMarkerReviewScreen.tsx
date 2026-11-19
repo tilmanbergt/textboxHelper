@@ -361,6 +361,7 @@ export default function EditMarkerReviewScreen({
                 selectedPen && review.recognizeAgain(selectedPen.id)
               }
               onNudge={(edge, delta) => review.nudge(selected, edge, delta)}
+              onFixCase={fixCase => review.setFixCase(selected.id, fixCase)}
               onDrop={
                 !applied && dropItemOfOperation(selected)
                   ? () =>
@@ -406,6 +407,8 @@ function ChangeRow({
       ? newText
       : operation.kind === 'split'
       ? 'New paragraph from here'
+      : operation.kind === 'space' || operation.kind === 'swap'
+      ? operation.summary.replace(/^(Space|Swap) · /, '')
       : operation.kind === 'replace'
       ? `${words} → ${newText}`
       : words;
@@ -420,12 +423,16 @@ function ChangeRow({
         {text}
       </Text>
       <Text style={styles.rowMeta} numberOfLines={1}>
-        {operation.kind === 'insert' || operation.kind === 'split'
+        {operation.kind === 'insert' ||
+        operation.kind === 'split' ||
+        operation.kind === 'space'
           ? operation.detail
           : `Textbox ${operation.targetTextboxNumInPage} · line ${
               operation.lineIndex + 1
             }`}
         {operation.uncertain ? ' · Check place' : ''}
+        {operation.insideSwap ? ' · inside swap' : ''}
+        {operation.swap?.waitingFor ? ' · waiting' : ''}
       </Text>
     </Pressable>
   );
@@ -445,6 +452,12 @@ function kindLabel(operation: RecognizedEditOperation): string {
   }
   if (operation.kind === 'split') {
     return 'Paragraph break';
+  }
+  if (operation.kind === 'space') {
+    return 'Space';
+  }
+  if (operation.kind === 'swap') {
+    return 'Swap';
   }
   if (operation.kind === 'replace') {
     return operation.penEditNumber !== undefined

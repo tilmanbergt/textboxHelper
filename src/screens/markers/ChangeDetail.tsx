@@ -15,6 +15,7 @@ import type {
   PenOperationStatus,
   RecognizedEditOperation,
 } from '../../domain/markerTypes';
+import Checkbox from '../../ui/Checkbox';
 import PillButton from '../../ui/PillButton';
 import StrokeDrawing from '../../ui/StrokeDrawing';
 import {COLORS, FONT, RADII, SPACING} from '../../ui/theme';
@@ -36,6 +37,8 @@ interface Props {
   onSkip: (skipped: boolean) => void;
   onRecognizeAgain: () => void;
   onNudge: (edge: 'start' | 'end', delta: number) => void;
+  /** A swap's "Fix capitals" switched on or off. */
+  onFixCase: (fixCase: boolean) => void;
   /** Null when the change can't be dropped (nothing of it may be removed from the page). */
   onDrop: (() => void) | null;
 }
@@ -50,6 +53,7 @@ export default function ChangeDetail({
   onSkip,
   onRecognizeAgain,
   onNudge,
+  onFixCase,
   onDrop,
 }: Props): React.JSX.Element {
   const [draft, setDraft] = useState(pen?.text ?? '');
@@ -119,6 +123,12 @@ export default function ChangeDetail({
         </View>
       ) : null}
       {operation.uncertain ? <Text style={styles.check}>Check the place: {operation.uncertain}</Text> : null}
+      {operation.insideSwap ? (
+        <Text style={styles.hint}>Inside a swap: this change is made first, then the parts change places.</Text>
+      ) : null}
+      {operation.swap ? (
+        <SwapDetail operation={operation} disabled={busy} onFixCase={onFixCase} />
+      ) : null}
       {operation.edgeView ? (
         <EdgeControl view={operation.edgeView} disabled={busy} onNudge={onNudge} />
       ) : null}
@@ -182,6 +192,45 @@ function Handwriting({view}: {view: PenEditView}): React.JSX.Element {
   return (
     <View style={[styles.picture, styles.noPicture]}>
       <Text style={styles.hint}>{strokes === undefined ? 'Reading…' : 'No picture kept.'}</Text>
+    </View>
+  );
+}
+
+/** A swap: the parts in their new order, whether it waits, and "Fix capitals" where it applies. */
+function SwapDetail({
+  operation,
+  disabled,
+  onFixCase,
+}: {
+  operation: RecognizedEditOperation;
+  disabled: boolean;
+  onFixCase: (fixCase: boolean) => void;
+}): React.JSX.Element | null {
+  const swap = operation.swap;
+  if (!swap) {
+    return null;
+  }
+  if (swap.waitingFor && swap.waitingFor.length > 0) {
+    return (
+      <Text style={styles.check}>
+        Waits for the change inside it: once that text is recognized (or included again), the parts
+        swap with it made first.
+      </Text>
+    );
+  }
+  return (
+    <View style={styles.edges}>
+      <Text style={styles.result} numberOfLines={3}>
+        New order: {operation.replacementText ?? ''}
+      </Text>
+      {swap.capsAvailable ? (
+        <Checkbox
+          label="Fix capitals (the new first word starts the sentence)"
+          checked={swap.fixCase}
+          onChange={onFixCase}
+          disabled={disabled}
+        />
+      ) : null}
     </View>
   );
 }

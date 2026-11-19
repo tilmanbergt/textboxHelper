@@ -5,6 +5,7 @@ import type {CaretInsertMode} from './penEditCaret';
 import type {EdgeShift} from './edgeShift';
 import type {PenEditReview, RecognitionStatus} from './penEditModel';
 import type {PenEditKind} from './penEditTags';
+import type {SwapZones} from './swapMark';
 import type {PageElementData, Rect, TextElementData, TextboxData} from './textboxModel';
 
 /**
@@ -16,9 +17,23 @@ import type {PageElementData, Rect, TextElementData, TextboxData} from './textbo
 
 export type EditMarkerOperationKind = 'delete' | 'replace';
 
-/** What a change in the review does; an insertion comes only from a pen edit. */
-/** 'split': a paragraph break from a < or > or a step mark on its own. */
-export type ReviewOperationKind = EditMarkerOperationKind | 'insert' | 'split';
+/**
+ * What a change in the review does; an insertion comes only from a pen edit. 'split': a paragraph
+ * break from a < or > or a step mark with its second upright; 'space': a caret with a cross;
+ * 'swap': two parts side by side change places (technical-design-swap-space-marks.md).
+ */
+export type ReviewOperationKind = EditMarkerOperationKind | 'insert' | 'split' | 'space' | 'swap';
+
+/** A swap's parts in its textbox's original text, and how its text is made. */
+export type SwapInfo = {
+  zones: SwapZones;
+  /** Move a sentence's capital to the new first word (the user's choice in the review). */
+  fixCase: boolean;
+  /** Whether "Fix capitals" applies to this swap; set by the assembly. */
+  capsAvailable: boolean;
+  /** Set by the assembly when the swap waits for a change inside it (its operation ids). */
+  waitingFor?: string[];
+};
 
 /**
  * Where a pen edit's text stands in the review (technical-design-pen-edits.md §3.6): recognizing
@@ -56,6 +71,10 @@ export type RecognizedEditOperation = {
   uncertain?: string;
   /** Set by the assembly for changes inside a textbox: the edge control's view. */
   edgeView?: EdgeView;
+  /** Set for a swap. */
+  swap?: SwapInfo;
+  /** Set by the assembly for a change made inside a swapped part (the swap's operation id). */
+  insideSwap?: string;
 };
 
 export type IgnoredEditMarker = {

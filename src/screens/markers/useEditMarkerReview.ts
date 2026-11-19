@@ -23,7 +23,7 @@ import {
   startSelectMark,
 } from '../../actions/penEditReview';
 import {NO_SHIFT, type EdgeShift} from '../../domain/edgeShift';
-import {assembleMarkerPreview} from '../../domain/markerAssembly';
+import {assembleMarkerPreview, type SwapOptions} from '../../domain/markerAssembly';
 import type {
   EditMarkerCalibration,
   EditMarkerPreview,
@@ -45,6 +45,8 @@ export interface EditMarkerReview {
   drop: (items: DropItem[], eraseHandwriting: boolean) => void;
   /** Moves a change's start, end or (zero-length) place by one character. */
   nudge: (operation: RecognizedEditOperation, edge: 'start' | 'end', delta: number) => void;
+  /** A swap's "Fix capitals" on or off (kept while the review is open). */
+  setFixCase: (operationId: string, fixCase: boolean) => void;
   loading: boolean;
   busy: boolean;
   applied: boolean;
@@ -79,6 +81,7 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
   const [calibration, setCalibration] = useState<EditMarkerCalibration>(getEditMarkerCalibration);
   // Edge nudges of plain marks: kept while the review is open (a pen edit's go with it).
   const [plainShifts, setPlainShifts] = useState<Record<string, EdgeShift>>({});
+  const [swapOptions, setSwapOptions] = useState<SwapOptions>({});
 
   const load = useCallback(
     async (keepStatus = false) => {
@@ -91,6 +94,7 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
         setAnalysis(next);
         setPenStates(next.base?.penStates ?? {});
         setPlainShifts({});
+        setSwapOptions({});
         if (!keepStatus) {
           setStatus(next.fontWarning ? {text: next.fontWarning} : null);
         }
@@ -119,9 +123,9 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
   const preview = useMemo(
     () =>
       analysis?.base
-        ? assembleMarkerPreview(analysis.base, penStates, analysis.fontWarning, plainShifts)
+        ? assembleMarkerPreview(analysis.base, penStates, analysis.fontWarning, plainShifts, swapOptions)
         : analysis,
-    [analysis, penStates, plainShifts],
+    [analysis, penStates, plainShifts, swapOptions],
   );
 
   const updatePenState = useCallback((id: string, state: PenTextState) => {
@@ -318,10 +322,20 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
     [busy, load, loading, preview],
   );
 
+  const setFixCase = useCallback(
+    (operationId: string, fixCase: boolean) => {
+      if (!busy && !applied) {
+        setSwapOptions(current => ({...current, [operationId]: {fixCase}}));
+      }
+    },
+    [applied, busy],
+  );
+
   return {
     preview,
     drop,
     nudge,
+    setFixCase,
     loading,
     busy,
     applied,

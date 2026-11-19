@@ -27,6 +27,8 @@ import {
   showSplits,
   splitChangeText,
 } from './paragraphMarks';
+import {composeSwap, swapSummary, type ChangeNearSwap} from './swapText';
+import type {IgnoredEditMarker} from './markerTypes';
 
 /**
  * The edit-marker preview assembled from the analysis and the pen edits' current text
@@ -129,13 +131,16 @@ function shiftedRanges(
     byTextbox.set(uuid, [...(byTextbox.get(uuid) ?? []), draft]);
   }
   for (const textbox of base.textboxes) {
-    const drafts = byTextbox.get(textbox.uuid) ?? [];
+    // A swap keeps its place; the changes inside it are made first (swapText.ts).
+    const drafts = (byTextbox.get(textbox.uuid) ?? []).filter(
+      draft => draft.operation.kind !== 'swap',
+    );
     const spans = shiftSpans(
       textbox.originalText.length,
       drafts.map(({operation, range}) => ({
         start: range.start,
         end: range.end,
-        zeroLength: operation.kind === 'insert' || operation.kind === 'split',
+        zeroLength: isZeroLengthKind(operation.kind),
         shift: operation.penEditId
           ? penStates[operation.penEditId]?.edges
           : plainShifts[operation.id],
@@ -146,26 +151,40 @@ function shiftedRanges(
   return result;
 }
 
+function isZeroLengthKind(kind: RecognizedEditOperation['kind']): boolean {
+  return kind === 'insert' || kind === 'split' || kind === 'space';
+}
+
+/** A change's range with the operation it belongs to, so a swap can take the ones inside it. */
+type TaggedRange = TextMutationRange & {opId: string};
+
+/** The user's choices for swaps while the review is open: "Fix capitals", by operation id. */
+export type SwapOptions = Record<string, {fixCase: boolean}>;
+
 export function assembleMarkerPreview(
   base: MarkerPreviewBase,
   penStates: Record<string, PenTextState>,
   fontWarning: string | null = null,
   plainShifts: Record<string, EdgeShift> = {},
+  swapOptions: SwapOptions = {},
 ): EditMarkerPreview {
   const operations: RecognizedEditOperation[] = [];
-  const displayRanges = new Map<string, TextMutationRange[]>();
-  const applyRanges = new Map<string, TextMutationRange[]>();
+  const displayRanges = new Map<string, TaggedRange[]>();
+  const applyRanges = new Map<string, TaggedRange[]>();
+  const swapDrafts: MarkerPreviewBase['drafts'] = [];
+  const swapIgnored: IgnoredEditMarker[] = [];
   const readyOperations: RecognizedEditOperation[] = [];
   const readyPenIds: string[] = [];
   let pendingCount = 0;
   let skippedCount = 0;
 
+  let currentOpId = '';
   const add = (
-    map: Map<string, TextMutationRange[]>,
+    map: Map<string, TaggedRange[]>,
     uuid: string,
     range: TextMutationRange,
   ) => {
-    map.set(uuid, [...(map.get(uuid) ?? []), range]);
+    map.set(uuid, [...(map.get(uuid) ?? []), {...range, opId: currentOpId}]);
   };
 
   const originalTextOf = new Map(
@@ -175,14 +194,18 @@ export function assembleMarkerPreview(
   const shifted = shiftedRanges(base, penStates, plainShifts);
 
   for (const draft of base.drafts) {
+    if (draft.operation.kind === 'swap') {
+      swapDrafts.push(draft);
+      continue;
+    }
+    currentOpId = draft.operation.id;
     const uuid = draft.operation.targetTextboxUuid;
     const original = originalTextOf.get(uuid) ?? '';
     const range: TextMutationRange = {
       ...draft.range,
       ...(shifted.get(draft.operation.id) ?? {}),
     };
-    const zeroLength =
-      draft.operation.kind === 'insert' || draft.operation.kind === 'split';
+    const zeroLength = isZeroLengthKind(draft.operation.kind);
     const view = (inserted: string) =>
       edgeViewOf(original, range.start, range.end, zeroLength, inserted);
     const operation: RecognizedEditOperation = {
@@ -316,6 +339,91 @@ export function assembleMarkerPreview(
     }
   }
 
+  // Swaps: the changes inside each part first, then the parts change places (§6.2).
+  const insideSwap = new Map<string, string>();
+  for (const {operation} of swapDrafts) {
+    const info = operation.swap;
+    const uuid = operation.targetTextboxUuid;
+    const original = originalTextOf.get(uuid) ?? '';
+    if (!info) {
+      continue;
+    }
+    const zones = info.zones;
+    const overlapsSwap = swapDrafts.some(
+      other =>
+        other.operation.id !== operation.id &&
+        other.operation.targetTextboxUuid === uuid &&
+        other.operation.swap &&
+        other.operation.swap.zones.a0 < zones.b1 &&
+        zones.a0 < other.operation.swap.zones.b1,
+    );
+    const shown = displayRanges.get(uuid) ?? [];
+    const applied = applyRanges.get(uuid) ?? [];
+    const changes: ChangeNearSwap[] = shown
+      .filter(range => !range.opId.startsWith('swap:'))
+      .map(range => {
+        const ready = applied.find(item => item.opId === range.opId);
+        return {
+          id: range.opId,
+          start: range.start,
+          end: range.end,
+          text: ready ? (ready.kind === 'replace' ? ready.replacementText ?? '' : '') : '',
+          ready: !!ready,
+        };
+      });
+    const fixCase = swapOptions[operation.id]?.fixCase ?? info.fixCase;
+    const result = overlapsSwap
+      ? ({kind: 'conflict', reason: 'Swaps overlap: draw them one after the other.'} as const)
+      : composeSwap(original, zones, changes, fixCase);
+    if (result.kind === 'conflict') {
+      swapIgnored.push({
+        markerUuid: operation.markerUuid,
+        markerNumInPage: operation.markerNumInPage,
+        summary: operation.summary,
+        reason: result.reason,
+        removableNums: operation.consumedMarkerNums,
+      });
+      continue;
+    }
+    if (result.kind === 'waiting') {
+      operations.push({
+        ...operation,
+        swap: {...info, fixCase, waitingFor: result.waitingIds},
+      });
+      continue;
+    }
+    const inner = new Set(result.innerIds);
+    inner.forEach(id => insideSwap.set(id, operation.id));
+    const composed: TaggedRange = {
+      kind: 'replace',
+      start: zones.a0,
+      end: zones.b1,
+      replacementText: result.text,
+      opId: operation.id,
+    };
+    displayRanges.set(uuid, [...shown.filter(range => !inner.has(range.opId)), composed]);
+    applyRanges.set(uuid, [...applied.filter(range => !inner.has(range.opId)), composed]);
+    const assembled: RecognizedEditOperation = {
+      ...operation,
+      summary: `Swap · ${swapSummary(
+        original.slice(zones.a0, zones.a1),
+        original.slice(zones.b0, zones.b1),
+      )}`,
+      replacementText: result.text,
+      swap: {...info, fixCase, capsAvailable: result.capsAvailable},
+    };
+    operations.push(assembled);
+    readyOperations.push(assembled);
+  }
+  if (insideSwap.size > 0) {
+    operations.forEach((operation, index) => {
+      const swapId = insideSwap.get(operation.id);
+      if (swapId) {
+        operations[index] = {...operation, insideSwap: swapId};
+      }
+    });
+  }
+
   const textboxes: EditMarkerTextboxPreview[] = [];
   const textMutations: TextMutationPlan[] = [];
   for (const textbox of base.textboxes) {
@@ -408,11 +516,14 @@ export function assembleMarkerPreview(
   const shownMarkerNums = new Set(
     operations.flatMap(operation => operation.consumedMarkerNums),
   );
-  const ignoredMarkers = base.ignored.filter(
-    marker =>
-      marker.penEditId !== undefined ||
-      !shownMarkerNums.has(marker.markerNumInPage),
-  );
+  const ignoredMarkers = [
+    ...base.ignored.filter(
+      marker =>
+        marker.penEditId !== undefined ||
+        !shownMarkerNums.has(marker.markerNumInPage),
+    ),
+    ...swapIgnored,
+  ];
   const recognizedMarkerNums = [
     ...new Set(
       readyOperations.flatMap(operation => operation.consumedMarkerNums),

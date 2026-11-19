@@ -76,6 +76,17 @@ describe('pickNewestMark', () => {
 });
 
 describe('readDeclaredMark', () => {
+  it('takes a step with its second upright as one caret (_||‾)', () => {
+    const step = declared('step', 1, [300, 540], [350, 540], [350, 500], [400, 500]);
+    const upright = declared('up', 2, [360, 504], [361, 536]);
+    const mark = readDeclaredMark([step, upright]);
+    expect(mark?.kind).toBe('caret');
+    if (mark?.kind === 'caret') {
+      expect(mark.shape.direction).toBe('step');
+      expect(mark.strokes.map(stroke => stroke.uuid)).toEqual(['step', 'up']);
+    }
+  });
+
   it('reads a strike with its loop', () => {
     const mark = readDeclaredMark([strikeStroke('s', 1), loopStroke('l', 2)]);
     expect(mark?.kind).toBe('replace');

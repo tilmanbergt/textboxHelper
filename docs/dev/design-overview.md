@@ -78,17 +78,24 @@ in the lasso, `domain/textSplitting.ts` computes the new texts, `domain/textboxE
 preview of every action at once (with the reason an action can't be chosen), the new textboxes
 and the checks that the result fits the page without colliding with other elements; the new textboxes are sized through the native measurement.
 
-### Edit markers (`actions/editMarkers.ts`, `actions/editMarkerAnalysis.ts`)
+### Edit markers (`actions/editMarkers.ts`, `actions/editMarkerAnalysis.ts`, `actions/shapeMarks.ts`)
 
 Handwritten edit markers on textboxes: a delete marker is a line through words; a replace marker
-is a delete line plus a small loop (or two crossing lines); a < or > or a step mark on its own
-breaks a paragraph. Freehand strokes and the Supernote straight-line tool are both recognized.
-`supernote/markerStrokeRead.ts` reads the strokes; `actions/editMarkerAnalysis.ts` maps one
-marker to words through the hit-testing core and the native measurement;
+is a delete line plus a small loop (or two crossing lines); a < or >, or a step mark with a second
+upright (_||‾), breaks a paragraph; a ∧ or V with a cross inserts a space; the swap mark (a line
+above one part and below the next, joined by a vertical, in one stroke or in three pieces across
+lines) swaps two parts. Freehand strokes and the Supernote straight-line tool are both recognized.
+`supernote/markerStrokeRead.ts` reads the strokes; `actions/markerMeasure.ts` measures each
+textbox once per review and locks textboxes whose font can't be read (their marks are ignored);
+`actions/shapeMarks.ts` reads the marks known by their shape first (`domain/paragraphMarks.ts`,
+`domain/spaceMark.ts`, `domain/swapMark.ts`), and their strokes never reach the delete analysis;
+`actions/editMarkerAnalysis.ts` maps one marker to words through the hit-testing core and the
+native measurement (with each letter's edge, `domain/textOffsets.ts`);
 `actions/editMarkers.ts` pairs replace marks with their tagged text, places insertions, builds the
 preview and applies the plan - for the lasso selection or the whole page. The pure parts are in
 `domain/markerStrokes.ts`, `domain/markerText.ts`, `domain/markerTypes.ts`,
-`domain/markerAssembly.ts` and `domain/edgeShift.ts`. The analysis runs once; the preview is
+`domain/markerAssembly.ts`, `domain/swapText.ts` (a swap makes the changes inside its parts
+first) and `domain/edgeShift.ts`. The analysis runs once; the preview is
 assembled from it, the tagged texts and the user's edge nudges (one character at a time), so the
 review updates without measuring again. It shows each affected textbox as diff segments
 (`domain/markerDiff.ts`): the original text with the removed ranges struck through and new text in

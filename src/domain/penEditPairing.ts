@@ -12,6 +12,7 @@ import {
 import type {PenEditMark} from './penEditModel';
 import {isTakenStrike, rectsMatch} from './penEditMatching';
 import {analyzeCaret, analyzeTwoStrokeCaret, type CaretShape, type Point} from './penEditCaret';
+import {isSecondUpright} from './paragraphMarks';
 import type {StrokeStats} from './markerTypes';
 
 /**
@@ -230,7 +231,14 @@ export function readDeclaredMark(strokes: DeclaredStroke[]): DeclaredMark | null
   for (const stroke of ordered) {
     const shape = stroke.isStraightLine ? null : analyzeCaret(stroke.points);
     if (shape) {
-      return {kind: 'caret', strokes: [stroke], rect: {...stroke.stats.rect}, shape};
+      // A step's second upright (_||‾) is part of the mark.
+      const upright =
+        shape.direction === 'step'
+          ? ordered.find(other => other !== stroke && !other.isStraightLine && isSecondUpright(shape, other.stats.rect))
+          : undefined;
+      return upright
+        ? {kind: 'caret', strokes: [stroke, upright], rect: unionOf(stroke.stats.rect, upright.stats.rect), shape}
+        : {kind: 'caret', strokes: [stroke], rect: {...stroke.stats.rect}, shape};
     }
   }
   for (let i = 0; i + 1 < ordered.length; i += 1) {

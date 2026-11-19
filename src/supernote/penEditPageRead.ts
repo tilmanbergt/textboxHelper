@@ -18,7 +18,7 @@ import {
   type Point,
 } from '../domain/penEditCaret';
 import {isTakenStrike} from '../domain/penEditMatching';
-import {isStepSizedRect} from '../domain/paragraphMarks';
+import {isSecondUpright, isStepSizedRect} from '../domain/paragraphMarks';
 import {isPenEditDecoration, parsePenEditUserData} from '../domain/penEditTags';
 import type {Rect} from '../domain/textboxModel';
 import {readAccessorRange} from './markerStrokeRead';
@@ -198,7 +198,23 @@ export async function findCaretInWindow(
         ? analyzeTwoStrokeCaret(legs[0] as Point[], legs[1] as Point[])
         : analyzeCaret(legs[0] as Point[]);
     if (shape) {
-      return {strokes: candidate.strokes, rect: candidate.rect, shape};
+      // A step's second upright (_||‾) belongs to the mark too.
+      const upright =
+        shape.direction === 'step'
+          ? window.find(
+              stroke =>
+                !candidate.strokes.includes(stroke) &&
+                !stroke.isStraightLine &&
+                isSecondUpright(shape, stroke.stats.rect),
+            )
+          : undefined;
+      return upright
+        ? {
+            strokes: [...candidate.strokes, upright],
+            rect: unionRect(candidate.rect, upright.stats.rect),
+            shape,
+          }
+        : {strokes: candidate.strokes, rect: candidate.rect, shape};
     }
   }
   return null;

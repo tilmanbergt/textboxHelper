@@ -43,7 +43,13 @@ Draw the delete line, then a small circle right after its end or just above the 
 Draw a V or ∧ on the line, its tip between two words or inside a word. Right after, write the new text anywhere on the page, lasso it and tap Insertion or Replacement. The number appears between the ends of the caret's legs, so draw it big enough. Between words the spaces are added for you; inside a word the text goes in as written.
 
 ## Insert or break paragraphs
-A < or > beside the text (one stroke or two lines meeting at the tip) points with its tip between two lines; a step mark (draw under the line to the right, straight up, then on above the next word) marks a word gap. On its own, either breaks the paragraph there. Followed by tagged text, the text becomes a paragraph of its own there. Between two paragraphs a < or > puts the new text in as a new paragraph. A tip in the middle of a line is unclear and is ignored. Paragraphs below move down to make room.
+A < or > beside the text (one stroke or two lines meeting at the tip) points with its tip between two lines; a step mark (draw under the line to the right, straight up, then on above the next word, or the same falling) marks a word gap. On its own, a < or > breaks the paragraph there; a step needs a second short line next to its upright (_||‾), as two lines mean a break. Followed by tagged text, the text becomes a paragraph of its own there. Between two paragraphs a < or > puts the new text in as a new paragraph. A tip in the middle of a line is unclear and is ignored. Paragraphs below move down to make room.
+
+## Swap two parts
+Draw a line above the first part and below the second, joined by a vertical between them: up at the start, over the first part, down between the parts, under the second part, up at the end (|‾‾|__|), or the other way round (under first, over second). Over several lines, draw only three pieces: a start corner (a short vertical, then a line over or under the first words), the middle piece where the first part ends and the second begins (its lines reach past the word on each side), and an end corner (a line ending in a short vertical). The lines in between are optional. A vertical inside a word cuts it there. Punctuation stays where it was; at a sentence's start, "Fix capitals" moves the capital to the new first word. A delete or replacement inside a part is made first, then the parts swap.
+
+## Insert a space
+Draw a ∧ under the gap (or a V over it) with a small cross (+, × or #) at its tip: a space goes in there, e.g. inside "thisword".
 
 ## One button, the mark decides
 Insertion or Replacement tags the lassoed text. The mark you drew just before it decides what it is: a delete line with a circle makes it a replacement, a caret an insertion.

@@ -1,6 +1,6 @@
 # Technical design: swap and insert-space marks, and the font rule
 
-Status: building. Ideas: `claude/ideas-more-edit-marks.md` (claude.ai project) §1 (swap) and §2 (caret family). Decisions (Tilman, 2026-11-18/19): this design covers **swap** and **insert space** only; new paragraphs are `technical-design-paragraph-marks.md` (step mark, `<`/`>`; built in another session); the text caret stays as built (pen edits §8). Space caret: **∧ and V** both. **Font rule:** marks on a textbox whose font can't be loaded are ignored, and the user is told why. **Swap with other changes:** keep both where simple — edits inside the swapped parts first, then the swap (§6.2).
+Status: built (see As built); device test open. Ideas: `claude/ideas-more-edit-marks.md` (claude.ai project) §1 (swap) and §2 (caret family). Decisions (Tilman, 2026-11-18/19): this design covers **swap** and **insert space** only; new paragraphs are `technical-design-paragraph-marks.md` (step mark, `<`/`>`; built in another session); the text caret stays as built (pen edits §8). Space caret: **∧ and V** both. **Font rule:** marks on a textbox whose font can't be loaded are ignored, and the user is told why. **Swap with other changes:** keep both where simple — edits inside the swapped parts first, then the swap (§6.2).
 
 Code read: local `textboxHelper` working tree (2026-11-19): `actions/editMarkers.ts`, `actions/editMarkerAnalysis.ts`, `domain/markerAssembly.ts`, `domain/markerTypes.ts`, `domain/markerStrokes.ts`, `domain/penEditCaret.ts`, `domain/hitTesting.ts`, `domain/textboxLayout.ts`, `domain/fontPaths.ts`, `supernote/textboxMetrics.ts`, `TextboxMetricsModule.kt`. Goes into the repo as `docs/dev/history/technical-design-swap-space-marks.md`.
 
@@ -216,3 +216,53 @@ Tests (Jest, pure): `fontLockedReason`; `charOffsetAtX` (edges, fallback, mismat
 5. **Later, if ever:** a swap of two parts with text between them that stays ("red **and** blue" → "blue and red") would need a different mark (two loops + arrow, say). Not planned.
 3. **Cross position:** anywhere within reach of the tip (§4.1). Alternative: only above a ∧ / below a V (stricter, fewer false hits).
 4. **Thresholds** (sizes, 0.15/0.35 line-height bands, 45–135°) are first guesses; tune from device diagnostics in M3/M4.
+
+## As built
+
+- **Commits**: font rule + one measurement per textbox; character edges (native); swap, space and
+  the paragraph step's second upright together (they share the shape-mark stage). 232 → 275 Jest
+  tests (`swapSpaceMarks.test.ts`, `textOffsets.test.ts`, assembly and Select mark cases).
+- **Measurement** (`actions/markerMeasure.ts`): `createTextboxMeasurer` caches one measurement
+  per textbox for the preview; `analyzeDeleteMarker`, `locateMarkOnPage` (carets, paragraph
+  marks, tagged insertions) and the shape marks all use it. A locked textbox gives a delete mark
+  the font reason (`fontLocked` on its result, so a tagged replacement on it says so too) and a
+  caret target `unclear` with the font reason. The status line is `fontWarning` (kept as the
+  field's name) built by `buildLockedFontsMessage`; the old "positions may be wrong" warning is no
+  longer shown in the review.
+- **Character edges**: `charEdges` per word from `TextboxMetricsModule.kt`; `CaretTextbox.words`
+  carry them as `edges` (page x); `charPositionInWord` (`domain/textOffsets.ts`) is used by the
+  caret placement and the swap's places. Edges that don't fit the word (count, order) fall back
+  to the average width.
+- **Shape marks** (`actions/shapeMarks.ts`, replaces the paragraph loop of `editMarkers.ts`):
+  reads every stroke's points once, then paragraph marks, spaces, swaps, in that order. Used
+  strokes are kept out of the delete analysis and out of replace marks' verticals and loops.
+- **Paragraph step** (P1): `analyzeStepMark` reads falling steps too; on its own in the review a
+  step needs `isSecondUpright` (both strokes are consumed). Before tagged text a step works with
+  or without it: `findCaretInWindow` and `readDeclaredMark` take a second upright along as part of
+  the mark. A bare step that is no swap piece is Ignored with `BARE_STEP_REASON`.
+- **Space**: one-stroke ∧/V, or two strokes meeting at the tip (only strokes of a caret's size are
+  paired), with `findCrossAtCaret` (2–4 legs crossing at ≥ 45° within max(40 px, 1.5 × caret size)
+  of the tip). A caret whose tip isn't on a textbox is left alone (it may be a "v" in
+  handwriting). Kind `space`, a zero-length range with `' '`; edge nudges work as for insertions.
+- **Swap shapes** (`domain/swapMark.ts`): `pieceOnLine` reads a stroke against one line (runs
+  above/below ±0.2 line heights, reaching ±0.3; tiny end runs are the outer verticals' tips). Two
+  runs with at least one outer vertical = the whole one-line mark; two runs without = the middle
+  piece; one run with a vertical crossing the line's middle at its left = start corner, at its
+  right = end corner; one run alone = a plain line. `pairSwapPieces` pairs a middle piece with the
+  nearest matching corners in reading order (same textbox, same orientation); its runs must reach
+  past the word on each side (≥ 60 px). Plain lines between the swap's first and last line are
+  consumed with a swap drawn in pieces, without a side check. Overlapping swaps are both refused.
+- **Places**: `offsetAtX` snaps to word edges within 0.6 characters, else cuts inside the word
+  (the swap gets "Check place"); `swapZones` takes the spaces off both parts' ends and refuses a
+  swap over a paragraph end.
+- **Text** (`domain/swapText.ts`): `composeSwap` zones every other change of the textbox; inside
+  A, the gap or B it is made first (edge insertions stay outside or in the gap), a change over an
+  edge or a paragraph break inside is a conflict (the swap goes to Ignored, the change stays), a
+  part left empty is a conflict, a pen edit inside that isn't ready makes the swap wait
+  (`swap.waitingFor`, not applied, its strokes stay). The assembly tags ranges with their
+  operation (`TaggedRange`) to replace the inner ones by one range `[a0, b1)`; inner operations get
+  `insideSwap`. Swaps take no edge nudges.
+- **Review**: rows "Swap" and "Space"; the detail area shows the new order and "Fix capitals"
+  (`SwapOptions`, kept while the review is open) when it applies, or that the swap waits. Swaps and
+  spaces can be dropped like other plain marks. Refused swap pieces and bare steps are listed (and
+  droppable) only when they lie on a textbox.
