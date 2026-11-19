@@ -65,6 +65,7 @@ export function caretTextboxOf(
       lineIndex: word.lineIndex,
       left: x + word.left,
       right: x + word.right,
+      ...(word.charEdges ? {edges: word.charEdges.map(edge => x + edge)} : {}),
     })),
   };
 }

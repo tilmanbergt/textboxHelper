@@ -65,6 +65,11 @@ export type NativeDetailedWord = {
   height: number;
   centerX: number;
   centerY: number;
+  /**
+   * Where each character of the word starts, and where its last one ends (length = characters +
+   * 1), in the same coordinates as `left`. Missing from native builds before it was added.
+   */
+  charEdges?: number[];
 };
 
 export type NativeDetailedMeasurement = {

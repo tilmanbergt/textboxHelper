@@ -105,6 +105,12 @@ class TextboxMetricsModule(
           val top = layout.getLineTop(lineIndex).toDouble()
           val bottom = layout.getLineBottom(lineIndex).toDouble()
           val text = measurement.text.substring(segmentStart, segmentEndExclusive)
+          // Where each character starts on the line, and where the last one ends: lets a mark
+          // inside a word find the right letter instead of guessing from the average width.
+          val charEdges = Arguments.createArray()
+          for (offset in segmentStart..segmentEndExclusive) {
+            charEdges.pushDouble(layout.getPrimaryHorizontal(offset).toDouble())
+          }
 
           val word = Arguments.createMap().apply {
             putInt("start", segmentStart)
@@ -121,6 +127,7 @@ class TextboxMetricsModule(
             putDouble("height", bottom - top)
             putDouble("centerX", (left + right) / 2.0)
             putDouble("centerY", (top + bottom) / 2.0)
+            putArray("charEdges", charEdges)
           }
           words.pushMap(word)
           segmentStart = segmentEndExclusive

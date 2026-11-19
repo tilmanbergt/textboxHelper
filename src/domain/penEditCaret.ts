@@ -5,6 +5,7 @@ import {
   splitChangeText,
 } from './paragraphMarks';
 import type {Rect} from './textboxModel';
+import {charPositionInWord} from './textOffsets';
 
 /**
  * The insertion caret (technical-design-pen-edits.md §8, As built): a V or ∧ drawn on a line, or
@@ -208,6 +209,8 @@ export type CaretTextbox = {
     lineIndex: number;
     left: number;
     right: number;
+    /** Page x of each character's edge, when the native measurement gave them. */
+    edges?: number[];
   }>;
 };
 
@@ -308,8 +311,7 @@ function offsetOnLine(
     const word = onLine[index];
     if (tipX >= word.left && tipX <= word.right) {
       const length = Math.max(1, word.end - word.start);
-      const charWidth = Math.max(1, (word.right - word.left) / length);
-      const position = (tipX - word.left) / charWidth;
+      const position = charPositionInWord(word, tipX);
       if (position < WORD_EDGE_SNAP_CHARS) {
         return {offset: word.start, mode: 'betweenWords', snapped: position};
       }
