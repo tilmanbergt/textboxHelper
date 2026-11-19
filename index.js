@@ -28,7 +28,7 @@ import {
   BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
   BUTTON_ID_TOOLBAR_PEN_EDIT,
 } from './src/domain/buttonIds';
-import {presentTagOutcome, tagPenEdit} from './src/actions/penEditTag';
+import {presentEarlyNoMark, presentTagOutcome, tagPenEdit} from './src/actions/penEditTag';
 import {initPluginRouting} from './src/supernote/pluginRouting';
 
 AppRegistry.registerComponent(appName, () => App);
@@ -39,15 +39,28 @@ PluginManager.init();
 // plugin screen. A failure or a snippet without its mark opens App's small result card; a mark
 // selected from the review opens the review again at that change.
 function runPenEditTag() {
-  tagPenEdit()
+  // Opened as soon as the search found no mark; the final outcome then only updates the card.
+  let shown = false;
+  const show = async () => {
+    if (shown) {
+      return;
+    }
+    shown = true;
+    try {
+      await PluginManager.showPluginView();
+    } catch (error) {
+      console.error('[PenEdit] showPluginView failed', String(error));
+    }
+  };
+  tagPenEdit({
+    onNoMark: notice => {
+      presentEarlyNoMark(notice);
+      show();
+    },
+  })
     .then(async outcome => {
-      if (!presentTagOutcome(outcome)) {
-        return;
-      }
-      try {
-        await PluginManager.showPluginView();
-      } catch (error) {
-        console.error('[PenEdit] showPluginView failed', String(error));
+      if (presentTagOutcome(outcome)) {
+        await show();
       }
     })
     .catch(error => console.error('[PenEdit] tag threw', String(error)));

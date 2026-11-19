@@ -188,6 +188,13 @@ Device: see §11.
   active entry (`ownedRects`, `withoutOwned`), and `pickNewestMark` takes a mark only when its
   strokes include the newest stroke of the window — the mark must be the last thing written before
   the text.
+- **Quicker "no mark" card** (device: the card took several seconds). The card opens as soon as
+  the search found no mark (`tagPenEdit({onNoMark})`, `presentEarlyNoMark`), during the settle
+  pause; it says "Saving the tag…" with its buttons disabled until the final outcome replaces it
+  (or a failure, if the tag couldn't be stored). The look-back reads only the last three strokes
+  (`LOOK_BACK_WINDOW = 3`, counting strokes only): with the mark required to be the last thing
+  written, older strokes can't matter. To watch on the device: the plugin view opens while the tag
+  still writes to the page and saves the note.
 - **Strike alone**: a mark selected with Select mark may be a strike without loop or verticals;
   its number goes in a ring right of the strike's end. The review accepts such a strike as a
   replace mark only when its pen edit's stored mark has no modifiers.

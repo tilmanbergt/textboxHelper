@@ -66,7 +66,8 @@ export type ReviewFocus = {notePath: string; page: number; penEditId: string; nu
 
 export type PenEditTagOutcome =
   | {kind: 'tagged'; tagKind: PenEditKind; number: number}
-  | {kind: 'noMark'; id: string; number: number}
+  /** `saving`: shown as soon as the search found no mark, while the tag is still being stored. */
+  | {kind: 'noMark'; id: string; number: number; saving?: boolean}
   | {kind: 'markAttached'; tagKind: PenEditKind; number: number; fromReview: boolean; focus: ReviewFocus}
   | {kind: 'markNotRead'; number: number}
   | {kind: 'empty'}
@@ -112,12 +113,24 @@ export function subscribeReviewFocus(listener: () => void): () => void {
 }
 
 /**
+ * The card for a tag whose search found no mark, shown while the tag is still being stored. Its
+ * buttons wait for the final outcome, which `presentTagOutcome` puts in its place.
+ */
+export function presentEarlyNoMark(notice: {id: string; number: number}): void {
+  setPenEditOutcome({kind: 'noMark', id: notice.id, number: notice.number, saving: true});
+}
+
+/**
  * Hands the outcome to App and says whether the plugin view must open: a tag or a mark selected
  * from the tag card shows nothing but the numbers on the page; a mark selected from the review
  * opens the review again at that change; everything else opens the result card.
  */
 export function presentTagOutcome(result: PenEditTagOutcome): boolean {
-  if (result.kind === 'tagged' || result.kind === 'busy') {
+  if (result.kind === 'busy') {
+    return false;
+  }
+  if (result.kind === 'tagged') {
+    // A card opened early for this tag can't be right any more; it never is for a found mark.
     return false;
   }
   if (result.kind === 'markAttached') {
@@ -157,7 +170,13 @@ export const LASSO_SETTLE_MS = 900;
 
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
-export async function tagPenEdit(): Promise<PenEditTagOutcome> {
+/**
+ * `onNoMark` is called as soon as the search found no mark, before the slow part of the tag
+ * (writing onto the page and saving the note): the card can open right away and wait there.
+ */
+export async function tagPenEdit(
+  options: {onNoMark?: (notice: {id: string; number: number}) => void} = {},
+): Promise<PenEditTagOutcome> {
   if (running) {
     console.warn('[PenEdit] tag already running - press ignored');
     return {kind: 'busy'};
@@ -260,6 +279,14 @@ export async function tagPenEdit(): Promise<PenEditTagOutcome> {
         ? storedMark(found)
         : null;
     const tagKind = kindOfMark(mark);
+    if (!mark && options.onNoMark) {
+      try {
+        options.onNoMark({id, number});
+      } catch (error) {
+        console.warn('[PenEdit] early no-mark notice failed', String(error));
+      }
+      step('noMarkShown');
+    }
 
     const lassoRect = snap.rect ?? boundsOfFlatPoints(snap.strokes.map(stroke => stroke.points));
     if (!lassoRect) {

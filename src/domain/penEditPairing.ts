@@ -21,8 +21,12 @@ import type {StrokeStats} from './markerTypes';
  * the strike really covers words is checked later, in the review.
  */
 
-/** How many elements before the snippet are looked at, not counting Textbox Tools' own. */
-export const LOOK_BACK_WINDOW = 8;
+/**
+ * How many strokes before the snippet are looked at. A mark counts only when it is the last thing
+ * written before the text (`pickNewestMark`), and the largest mark has three strokes (a strike and
+ * two crossing lines), so three are enough; fewer reads make the tag quicker.
+ */
+export const LOOK_BACK_WINDOW = 3;
 /**
  * The most element numbers read: the host renumbers after inserts, so our own icons and numbers
  * can sit between a mark and its snippet and are skipped without counting.

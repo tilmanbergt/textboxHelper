@@ -47,12 +47,14 @@ export default function PenEditOutcomeScreen({outcome, onClose}: Props): React.J
   const {title, body} = texts(outcome);
   const [error, setError] = useState<string | null>(null);
 
+  // The card may open before the tag is stored; it redraws when the final outcome arrives.
+  const saving = outcome.kind === 'noMark' && !!outcome.saving;
   useEffect(() => {
     requestEinkRefresh();
-  }, [error]);
+  }, [error, outcome]);
 
   const selectMark = () => {
-    if (outcome.kind !== 'noMark') {
+    if (outcome.kind !== 'noMark' || outcome.saving) {
       return;
     }
     startSelectMark(outcome.id, 'tag')
@@ -68,12 +70,13 @@ export default function PenEditOutcomeScreen({outcome, onClose}: Props): React.J
       <View style={styles.card}>
         <Text style={styles.title}>{title}</Text>
         {body ? <Text style={styles.message}>{body}</Text> : null}
+        {saving ? <Text style={styles.message}>Saving the tag…</Text> : null}
         {error ? <Text style={styles.message}>{error}</Text> : null}
         <View style={styles.buttons}>
           {outcome.kind === 'noMark' ? (
             <>
-              <PillButton label="Fix in review" onPress={onClose} />
-              <PillButton label="Select mark now" primary onPress={selectMark} />
+              <PillButton label="Fix in review" onPress={onClose} disabled={saving} />
+              <PillButton label="Select mark now" primary onPress={selectMark} disabled={saving} />
             </>
           ) : (
             <PillButton label="OK" primary onPress={onClose} />
