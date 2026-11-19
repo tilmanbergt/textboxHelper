@@ -359,3 +359,18 @@ describe('planReflow and gapParagraphPlacement', () => {
     expect(shifts.get('n1')).toBeUndefined();
   });
 });
+
+describe('locateCaret: places worth a check', () => {
+  it('flags a tip between two lines, and not one on a line', () => {
+    const spaced: CaretTextbox = {
+      ...box,
+      rect: {left: 100, top: 100, right: 700, bottom: 196},
+      lines: [
+        {index: 0, start: 0, end: 18, top: 100, bottom: 140},
+        {index: 2, start: 19, end: 28, top: 156, bottom: 196},
+      ],
+    };
+    expect(locateCaret({x: 190, y: 148}, 'down', [spaced])).toHaveProperty('uncertain');
+    expect(locateCaret({x: 210, y: 112}, 'down', [box])).not.toHaveProperty('uncertain');
+  });
+});

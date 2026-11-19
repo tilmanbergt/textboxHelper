@@ -330,6 +330,7 @@ export async function tagPenEdit(): Promise<PenEditTagOutcome> {
       review: 'open',
       state: 'active',
       awaitingMark: null,
+      edges: null,
     };
     await changePenEditIndex(current => upsertPenEdit(current, entry));
     stored = true;

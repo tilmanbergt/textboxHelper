@@ -156,6 +156,7 @@ const entry = (overrides: Partial<PenEditEntry> = {}): PenEditEntry => ({
   review: 'open',
   state: 'active',
   awaitingMark: null,
+  edges: null,
   ...overrides,
 });
 

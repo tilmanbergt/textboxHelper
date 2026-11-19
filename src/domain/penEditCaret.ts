@@ -229,6 +229,8 @@ export type CaretTarget =
       numInPage: number;
       offset: number;
       mode: CaretInsertMode;
+      /** Why the place was a close call, worth a look in the review. */
+      uncertain?: string;
     }
   | {kind: 'gap'; above: string | null; below: string | null}
   /** A paragraph split at `offset` (a < or >, or a step mark). */
@@ -242,6 +244,8 @@ export type CaretTarget =
  * see `textLeftX`.)
  */
 export const WORD_EDGE_SNAP_CHARS = 0.6;
+/** A snap from further inside the word than this is shown as "Check place". */
+export const UNCERTAIN_SNAP_CHARS = 0.3;
 /** Horizontal slack around a textbox for a caret drawn just left or right of the text. */
 const COLUMN_SLACK_PX = 24;
 /** The same for a < or > in the margin. */
@@ -287,7 +291,7 @@ function offsetOnLine(
   line: {start: number; end: number},
   words: CaretTextbox['words'],
   text: string,
-): {offset: number; mode: CaretInsertMode} {
+): {offset: number; mode: CaretInsertMode; snapped?: number} {
   const onLine = words.sort((a, b) => a.left - b.left);
   if (onLine.length === 0 || text.slice(line.start, line.end).trim() === '') {
     return {offset: line.start, mode: 'blankLine'};
@@ -307,10 +311,10 @@ function offsetOnLine(
       const charWidth = Math.max(1, (word.right - word.left) / length);
       const position = (tipX - word.left) / charWidth;
       if (position < WORD_EDGE_SNAP_CHARS) {
-        return {offset: word.start, mode: 'betweenWords'};
+        return {offset: word.start, mode: 'betweenWords', snapped: position};
       }
       if (length - position < WORD_EDGE_SNAP_CHARS) {
-        return {offset: word.end, mode: 'betweenWords'};
+        return {offset: word.end, mode: 'betweenWords', snapped: length - position};
       }
       return {offset: word.start + Math.round(position), mode: 'inWord'};
     }
@@ -377,13 +381,20 @@ export function locateCaret(
   if (best) {
     const {textbox, line} = best;
     const words = textbox.words.filter(word => word.lineIndex === line.index);
-    const {offset, mode} = offsetOnLine(tip.x, line, words, textbox.text);
+    const {offset, mode, snapped} = offsetOnLine(tip.x, line, words, textbox.text);
+    const uncertain =
+      best.score >= 1
+        ? "The caret's tip was between two lines; it went to the nearer one."
+        : snapped !== undefined && snapped > UNCERTAIN_SNAP_CHARS
+        ? "The caret's tip was inside a word; it went to the word's edge."
+        : undefined;
     return {
       kind: 'text',
       uuid: textbox.uuid,
       numInPage: textbox.numInPage,
       offset,
       mode,
+      ...(uncertain ? {uncertain} : {}),
     };
   }
   if (

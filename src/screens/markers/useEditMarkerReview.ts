@@ -5,7 +5,8 @@
  * corrections, applies the ready changes, and keeps the status line. After a successful apply the screen stays open with the
  * result; the preview is read again so the page's new state shows.
  */
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {dropItems, type DropItem} from '../../actions/editMarkerDrop';
 import {
   applyEditMarkerPreview,
   getEditMarkerCalibration,
@@ -13,21 +14,22 @@ import {
   resetEditMarkerCalibration,
   saveEditMarkerDiagnostics,
   setEditMarkerCalibration,
-  removeIgnoredItems,
 } from '../../actions/editMarkers';
 import {
   resetRecognition,
   setPenEditCorrection,
+  setPenEditEdges,
   setPenEditReview,
   startSelectMark,
 } from '../../actions/penEditReview';
+import {NO_SHIFT, type EdgeShift} from '../../domain/edgeShift';
 import {assembleMarkerPreview} from '../../domain/markerAssembly';
 import type {
-  IgnoredEditMarker,
   EditMarkerCalibration,
   EditMarkerPreview,
   EditMarkerPreviewScope,
   PenTextState,
+  RecognizedEditOperation,
 } from '../../domain/markerTypes';
 import {fileNameOf, userMessage} from '../../domain/userMessage';
 import {updateSettings} from '../../storage/settingsFile';
@@ -36,8 +38,13 @@ import {usePenRecognitionQueue} from './usePenRecognitionQueue';
 
 export interface EditMarkerReview {
   preview: EditMarkerPreview | null;
-  /** Deletes ignored markers and unused pen edits from the page, then reads the page again. */
-  removeIgnored: (items: IgnoredEditMarker[]) => void;
+  /**
+   * Drops changes from the page without applying them (pen edits keep or lose their handwriting),
+   * then reads the page again.
+   */
+  drop: (items: DropItem[], eraseHandwriting: boolean) => void;
+  /** Moves a change's start, end or (zero-length) place by one character. */
+  nudge: (operation: RecognizedEditOperation, edge: 'start' | 'end', delta: number) => void;
   loading: boolean;
   busy: boolean;
   applied: boolean;
@@ -70,6 +77,8 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
   const [applied, setApplied] = useState(false);
   const [status, setStatus] = useState<FrameStatus | null>({text: 'Reading markers…'});
   const [calibration, setCalibration] = useState<EditMarkerCalibration>(getEditMarkerCalibration);
+  // Edge nudges of plain marks: kept while the review is open (a pen edit's go with it).
+  const [plainShifts, setPlainShifts] = useState<Record<string, EdgeShift>>({});
 
   const load = useCallback(
     async (keepStatus = false) => {
@@ -81,6 +90,7 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
         const next = await getEditMarkerPreview(scope);
         setAnalysis(next);
         setPenStates(next.base?.penStates ?? {});
+        setPlainShifts({});
         if (!keepStatus) {
           setStatus(next.fontWarning ? {text: next.fontWarning} : null);
         }
@@ -107,8 +117,11 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
 
   // Re-assembled whenever a pen edit's text arrives or changes; no new measuring.
   const preview = useMemo(
-    () => (analysis?.base ? assembleMarkerPreview(analysis.base, penStates, analysis.fontWarning) : analysis),
-    [analysis, penStates],
+    () =>
+      analysis?.base
+        ? assembleMarkerPreview(analysis.base, penStates, analysis.fontWarning, plainShifts)
+        : analysis,
+    [analysis, penStates, plainShifts],
   );
 
   const updatePenState = useCallback((id: string, state: PenTextState) => {
@@ -160,6 +173,49 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
       }
     },
     [penStates, store],
+  );
+
+  // A pen edit's nudges are stored once the taps stop (they come in runs).
+  const edgeWrites = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const writes = edgeWrites.current;
+    return () => writes.forEach(timer => clearTimeout(timer));
+  }, []);
+
+  const nudge = useCallback(
+    (operation: RecognizedEditOperation, edge: 'start' | 'end', delta: number) => {
+      if (busy || applied) {
+        return;
+      }
+      const move = (shift: EdgeShift): EdgeShift =>
+        edge === 'start' ? {...shift, start: shift.start + delta} : {...shift, end: shift.end + delta};
+      const penId = operation.penEditId;
+      if (!penId) {
+        setPlainShifts(current => ({...current, [operation.id]: move(current[operation.id] ?? NO_SHIFT)}));
+        return;
+      }
+      const current = penStates[penId];
+      if (!current) {
+        return;
+      }
+      const edges = move(current.edges ?? NO_SHIFT);
+      updatePenState(penId, {...current, edges});
+      const pending = edgeWrites.current.get(penId);
+      if (pending) {
+        clearTimeout(pending);
+      }
+      edgeWrites.current.set(
+        penId,
+        setTimeout(() => {
+          edgeWrites.current.delete(penId);
+          setPenEditEdges(penId, edges).catch(error => {
+            console.warn('[EditMarkerReview] edges not stored', String(error));
+            setStatus({kind: 'error', text: 'The moved edge could not be stored; it applies only now.'});
+          });
+        }, 500),
+      );
+    },
+    [applied, busy, penStates, updatePenState],
   );
 
   const selectMark = useCallback(
@@ -241,21 +297,21 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
       .finally(() => setBusy(false));
   }, [busy, load, loading, preview]);
 
-  const removeIgnored = useCallback(
-    (items: IgnoredEditMarker[]) => {
+  const drop = useCallback(
+    (items: DropItem[], eraseHandwriting: boolean) => {
       if (!preview || loading || busy || items.length === 0) {
         return;
       }
       setBusy(true);
-      setStatus({text: 'Removing from the page…'});
-      removeIgnoredItems(preview, items)
+      setStatus({text: eraseHandwriting ? 'Writing the backup…' : 'Dropping…'});
+      dropItems(preview, items, eraseHandwriting)
         .then(async result => {
           setStatus({text: result.message});
           await load(true);
         })
         .catch(error => {
-          console.warn('[EditMarkerReview] remove failed', String(error));
-          setStatus({kind: 'error', text: userMessage(error, 'Could not remove them from the page.')});
+          console.warn('[EditMarkerReview] drop failed', String(error));
+          setStatus({kind: 'error', text: userMessage(error, 'Could not drop them from the page.')});
         })
         .finally(() => setBusy(false));
     },
@@ -264,7 +320,8 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
 
   return {
     preview,
-    removeIgnored,
+    drop,
+    nudge,
     loading,
     busy,
     applied,

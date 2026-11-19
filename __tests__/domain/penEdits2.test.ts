@@ -131,6 +131,7 @@ describe('Select mark state', () => {
     review: 'open',
     state: 'active',
     awaitingMark: null,
+    edges: null,
     ...overrides,
   });
   const index = (...entries: PenEditEntry[]): PenEditIndex => ({version: 1, entries});

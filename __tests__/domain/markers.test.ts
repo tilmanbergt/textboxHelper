@@ -11,7 +11,6 @@ import {
   buildSelectionMessage,
   formatOperationSnippet,
   mergeHighlightRanges,
-  parseReplacementLines,
 } from '../../src/domain/markerText';
 import type {EditMarkerApplyPlan, MarkerDeleteCandidate, MarkerStrokeAnalysis, StrokeStats} from '../../src/domain/markerTypes';
 import type {PageElementData, Rect, TextElementData} from '../../src/domain/textboxModel';
@@ -134,21 +133,6 @@ describe('marker text changes', () => {
     ]);
   });
 
-  it('takes replacement text from lines starting with #', () => {
-    const lines = parseReplacementLines(textbox('r', 'note\n# new words \n#\nplain', rect(10, 300, 400, 400)));
-    expect(lines).toEqual([
-      {
-        sourceTextboxUuid: 'r',
-        sourceTextboxNumInPage: 7,
-        sourceLineIndex: 1,
-        sortTop: 301,
-        sortLeft: 10,
-        text: 'new words',
-        rawLine: '# new words ',
-      },
-    ]);
-  });
-
   it('words the selection and the operations for the review', () => {
     expect(buildSelectionMessage(1, 1)).toBe('1 marker selected · 1 textbox also selected');
     expect(buildSelectionMessage(3, 0)).toBe('3 markers selected');
@@ -165,7 +149,6 @@ describe('edit-marker backup', () => {
       selectedMarkerCount: 3,
       operations: [],
       recognizedMarkerNums: [],
-      replacementSourceTextboxNums: [],
       penEditIds: [],
       insertions: [],
       textMutations: [

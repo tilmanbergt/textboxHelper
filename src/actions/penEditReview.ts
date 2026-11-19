@@ -33,6 +33,7 @@ import {
   isPenEditDecoration,
   parsePenEditUserData,
 } from '../domain/penEditTags';
+import {isNoShift, type EdgeShift} from '../domain/edgeShift';
 import {normalizeRecognizedText} from '../domain/penEditText';
 import {
   textLeftX,
@@ -90,6 +91,7 @@ export function stateOf(entry: PenEditEntry): PenTextState {
     text: entry.recognition.text,
     correctedText: entry.correctedText,
     review: entry.review,
+    edges: entry.edges,
   };
 }
 
@@ -407,6 +409,7 @@ export type CaretInline = {
   textbox: TextElementData;
   offset: number;
   mode: CaretInsertMode;
+  uncertain?: string;
 };
 
 /**
@@ -471,6 +474,9 @@ export async function placeCaretInsertions<T extends TextElementData>(
           textbox,
           offset: target.offset,
           mode: target.kind === 'split' ? 'paragraph' : target.mode,
+          ...(target.kind === 'text' && target.uncertain
+            ? {uncertain: target.uncertain}
+            : {}),
         });
       }
       continue;
@@ -637,6 +643,17 @@ export async function setPenEditReview(
   );
 }
 
+/** The user's character nudges of a pen edit's edges; no nudge is stored as none. */
+export async function setPenEditEdges(
+  id: string,
+  edges: EdgeShift | null,
+): Promise<void> {
+  const stored = isNoShift(edges) ? null : edges;
+  await changePenEditIndex(current =>
+    updatePenEdit(current, id, entry => ({...entry, edges: stored})),
+  );
+}
+
 /**
  * Select mark (technical-design-pen-edits-2.md §4): this snippet waits for the mark the user is
  * about to draw or lasso; the next tap of "Insertion or Replacement" on a few strokes attaches it.
@@ -706,6 +723,10 @@ export function penEditElementNums(
   ids: string[],
   entries: PenEditEntry[],
   pageElements: Element[],
+  options: {handwriting: boolean; replaceMark: boolean} = {
+    handwriting: true,
+    replaceMark: false,
+  },
 ): number[] {
   const counts = new Map<number, number>();
   pageElements.forEach(element =>
@@ -714,11 +735,18 @@ export function penEditElementNums(
   const nums: number[] = [];
   for (const entry of entries.filter(item => ids.includes(item.id))) {
     const resolved = resolvePenEdit(entry, pageElements);
-    // The caret goes with its insertion; a replace mark is removed as a marker.
-    const marks = entry.mark?.kind === 'caret' ? resolved.markElements : [];
+    // A caret always goes with its insertion. A replace mark goes as a consumed marker when
+    // applying; when dropping (`replaceMark`) it goes here, or it would read as a delete later.
+    const marks =
+      entry.mark?.kind === 'caret' || options.replaceMark
+        ? [
+            ...resolved.markElements,
+            ...(resolved.strike ? [resolved.strike] : []),
+          ]
+        : [];
     for (const element of [
       ...resolved.decorations,
-      ...resolved.strokes,
+      ...(options.handwriting ? resolved.strokes : []),
       ...marks,
     ]) {
       // Kept GTD's rule: remove by number only when the number is unique on the page.

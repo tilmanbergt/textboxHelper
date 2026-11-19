@@ -9,6 +9,7 @@ import type {
   EditMarkerApplyPlan,
   EditMarkerPreview,
   EditMarkerTextboxPreview,
+  EdgeView,
   InsertionPlan,
   MarkerPreviewBase,
   PenOperationStatus,
@@ -19,6 +20,7 @@ import type {
 } from './markerTypes';
 import {cloneRect} from './geometry';
 import {caretInsertionText} from './penEditCaret';
+import {edgeContext, insertModeAt, shiftSpans, type EdgeShift} from './edgeShift';
 import {
   SPLIT_SHOWN,
   SPLIT_SIGN,
@@ -87,10 +89,68 @@ function placeholder(
   }
 }
 
+/** How a change reads in place: the text around it with the change made. */
+function edgeViewOf(
+  original: string,
+  start: number,
+  end: number,
+  zeroLength: boolean,
+  inserted: string,
+): EdgeView {
+  const around = 24;
+  const head = original.slice(Math.max(0, start - around), start);
+  const tail = original.slice(end, end + around);
+  return {
+    start,
+    end,
+    zeroLength,
+    startContext: edgeContext(original, start),
+    endContext: edgeContext(original, end),
+    result: `${start - around > 0 ? '…' : ''}${head}${inserted}${tail}${
+      end + around < original.length ? '…' : ''
+    }`.replace(/\n/g, ' ¶ '),
+  };
+}
+
+/**
+ * Every change's range after the user's edge nudges (technical-design-pen-edits-2.md §6): a pen
+ * edit's stored with it, a plain mark's in `plainShifts` (kept while the review is open). Ranges
+ * of one textbox are moved together so none runs into another.
+ */
+function shiftedRanges(
+  base: MarkerPreviewBase,
+  penStates: Record<string, PenTextState>,
+  plainShifts: Record<string, EdgeShift>,
+): Map<string, {start: number; end: number}> {
+  const result = new Map<string, {start: number; end: number}>();
+  const byTextbox = new Map<string, MarkerPreviewBase['drafts']>();
+  for (const draft of base.drafts) {
+    const uuid = draft.operation.targetTextboxUuid;
+    byTextbox.set(uuid, [...(byTextbox.get(uuid) ?? []), draft]);
+  }
+  for (const textbox of base.textboxes) {
+    const drafts = byTextbox.get(textbox.uuid) ?? [];
+    const spans = shiftSpans(
+      textbox.originalText.length,
+      drafts.map(({operation, range}) => ({
+        start: range.start,
+        end: range.end,
+        zeroLength: operation.kind === 'insert' || operation.kind === 'split',
+        shift: operation.penEditId
+          ? penStates[operation.penEditId]?.edges
+          : plainShifts[operation.id],
+      })),
+    );
+    drafts.forEach(({operation}, index) => result.set(operation.id, spans[index]));
+  }
+  return result;
+}
+
 export function assembleMarkerPreview(
   base: MarkerPreviewBase,
   penStates: Record<string, PenTextState>,
   fontWarning: string | null = null,
+  plainShifts: Record<string, EdgeShift> = {},
 ): EditMarkerPreview {
   const operations: RecognizedEditOperation[] = [];
   const displayRanges = new Map<string, TextMutationRange[]>();
@@ -112,8 +172,26 @@ export function assembleMarkerPreview(
     base.textboxes.map(textbox => [textbox.uuid, textbox.originalText]),
   );
 
-  for (const {operation, range} of base.drafts) {
-    const uuid = operation.targetTextboxUuid;
+  const shifted = shiftedRanges(base, penStates, plainShifts);
+
+  for (const draft of base.drafts) {
+    const uuid = draft.operation.targetTextboxUuid;
+    const original = originalTextOf.get(uuid) ?? '';
+    const range: TextMutationRange = {
+      ...draft.range,
+      ...(shifted.get(draft.operation.id) ?? {}),
+    };
+    const zeroLength =
+      draft.operation.kind === 'insert' || draft.operation.kind === 'split';
+    const view = (inserted: string) =>
+      edgeViewOf(original, range.start, range.end, zeroLength, inserted);
+    const operation: RecognizedEditOperation = {
+      ...draft.operation,
+      textStart: range.start,
+      ...(draft.operation.insertMode
+        ? {insertMode: insertModeAt(original, range.start, draft.operation.insertMode)}
+        : {}),
+    };
     if (operation.penEditId && operation.kind === 'insert') {
       // An insertion at a caret: the text goes in at the caret, with the spaces it needs.
       const state = penStates[operation.penEditId];
@@ -122,7 +200,7 @@ export function assembleMarkerPreview(
       const text = status === 'ready' ? penTextOf(state) : '';
       const joined = text
         ? caretInsertionText(
-            originalTextOf.get(uuid) ?? '',
+            original,
             range.start,
             text,
             operation.insertMode ?? 'betweenWords',
@@ -135,6 +213,7 @@ export function assembleMarkerPreview(
         penStatus: status,
         replacementText: text || undefined,
         summary: `Insert "${shown}"`,
+        edgeView: view(joined ? showSplits(joined) : ` ${shown} `),
       };
       operations.push(assembled);
       if (status === 'ready' && joined) {
@@ -170,8 +249,9 @@ export function assembleMarkerPreview(
     }
     if (operation.kind === 'split') {
       // A paragraph break on its own: the split sign, shown as a paragraph end.
-      operations.push(operation);
-      readyOperations.push(operation);
+      const assembled = {...operation, edgeView: view('\n')};
+      operations.push(assembled);
+      readyOperations.push(assembled);
       add(displayRanges, uuid, {
         ...range,
         kind: 'replace',
@@ -185,8 +265,12 @@ export function assembleMarkerPreview(
       continue;
     }
     if (!operation.penEditId) {
-      operations.push(operation);
-      readyOperations.push(operation);
+      const assembled = {
+        ...operation,
+        edgeView: view(range.replacementText ?? ''),
+      };
+      operations.push(assembled);
+      readyOperations.push(assembled);
       add(displayRanges, uuid, range);
       add(applyRanges, uuid, range);
       continue;
@@ -201,6 +285,7 @@ export function assembleMarkerPreview(
       penStatus: status,
       replacementText: text || undefined,
       summary: formatOperationSnippet('replace', operation.words, shown),
+      edgeView: view(text || shown),
     };
     operations.push(assembled);
     if (status === 'ready') {
@@ -341,7 +426,6 @@ export function assembleMarkerPreview(
         selectedMarkerCount: base.selectedMarkerCount,
         operations: readyOperations,
         recognizedMarkerNums,
-        replacementSourceTextboxNums: base.replacementSourceTextboxNums,
         textMutations,
         penEditIds: readyPenIds,
         insertions,

@@ -1,12 +1,11 @@
 import {plural} from './plural';
-import {cloneRect, rectHeight, rectOverlapHeight} from './geometry';
+import {cloneRect} from './geometry';
 import type {
   EditMarkerCalibration,
   EditMarkerHighlightRange,
   EditMarkerOperationKind,
   EditMarkerPreview,
   IgnoredEditMarker,
-  ReplacementTextLine,
   StrokeStats,
   TextMutationPlan,
   TextMutationRange,
@@ -23,22 +22,9 @@ import {
 
 /**
  * The text side of edit markers: applying deletions and replacements to a textbox's text, the
- * highlight ranges for the preview, typed replacement lines, and the messages and log summaries
- * the review screen and the diagnostics show.
+ * highlight ranges for the preview, and the messages and log summaries the review screen and the
+ * diagnostics show.
  */
-
-export const REPLACE_SOURCE_HORIZONTAL_OVERLAP_RATIO = 0.35;
-
-export const REPLACE_SOURCE_VERTICAL_OVERLAP_RATIO = 0.25;
-
-export function verticalOverlapRatio(left: Rect, right: Rect): number {
-  const denominator = Math.min(rectHeight(left), rectHeight(right));
-  if (denominator <= 0) {
-    return 0;
-  }
-
-  return rectOverlapHeight(left, right) / denominator;
-}
 
 export function roundNumber(value: number): number {
   return Math.round(value * 100) / 100;
@@ -295,46 +281,6 @@ export function applyTextMutationRanges(
   ranges: TextMutationRange[],
 ): string {
   return applyTextMutationRangesDetailed(text, ranges).text;
-}
-
-export function parseReplacementLines(textbox: TextElementData): ReplacementTextLine[] {
-  const text = textbox.textBox.textContentFull || '';
-  const lines = text.split(/\r?\n/);
-  const rect = textbox.textBox.textRect;
-
-  return lines
-    .map((line, index) => {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith('#')) {
-        return null;
-      }
-
-      const replacementText = trimmed.slice(1).trim();
-      if (!replacementText) {
-        return null;
-      }
-
-      return {
-        sourceTextboxUuid: textbox.uuid,
-        sourceTextboxNumInPage: textbox.numInPage,
-        sourceLineIndex: index,
-        sortTop: rect.top + index,
-        sortLeft: rect.left,
-        text: replacementText,
-        rawLine: line,
-      };
-    })
-    .filter((line): line is ReplacementTextLine => !!line);
-}
-
-export function buildReplacementLineLogSummary(line: ReplacementTextLine): Record<string, unknown> {
-  return {
-    sourceTextboxUuid: line.sourceTextboxUuid,
-    sourceTextboxNumInPage: line.sourceTextboxNumInPage,
-    sourceLineIndex: line.sourceLineIndex,
-    text: line.text,
-    rawLine: line.rawLine,
-  };
 }
 
 export function createEmptyPreview(

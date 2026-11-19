@@ -49,7 +49,6 @@ const base = (overrides: Partial<MarkerPreviewBase> = {}): MarkerPreviewBase => 
   drafts: [replaceDraft],
   ignored: [],
   textboxes: [textbox],
-  replacementSourceTextboxNums: [],
   insertions: [],
   penEdits: [{id: 'pe1', kind: 'replacement', number: 1, pictureUri: null}],
   penStates: {},
@@ -61,6 +60,7 @@ const state = (overrides: Partial<PenTextState> = {}): PenTextState => ({
   text: 'proud',
   correctedText: null,
   review: 'open',
+  edges: null,
   ...overrides,
 });
 

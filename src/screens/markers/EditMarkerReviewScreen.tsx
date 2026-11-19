@@ -3,20 +3,27 @@
  *
  * Left: the recognized changes and the ignored markers, as tabs with counts and a paged list.
  * Right: one affected textbox at a time, removed words struck through, replacements in bold; a
- * tap on a change shows its textbox at the page holding it. A pen edit (technical-design-pen-
- * edits.md §3.6) shows its handwriting below, with Correct, Skip for later and Recognize again;
- * until its text is there, a grey placeholder stands in the text. One button applies every ready
- * change. Details (calibration, diagnostics) is a sub-screen with the same state.
+ * tap on a change shows its textbox at the page holding it. Below it, the change's detail
+ * (`ChangeDetail`, technical-design-pen-edits-2.md §5–§7): a tagged snippet's handwriting and its
+ * text, edited in place; the edge control; Skip for later, Recognize again and Drop, which asks in
+ * the same place. Until a snippet's text is there, a grey placeholder stands in the text. Ignored
+ * snippets offer Select mark. One button applies every ready change. Details (calibration,
+ * diagnostics) is a sub-screen with the same state.
  */
 import React, {useEffect, useMemo, useState} from 'react';
-import {Image, Pressable, StyleSheet, Text, View} from 'react-native';
-import {isRemovableIgnored} from '../../actions/editMarkers';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {
+  dropItemOfIgnored,
+  dropItemOfOperation,
+  type DropItem,
+} from '../../actions/editMarkerDrop';
 import {EDIT_MARKERS_HELP} from '../../domain/helpTexts';
 import type {
   EditMarkerPreviewScope,
   IgnoredEditMarker,
   PenEditView,
   PenOperationStatus,
+  PenTextState,
   RecognizedEditOperation,
 } from '../../domain/markerTypes';
 import {plural} from '../../domain/plural';
@@ -26,8 +33,8 @@ import PagedText from '../../ui/PagedText';
 import PillButton from '../../ui/PillButton';
 import ScreenFrame from '../../ui/ScreenFrame';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
+import ChangeDetail, {DropConfirm} from './ChangeDetail';
 import MarkerDetailsScreen from './MarkerDetailsScreen';
-import PenEditCorrectionScreen from './PenEditCorrectionScreen';
 import {useEditMarkerReview} from './useEditMarkerReview';
 
 type ListTab = 'changes' | 'ignored';
@@ -48,27 +55,39 @@ export default function EditMarkerReviewScreen({
 }: Props): React.JSX.Element {
   const review = useEditMarkerReview(scope);
   const {preview, loading, busy, applied} = review;
-  const [view, setView] = useState<'review' | 'details' | 'correct'>('review');
+  const [view, setView] = useState<'review' | 'details'>('review');
+  // The recognized text of the selected snippet is being edited: the textbox makes room.
+  const [editing, setEditing] = useState(false);
+  // Drop asks first, in the detail area.
+  const [pendingDrop, setPendingDrop] = useState<{
+    title: string;
+    items: DropItem[];
+    withHandwriting: boolean;
+  } | null>(null);
   const [tab, setTab] = useState<ListTab>('changes');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [jumpKey, setJumpKey] = useState(0);
 
   const operations = useMemo(() => preview?.operations ?? [], [preview]);
   const ignored = useMemo(() => preview?.ignoredMarkers ?? [], [preview]);
-  const removable = useMemo(
-    () => ignored.filter(isRemovableIgnored),
+  const droppableIgnored = useMemo(
+    () =>
+      ignored
+        .map(marker => ({marker, item: dropItemOfIgnored(marker)}))
+        .filter(
+          (entry): entry is {marker: IgnoredEditMarker; item: DropItem} =>
+            !!entry.item,
+        ),
     [ignored],
   );
-  // Removing is destructive: the first tap arms the button, the second removes.
-  const [armedRemove, setArmedRemove] = useState<string | null>(null);
-  useEffect(() => setArmedRemove(null), [ignored, tab]);
-  const removeTapped = (key: string, items: IgnoredEditMarker[]) => {
-    if (armedRemove === key) {
-      setArmedRemove(null);
-      review.removeIgnored(items);
-    } else {
-      setArmedRemove(key);
-    }
+  useEffect(() => setPendingDrop(null), [preview?.base, tab]);
+  const askDrop = (title: string, items: DropItem[]) => {
+    setEditing(false);
+    setPendingDrop({
+      title,
+      items,
+      withHandwriting: items.some(item => !!item.penEditId),
+    });
   };
   const textboxes = useMemo(() => preview?.textboxes ?? [], [preview]);
 
@@ -125,6 +144,8 @@ export default function EditMarkerReviewScreen({
   }, [selected?.penEditId, setSelectedPenEdit]);
 
   const selectOperation = (operation: RecognizedEditOperation) => {
+    setEditing(false);
+    setPendingDrop(null);
     setSelectedId(operation.id);
     setJumpKey(key => key + 1);
   };
@@ -150,28 +171,15 @@ export default function EditMarkerReviewScreen({
     );
   }
 
-  if (view === 'correct' && selectedPen) {
-    const state = review.penStates[selectedPen.id];
-    return (
-      <PenEditCorrectionScreen
-        view={selectedPen}
-        initialText={state ? state.correctedText ?? state.text : ''}
-        onSave={text => {
-          review.correct(selectedPen.id, text);
-          setView('review');
-        }}
-        onBack={() => setView('review')}
-      />
-    );
-  }
-
   const readyCount = preview?.applyPlan?.operations.length ?? 0;
   const pendingCount = preview?.pendingCount ?? 0;
+  const checkCount = operations.filter(operation => operation.uncertain).length;
 
   const context = [
     scope === 'page' ? 'Whole page' : 'Lasso selection',
     loading && !preview ? null : plural(operations.length, 'change'),
     pendingCount > 0 ? `${pendingCount} recognizing` : null,
+    checkCount > 0 ? `${checkCount} to check` : null,
     ignored.length > 0 ? `${ignored.length} ignored` : null,
   ]
     .filter(Boolean)
@@ -185,7 +193,7 @@ export default function EditMarkerReviewScreen({
             ? `Apply ${plural(readyCount, 'change')}`
             : 'Nothing to apply',
         onPress: review.apply,
-        disabled: !preview?.canApply || loading,
+        disabled: !preview?.canApply || loading || editing || !!pendingDrop,
         busy,
         busyLabel: 'Applying…',
       };
@@ -237,15 +245,16 @@ export default function EditMarkerReviewScreen({
             <PagedSection
               header="Not used"
               headerAccessory={
-                removable.length > 1 && !applied ? (
+                droppableIgnored.length > 1 && !applied ? (
                   <PillButton
                     size="small"
-                    label={
-                      armedRemove === 'all'
-                        ? 'Tap again to remove'
-                        : `Remove all (${removable.length})`
+                    label={`Drop all (${droppableIgnored.length})`}
+                    onPress={() =>
+                      askDrop(
+                        `Drop all ${droppableIgnored.length} ignored?`,
+                        droppableIgnored.map(entry => entry.item),
+                      )
                     }
-                    onPress={() => removeTapped('all', removable)}
                     disabled={busy || loading}
                   />
                 ) : undefined
@@ -262,22 +271,22 @@ export default function EditMarkerReviewScreen({
                           review.selectMark(marker.penEditId as string, onClose)
                       : null
                   }
-                  removeLabel={
-                    isRemovableIgnored(marker)
-                      ? armedRemove === marker.markerUuid
-                        ? 'Tap again'
-                        : 'Remove'
+                  onDrop={
+                    !applied && dropItemOfIgnored(marker)
+                      ? () =>
+                          askDrop(`Drop ${marker.summary.toLowerCase()}?`, [
+                            dropItemOfIgnored(marker) as DropItem,
+                          ])
                       : null
                   }
                   disabled={busy || loading}
-                  onRemove={() => removeTapped(marker.markerUuid, [marker])}
                 />
               )}
             />
           )}
         </View>
         <View style={styles.right}>
-          {textbox ? (
+          {textbox && !editing ? (
             <>
               <PagedText
                 header={
@@ -313,27 +322,70 @@ export default function EditMarkerReviewScreen({
                 Struck through: removed. Bold: new text. Grey: new text not
                 there yet.
               </Text>
-              {selected && selectedPen ? (
-                <PenEditPanel
-                  view={selectedPen}
-                  status={selected.penStatus ?? 'recognizing'}
-                  busy={busy || applied}
-                  onCorrect={() => setView('correct')}
-                  onSkip={skipped => review.setSkipped(selectedPen.id, skipped)}
-                  onRecognizeAgain={() => review.recognizeAgain(selectedPen.id)}
-                />
-              ) : null}
             </>
-          ) : (
+          ) : null}
+          {pendingDrop ? (
+            <DropConfirm
+              title={pendingDrop.title}
+              withHandwriting={pendingDrop.withHandwriting}
+              busy={busy}
+              onDrop={erase => {
+                const items = pendingDrop.items;
+                setPendingDrop(null);
+                review.drop(items, erase);
+              }}
+              onCancel={() => setPendingDrop(null)}
+            />
+          ) : selected && textbox && tab === 'changes' ? (
+            <ChangeDetail
+              operation={selected}
+              pen={
+                selectedPen
+                  ? {
+                      view: selectedPen,
+                      status: selected.penStatus ?? 'recognizing',
+                      text: penTextNow(review.penStates[selectedPen.id]),
+                    }
+                  : null
+              }
+              editing={editing && !!selectedPen}
+              onEditing={setEditing}
+              busy={busy || applied}
+              onSaveText={text =>
+                selectedPen && review.correct(selectedPen.id, text)
+              }
+              onSkip={skipped =>
+                selectedPen && review.setSkipped(selectedPen.id, skipped)
+              }
+              onRecognizeAgain={() =>
+                selectedPen && review.recognizeAgain(selectedPen.id)
+              }
+              onNudge={(edge, delta) => review.nudge(selected, edge, delta)}
+              onDrop={
+                !applied && dropItemOfOperation(selected)
+                  ? () =>
+                      askDrop(`Drop ${kindLabel(selected).toLowerCase()}?`, [
+                        dropItemOfOperation(selected) as DropItem,
+                      ])
+                  : null
+              }
+            />
+          ) : null}
+          {!textbox && !pendingDrop ? (
             <EmptyState
               loading={loading}
               message={preview?.summaryMessage ?? ''}
             />
-          )}
+          ) : null}
         </View>
       </View>
     </ScreenFrame>
   );
+}
+
+/** The text a snippet has now: the correction, else the recognition. */
+function penTextNow(state: PenTextState | undefined): string {
+  return state ? (state.correctedText ?? state.text).trim() : '';
 }
 
 function ChangeRow({
@@ -373,6 +425,7 @@ function ChangeRow({
           : `Textbox ${operation.targetTextboxNumInPage} · line ${
               operation.lineIndex + 1
             }`}
+        {operation.uncertain ? ' · Check place' : ''}
       </Text>
     </Pressable>
   );
@@ -401,74 +454,18 @@ function kindLabel(operation: RecognizedEditOperation): string {
   return 'Delete';
 }
 
-/** The handwriting of the selected pen edit and what can be done with it. */
-function PenEditPanel({
-  view,
-  status,
-  busy,
-  onCorrect,
-  onSkip,
-  onRecognizeAgain,
-}: {
-  view: PenEditView;
-  status: PenOperationStatus;
-  busy: boolean;
-  onCorrect: () => void;
-  onSkip: (skipped: boolean) => void;
-  onRecognizeAgain: () => void;
-}): React.JSX.Element {
-  const skipped = status === 'skipped';
-  return (
-    <View style={styles.penPanel}>
-      {view.pictureUri ? (
-        <Image
-          source={{uri: view.pictureUri}}
-          style={styles.penPicture}
-          resizeMode="contain"
-        />
-      ) : (
-        <Text style={styles.rowMeta}>
-          No picture of the handwriting was kept.
-        </Text>
-      )}
-      <View style={styles.penButtons}>
-        <PillButton
-          size="small"
-          label="Correct"
-          onPress={onCorrect}
-          disabled={busy}
-        />
-        <PillButton
-          size="small"
-          label={skipped ? 'Include' : 'Skip for later'}
-          onPress={() => onSkip(!skipped)}
-          disabled={busy}
-        />
-        <PillButton
-          size="small"
-          label="Recognize again"
-          onPress={onRecognizeAgain}
-          disabled={busy || status === 'recognizing'}
-        />
-      </View>
-    </View>
-  );
-}
-
 function IgnoredRow({
   marker,
-  removeLabel,
   disabled,
-  onRemove,
+  onDrop,
   onSelectMark,
 }: {
   marker: IgnoredEditMarker;
+  disabled: boolean;
+  /** Null when the strokes may be ordinary handwriting: they are never offered for removal. */
+  onDrop: (() => void) | null;
   /** Pen edits only: wait for a mark drawn or lassoed on the page (the review closes). */
   onSelectMark: (() => void) | null;
-  /** Null when the stroke may be ordinary handwriting: no Remove then. */
-  removeLabel: string | null;
-  disabled: boolean;
-  onRemove: () => void;
 }): React.JSX.Element {
   return (
     <View style={styles.row}>
@@ -487,17 +484,17 @@ function IgnoredRow({
               disabled={disabled}
             />
           ) : null}
-          {removeLabel ? (
+          {onDrop ? (
             <PillButton
               size="small"
-              label={removeLabel}
-              onPress={onRemove}
+              label="Drop"
+              onPress={onDrop}
               disabled={disabled}
             />
           ) : null}
         </View>
       </View>
-      <Text style={styles.rowMeta} numberOfLines={removeLabel ? 2 : 3}>
+      <Text style={styles.rowMeta} numberOfLines={onDrop ? 2 : 3}>
         {marker.reason}
       </Text>
     </View>
@@ -598,21 +595,6 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: FONT.medium,
     color: COLORS.text,
-  },
-  penPanel: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: SPACING.sm,
-    marginTop: SPACING.sm,
-    gap: SPACING.sm,
-  },
-  penPicture: {
-    height: 150,
-    width: '100%',
-  },
-  penButtons: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
   },
   emptyHint: {
     fontSize: FONT.small,

@@ -1,6 +1,6 @@
 # Technical design: pen edits 2 — one button, Select mark, edit in place, edges, Drop
 
-Status: Q1–Q2 built (one button, Select mark); Q3–Q6 open. Builds on pen edits
+Status: built in two commits (Q1–Q2, Q3–Q6); device test open. See As built. Builds on pen edits
 (`technical-design-pen-edits.md`, with the insertion caret in its As built) and paragraph marks
 (`technical-design-paragraph-marks.md`). Screens: design canvas "Textbox Tools – Pen edit review".
 
@@ -173,3 +173,42 @@ Device: see §11.
 - `showPluginView` from a `showType: 0` button after a successful tag (Select mark from the
   review) — checked on the device in Q1–Q2.
 - Whether the button is offered for a lasso that also holds a textbox (`editDataTypes: [0]`).
+
+## As built
+
+- **Two commits**: Q1–Q2 (one button, Select mark) and Q3–Q6 (edit in place, edges, Drop, `#`
+  removed). 205 → 229 Jest tests (`penEdits2.test.ts`, `edgeShift.test.ts`, caret "Check place").
+- **Look-back with both finders**: the read still stops at a whole replace mark; carets are looked
+  for in the same window, so a caret is found only when it is newer than the replace mark (or
+  there is none) — which is the rule.
+- **Strike alone**: a mark selected with Select mark may be a strike without loop or verticals;
+  its number goes in a ring right of the strike's end. The review accepts such a strike as a
+  replace mark only when its pen edit's stored mark has no modifiers.
+- **Review focus** is module state in `actions/penEditTag.ts` next to the tag outcome;
+  `presentTagOutcome` decides whether the plugin view opens. App opens the page review with
+  `focusPenEditId`; the screen selects that change or shows the Ignored tab and a status line.
+- **Edges**: `domain/edgeShift.ts` (`shiftSpans`, `insertModeAt`, `edgeContext`, `coveredSpan`).
+  The assembly moves all spans of a textbox together (`shiftedRanges`) and gives every change in a
+  textbox an `edgeView` (characters around its edges and the text as it will read). A pen edit's
+  nudges are stored 500 ms after the last tap (`setPenEditEdges`); plain marks' live in the hook
+  until the page is read again. Word characters for "inside a word" are a plain character class
+  (Latin with accents, Greek, Cyrillic): the device's engine may lack Unicode property classes.
+- **Punctuation**: `coveredSpan` keeps a trailing `,.;:!?…` run unless the mark reaches past its
+  middle, and a leading `(„“"'«` run unless the mark starts before its middle; the width of the run
+  is its share of the word's measured width.
+- **Check place**: `locateCaret` sets `uncertain` for a tip between two lines (line score ≥ 1) and
+  for a snap from more than 0.3 characters inside a word. Sideways carets and steps are not
+  flagged.
+- **Detail area**: `screens/markers/ChangeDetail.tsx` (picture or stroke drawing, text edited in
+  place, edge control, actions, `DropConfirm`). While editing, the textbox text is hidden so the
+  field sits at the top; Apply is disabled while editing or while Drop asks.
+- **Drop**: `actions/editMarkerDrop.ts`. Ignored rows have Drop (and Select mark › for tagged
+  text); a selected change has Drop in its detail area; Drop all (n) heads the Ignored list. A
+  backup is written only when handwriting is erased (no textbox text changes when dropping); it
+  holds the dropped pen edits and their strokes. `penEditElementNums` gained options: keep the
+  handwriting, and take the replace mark (marks always go when dropping).
+- **`#` path removed**: `findReplacementLinesForTextbox`, `parseReplacementLines`,
+  `ReplacementTextLine`, `replacementSourceTextboxNums` and its deletion at apply are gone.
+- **File size**: `actions/editMarkers.ts` was over the 1,000-line rule before this change (1,181
+  lines); moving Drop out and removing the `#` path brought it to 1,050. Splitting it further is on
+  the backlog.

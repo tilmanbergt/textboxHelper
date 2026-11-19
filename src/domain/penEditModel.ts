@@ -1,3 +1,4 @@
+import type {EdgeShift} from './edgeShift';
 import type {PenEditKind} from './penEditTags';
 import type {Rect} from './textboxModel';
 
@@ -89,6 +90,8 @@ export type PenEditEntry = {
    * technical-design-pen-edits-2.md §4): the next tap on a few strokes becomes its mark.
    */
   awaitingMark: AwaitingMark | null;
+  /** The user's character nudges of where the change starts and ends (review, §6). */
+  edges: EdgeShift | null;
 };
 
 /** Where Select mark was started: the tag's result card, or the review (which opens again). */
@@ -197,7 +200,15 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     review: reviews.includes(value.review as PenEditReview) ? (value.review as PenEditReview) : 'open',
     state: states.includes(value.state as PenEditState) ? (value.state as PenEditState) : 'active',
     awaitingMark: parseAwaitingMark(value.awaitingMark),
+    edges: parseEdges(value.edges),
   };
+}
+
+function parseEdges(value: unknown): EdgeShift | null {
+  if (!isRecord(value) || !isFiniteNumber(value.start) || !isFiniteNumber(value.end)) {
+    return null;
+  }
+  return value.start === 0 && value.end === 0 ? null : {start: value.start, end: value.end};
 }
 
 function parseAwaitingMark(value: unknown): AwaitingMark | null {

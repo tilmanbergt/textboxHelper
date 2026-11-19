@@ -2,13 +2,14 @@ import type {PageWordCandidate} from './hitTesting';
 import type {TextboxMeasurementCalibration} from './textboxLayout';
 import type {TextSegment} from './textPages';
 import type {CaretInsertMode} from './penEditCaret';
+import type {EdgeShift} from './edgeShift';
 import type {PenEditReview, RecognitionStatus} from './penEditModel';
 import type {PenEditKind} from './penEditTags';
 import type {PageElementData, Rect, TextElementData, TextboxData} from './textboxModel';
 
 /**
  * Types of the edit-marker recognition: what the preview shows, the plan that is applied, and the
- * stages in between (stroke statistics, delete candidates, replacement lines, text mutations).
+ * stages in between (stroke statistics, delete candidates, text mutations).
  * The candidate types are generic over the element type, so the flow keeps its SDK elements in
  * them while the pure logic reads only what `textboxModel.ts` describes.
  */
@@ -51,6 +52,10 @@ export type RecognizedEditOperation = {
   penStatus?: PenOperationStatus;
   /** An insertion at a caret: how its text joins the words around it. */
   insertMode?: CaretInsertMode;
+  /** Set when the caret's place was a close call: why it is worth a look ("Check place"). */
+  uncertain?: string;
+  /** Set by the assembly for changes inside a textbox: the edge control's view. */
+  edgeView?: EdgeView;
 };
 
 export type IgnoredEditMarker = {
@@ -107,6 +112,22 @@ export type PenTextState = {
   text: string;
   correctedText: string | null;
   review: PenEditReview;
+  /** Character nudges of the change's edges, stored with the pen edit. */
+  edges: EdgeShift | null;
+};
+
+/**
+ * Where a change sits in its textbox's text after the edge nudges, with the characters around its
+ * edges for the edge control. A zero-length change (insertion, paragraph break) has one place.
+ */
+export type EdgeView = {
+  start: number;
+  end: number;
+  zeroLength: boolean;
+  startContext: {before: string; after: string};
+  endContext: {before: string; after: string};
+  /** The text right around the change as it will read. */
+  result: string;
 };
 
 /** A tagged snippet as the review shows it. */
@@ -152,7 +173,6 @@ export type MarkerPreviewBase = {
   drafts: OperationDraft[];
   ignored: IgnoredEditMarker[];
   textboxes: MarkerTextboxBase[];
-  replacementSourceTextboxNums: number[];
   insertions: InsertionDraft[];
   penEdits: PenEditView[];
   /** The pen edits' text as stored when the page was read. */
@@ -210,7 +230,6 @@ export type EditMarkerApplyPlan = {
   selectedMarkerCount: number;
   operations: RecognizedEditOperation[];
   recognizedMarkerNums: number[];
-  replacementSourceTextboxNums: number[];
   textMutations: TextMutationPlan[];
   /** Pen edits applied with this plan (their snippets, icons and numbers are removed). */
   penEditIds: string[];
@@ -242,16 +261,6 @@ export type MarkerDeleteCandidate<
 export type MarkerStrokeAnalysis<Marker extends PageElementData = PageElementData> = {
   marker: Marker;
   strokeStats: StrokeStats;
-};
-
-export type ReplacementTextLine = {
-  sourceTextboxUuid: string;
-  sourceTextboxNumInPage: number;
-  sourceLineIndex: number;
-  sortTop: number;
-  sortLeft: number;
-  text: string;
-  rawLine: string;
 };
 
 export type TextMutationRange = {
