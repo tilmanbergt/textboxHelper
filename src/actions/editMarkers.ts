@@ -15,7 +15,6 @@ import {
 import {
   buildIgnoredMarker,
   buildOperationDetailWithReplacement,
-  buildReplacementLineLogSummary,
   buildTextboxLogSummary,
   cloneTextElementForMutation,
   countElementTypes,
@@ -41,7 +40,7 @@ import {
   type Rect,
   type TextboxData,
 } from '../domain/textboxModel';
-import {isPenEditElement, parsePenEditUserData} from '../domain/penEditTags';
+import {parsePenEditUserData} from '../domain/penEditTags';
 import {SPLIT_SIGN, splitParagraphParts} from '../domain/paragraphMarks';
 import {
   analyzeCaret,
@@ -79,15 +78,11 @@ import {
   resetFontWarnings,
 } from '../supernote/textboxMetrics';
 import {logEditMarker, markerDiagnostics} from '../utils/editMarkerLog';
-import {
-  analyzeDeleteMarker,
-  findReplacementLinesForTextbox,
-  type MarkerCandidate,
-} from './editMarkerAnalysis';
+import {analyzeDeleteMarker, type MarkerCandidate} from './editMarkerAnalysis';
+import {coveredSpan} from '../domain/edgeShift';
 import {
   loadPenEditContext,
   markPenEditsApplied,
-  markPenEditsDropped,
   penEditBackupData,
   locateMarkOnPage,
   penEditElementNums,
@@ -100,7 +95,7 @@ import {
  * This module runs the full marker lifecycle:
  * - load lasso or full-page context
  * - recognize delete and replace markers
- * - resolve typed replacement lines
+ * - take replacement and insertion text from the tagged snippets (pen edits)
  * - build the preview shown in the UI
  * - apply text mutations and remove consumed markers
  *
@@ -426,7 +421,6 @@ async function buildEditMarkerPreview(
 
     const usedRangesByTextbox = new Map<string, Set<string>>();
     const groupedTextboxes = new Map<string, TextElement>();
-    const replacementSourceTextboxNums = new Set<number>();
 
     const targetTextboxesByOrder = sortTextElements([
       ...new Map(
@@ -441,9 +435,7 @@ async function buildEditMarkerPreview(
       string,
       {
         pair: MarkerStrokeAnalysis<Element>[];
-        replacementText?: string;
-        replacementSourceTextboxNum?: number;
-        mismatchReason?: string;
+        ignoredReason?: string;
         penEdit?: PenEditEntry;
       }
     >();
@@ -463,6 +455,16 @@ async function buildEditMarkerPreview(
           pair: replaceModifiers(candidate, strokeAnalyses),
         }))
         .filter(entry => {
+          // A strike selected as a snippet's mark (Select mark) may stand alone: the user said it
+          // is a replace mark (technical-design-pen-edits-2.md §4.2).
+          const owner = pen.strikeOwner(entry.candidate.marker);
+          const declaredAlone =
+            entry.pair.length === 0 &&
+            owner?.mark?.kind === 'replace' &&
+            owner.mark.modifierRects.length === 0;
+          if (declaredAlone) {
+            return true;
+          }
           if (
             entry.pair.length === 0 ||
             entry.pair.some(pairEntry =>
@@ -478,76 +480,22 @@ async function buildEditMarkerPreview(
           return true;
         });
 
-      // A replace mark with a tagged snippet takes its text from the snippet; the others look for
-      // typed "#" lines as before.
-      const typedReplaceCandidates = replaceCandidates.filter(entry => {
+      // A replace mark takes its text from the tagged snippet written right after it. One without
+      // a snippet has no new text: it is listed under Ignored with how to give it one.
+      replaceCandidates.forEach(entry => {
         const penEdit = pen.strikeOwner(entry.candidate.marker);
-        if (!penEdit) {
-          return true;
+        if (penEdit) {
+          pairedPenEditIds.add(penEdit.id);
         }
-        pairedPenEditIds.add(penEdit.id);
         replaceCandidateInfoByMarkerUuid.set(entry.candidate.markerUuid, {
           pair: entry.pair,
-          penEdit,
+          ...(penEdit
+            ? {penEdit}
+            : {
+                ignoredReason:
+                  'Replace mark without new text: write the new words right after it, lasso them and tap Insertion or Replacement.',
+              }),
         });
-        return false;
-      });
-
-      if (typedReplaceCandidates.length === 0) {
-        return;
-      }
-
-      const replacementLines = findReplacementLinesForTextbox(
-        targetTextbox,
-        typedReplaceCandidates.length,
-        selectedTextboxes,
-        targetTextboxesByOrder,
-      );
-
-      if (replacementLines.length !== typedReplaceCandidates.length) {
-        const mismatchReason =
-          replacementLines.length === 0
-            ? 'Replace mark without new text: tag the new words with "Replacement" right after the mark, or write them below the paragraph in a line starting with #.'
-            : `Replace markers were found, but ${typedReplaceCandidates.length} marker(s) need ${typedReplaceCandidates.length} replacement line(s) and only ${replacementLines.length} were found.`;
-
-        typedReplaceCandidates.forEach(entry => {
-          replaceCandidateInfoByMarkerUuid.set(entry.candidate.markerUuid, {
-            pair: entry.pair,
-            mismatchReason,
-          });
-        });
-
-        logEditMarker('replaceResolutionMismatch', {
-          targetTextbox: buildTextboxLogSummary(targetTextbox),
-          replaceMarkerCount: typedReplaceCandidates.length,
-          replacementLineCount: replacementLines.length,
-          replacementLines: replacementLines.map(
-            buildReplacementLineLogSummary,
-          ),
-          reason: mismatchReason,
-        });
-        return;
-      }
-
-      typedReplaceCandidates.forEach((entry, index) => {
-        replaceCandidateInfoByMarkerUuid.set(entry.candidate.markerUuid, {
-          pair: entry.pair,
-          replacementText: replacementLines[index].text,
-          replacementSourceTextboxNum:
-            replacementLines[index].sourceTextboxNumInPage,
-        });
-      });
-
-      logEditMarker('replaceResolutionMatched', {
-        targetTextbox: buildTextboxLogSummary(targetTextbox),
-        replaceMarkers: typedReplaceCandidates.map(entry => ({
-          markerUuid: entry.candidate.markerUuid,
-          markerNumInPage: entry.candidate.markerNumInPage,
-          modifierMarkerNums: entry.pair.map(
-            pairEntry => pairEntry.marker.numInPage,
-          ),
-        })),
-        replacementLines: replacementLines.map(buildReplacementLineLogSummary),
       });
     });
 
@@ -556,9 +504,9 @@ async function buildEditMarkerPreview(
       const replaceInfo = replaceCandidateInfoByMarkerUuid.get(
         candidate.markerUuid,
       );
-      if (replaceInfo?.mismatchReason) {
+      if (replaceInfo?.ignoredReason) {
         ignoredMarkers.push({
-          ...buildIgnoredMarker(candidate.marker, replaceInfo.mismatchReason),
+          ...buildIgnoredMarker(candidate.marker, replaceInfo.ignoredReason),
           removableNums: [
             candidate.markerNumInPage,
             ...replaceInfo.pair.map(pairEntry => pairEntry.marker.numInPage),
@@ -598,19 +546,19 @@ async function buildEditMarkerPreview(
 
       const wordTexts = nextWords.map(word => word.text);
       const penEdit = replaceInfo?.penEdit;
-      const kind: EditMarkerOperationKind =
-        penEdit || replaceInfo?.replacementText ? 'replace' : 'delete';
-      if (replaceInfo?.replacementSourceTextboxNum !== undefined) {
-        replacementSourceTextboxNums.add(
-          replaceInfo.replacementSourceTextboxNum,
-        );
-      }
+      const kind: EditMarkerOperationKind = penEdit ? 'replace' : 'delete';
+      // Punctuation at the ends that the stroke didn't reach stays (technical-design-pen-edits-2.md
+      // §6): "default," with the line over "default" keeps its comma.
+      const span = coveredSpan(
+        nextWords,
+        candidate.strokeStats.rect.left,
+        candidate.strokeStats.rect.right,
+      ) ?? {start: nextWords[0].start, end: nextWords[nextWords.length - 1].end};
       drafts.push({
         range: {
           kind,
-          start: nextWords[0].start,
-          end: nextWords[nextWords.length - 1].end,
-          replacementText: replaceInfo?.replacementText,
+          start: span.start,
+          end: span.end,
         },
         operation: {
           id: `${candidate.markerUuid}:${candidate.targetTextbox.uuid}`,
@@ -626,19 +574,13 @@ async function buildEditMarkerPreview(
           targetTextboxUuid: candidate.targetTextbox.uuid,
           targetTextboxNumInPage: candidate.targetTextbox.numInPage,
           lineIndex: candidate.lineIndex,
-          summary: formatOperationSnippet(
-            kind,
-            wordTexts,
-            replaceInfo?.replacementText,
-          ),
+          summary: formatOperationSnippet(kind, wordTexts),
           detail: buildOperationDetailWithReplacement(
             candidate.targetTextbox,
             candidate.lineIndex,
             nextWords,
-            replaceInfo?.replacementText,
           ),
           words: wordTexts,
-          replacementText: replaceInfo?.replacementText,
           textStart: nextWords[0].start,
           ...(penEdit
             ? {penEditId: penEdit.id, penEditNumber: penEdit.number}
@@ -647,6 +589,20 @@ async function buildEditMarkerPreview(
       });
     });
 
+    // Tagged text without a mark: Select mark gives it one.
+    pen.entries
+      .filter(entry => entry.kind === 'unpaired')
+      .forEach(entry => {
+        ignoredMarkers.push({
+          markerUuid: entry.id,
+          markerNumInPage: 0,
+          summary: `Text ${entry.number}`,
+          reason:
+            'No replace mark or caret was found just before it. Select mark, then draw or lasso its mark.',
+          penEditNumber: entry.number,
+          penEditId: entry.id,
+        });
+      });
     // Tagged replacements whose mark wasn't recognized on the page.
     pen.entries
       .filter(
@@ -705,7 +661,7 @@ async function buildEditMarkerPreview(
       });
     });
 
-    placed.inline.forEach(({entry, textbox, offset, mode}) => {
+    placed.inline.forEach(({entry, textbox, offset, mode, uncertain}) => {
       groupedTextboxes.set(textbox.uuid, textbox);
       drafts.push({
         range: {kind: 'replace', start: offset, end: offset},
@@ -731,6 +687,7 @@ async function buildEditMarkerPreview(
           penEditId: entry.id,
           penEditNumber: entry.number,
           insertMode: mode,
+          ...(uncertain ? {uncertain} : {}),
         },
       });
     });
@@ -765,7 +722,6 @@ async function buildEditMarkerPreview(
       drafts,
       ignored: ignoredMarkers,
       textboxes: textboxBases,
-      replacementSourceTextboxNums: [...replacementSourceTextboxNums],
       insertions: placed.gaps,
       penEdits: pen.views.filter(
         view => pairedPenEditIds.has(view.id) || insertedIds.has(view.id),
@@ -1020,7 +976,6 @@ export async function applyEditMarkerPreview(
     await modifyPageElements(plan.notePath, plan.page, modifiedTextboxes);
     await deletePageElements(plan.notePath, plan.page, [
       ...plan.recognizedMarkerNums,
-      ...plan.replacementSourceTextboxNums,
       ...emptyTargetTextboxNums,
       ...penEditNums,
     ]);
@@ -1093,89 +1048,3 @@ export async function applyEditMarkerPreview(
 }
 
 /** Whether "Remove" is offered for an ignored item: tagged pen edits and markers on a textbox. */
-export function isRemovableIgnored(item: IgnoredEditMarker): boolean {
-  return item.penEditId !== undefined || (item.removableNums?.length ?? 0) > 0;
-}
-
-/**
- * Removes ignored markers and unused pen edits from the page: the marker strokes (with a replace
- * mark's verticals or loop), and a pen edit's handwriting, mark, badge and number. Reads the page
- * fresh and deletes only strokes that are still there under a unique number; never textboxes.
- */
-export async function removeIgnoredItems(
-  preview: EditMarkerPreview,
-  items: IgnoredEditMarker[],
-): Promise<{message: string}> {
-  const base = preview.base;
-  const removable = items.filter(isRemovableIgnored);
-  if (!base || removable.length === 0) {
-    throw new Error('Nothing here can be removed.');
-  }
-  let pageElements: Element[] = [];
-  try {
-    pageElements = await readPageElements(
-      base.notePath,
-      base.page,
-      `Could not read page ${base.page} elements before removing markers.`,
-    );
-    const counts = new Map<number, number>();
-    pageElements.forEach(element =>
-      counts.set(element.numInPage, (counts.get(element.numInPage) ?? 0) + 1),
-    );
-    const byNum = new Map(
-      pageElements.map(element => [element.numInPage, element]),
-    );
-    const markerNums = removable
-      .flatMap(item => item.removableNums ?? [])
-      .filter(num => {
-        const element = byNum.get(num);
-        return (
-          !!element &&
-          counts.get(num) === 1 &&
-          isSupportedEditMarkerElement(element) &&
-          !isPenEditElement(element)
-        );
-      });
-
-    const penIds = removable
-      .map(item => item.penEditId)
-      .filter((id): id is string => !!id);
-    const penEntries =
-      penIds.length > 0 ? (await penEditBackupData(penIds)).entries : [];
-    const penNums = penEditElementNums(penIds, penEntries, pageElements);
-
-    const nums = [...new Set([...markerNums, ...penNums])];
-    logEditMarker('removeIgnored', {
-      items: removable.map(item => item.penEditId ?? item.markerNumInPage),
-      markerNums,
-      penNums,
-    });
-    // As in apply: save first, so the file the delete works on holds the latest strokes.
-    await saveCurrentNoteForConsistency('removing ignored markers');
-    await deletePageElements(base.notePath, base.page, nums);
-    try {
-      await markPenEditsDropped(penIds);
-    } catch (error) {
-      console.warn(
-        '[EditMarkerActions] pen edits not marked dropped',
-        String(error),
-      );
-    }
-    await hideLassoBox('[EditMarkerActions]');
-
-    const parts = [
-      markerNums.length > 0
-        ? plural(removable.filter(item => !item.penEditId).length, 'marker')
-        : null,
-      penIds.length > 0 ? plural(penIds.length, 'pen edit') : null,
-    ].filter(Boolean);
-    return {
-      message:
-        nums.length > 0
-          ? `Removed ${parts.join(' and ')} from the page.`
-          : 'Nothing was removed: the strokes are no longer on the page.',
-    };
-  } finally {
-    await recycleElements(pageElements);
-  }
-}

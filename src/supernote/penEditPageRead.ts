@@ -19,14 +19,14 @@ import {
 } from '../domain/penEditCaret';
 import {isTakenStrike} from '../domain/penEditMatching';
 import {isStepSizedRect} from '../domain/paragraphMarks';
-import {isPenEditDecoration} from '../domain/penEditTags';
+import {isPenEditDecoration, parsePenEditUserData} from '../domain/penEditTags';
 import type {Rect} from '../domain/textboxModel';
 import {readAccessorRange} from './markerStrokeRead';
 
 /**
  * The look-back reads of a replacement tag (technical-design-pen-edits.md §3.5): the elements
- * numbered just before the snippet, one `getElement` each, until LOOK_BACK_WINDOW elements that
- * aren't Textbox Tools' badges or numbers were seen. Only the element's own rect is used (the host's recognize
+ * numbered just before the snippet, one `getElement` each, until LOOK_BACK_WINDOW strokes that
+ * belong to no tagged text were seen (at most LOOK_BACK_MAX_READS numbers). Only the element's own rect is used (the host's recognize
  * rect, or a straight line's points): no stroke points are read. Never throws; an unreadable
  * number is skipped. `isComplete` ends the reads early, once the window holds a whole mark.
  */
@@ -91,15 +91,17 @@ export async function readLookBackWindow(
         continue;
       }
       read += 1;
-      if (isPenEditDecoration(element)) {
+      // Our badges and numbers, and strokes tagged as another text's handwriting or mark: none of
+      // them is the mark of the text being tagged, and they don't count towards the window.
+      if (isPenEditDecoration(element) || parsePenEditUserData(element.userData) !== null) {
         continue;
       }
-      counted += 1;
       if (!isSupportedEditMarkerElement(element)) {
         continue;
       }
       const stroke = windowStroke(element);
       if (stroke) {
+        counted += 1;
         window.push(stroke);
         elements.set(element.uuid, element);
         element = null;

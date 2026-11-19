@@ -81,7 +81,7 @@ describe('pen edit numbers and icon', () => {
 
   it('closes the badge outlines and keeps them in their box', () => {
     const box = {left: 0, top: 0, right: 48, bottom: 48};
-    for (const points of [circlePolygon(box), snippetBadgePolygon('insertion', box)]) {
+    for (const points of [circlePolygon(box), snippetBadgePolygon(box)]) {
       expect(points[0]).toEqual(points[points.length - 1]);
       expect(boundsOfPoints(points)).toEqual(box);
     }
@@ -155,6 +155,8 @@ const entry = (overrides: Partial<PenEditEntry> = {}): PenEditEntry => ({
   correctedText: null,
   review: 'open',
   state: 'active',
+  awaitingMark: null,
+  edges: null,
   ...overrides,
 });
 

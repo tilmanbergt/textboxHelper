@@ -1,6 +1,5 @@
 import type {Element, TextBox} from 'sn-plugin-lib';
 import {
-  horizontalOverlapRatio,
   intersectionRect,
   pointInRect,
   rectHeight,
@@ -17,20 +16,14 @@ import {
 import {
   buildIgnoredMarker,
   buildLineLogSummary,
-  buildReplacementLineLogSummary,
   buildStrokeLogSummary,
   buildTextboxLogSummary,
   buildWordLogSummary,
-  parseReplacementLines,
-  REPLACE_SOURCE_HORIZONTAL_OVERLAP_RATIO,
-  REPLACE_SOURCE_VERTICAL_OVERLAP_RATIO,
-  verticalOverlapRatio,
 } from '../domain/markerText';
 import type {
   EditMarkerCalibration,
   IgnoredEditMarker,
   MarkerDeleteCandidate,
-  ReplacementTextLine,
   StrokeStats,
   WordCandidate,
 } from '../domain/markerTypes';
@@ -42,8 +35,7 @@ import {logEditMarker} from '../utils/editMarkerLog';
 
 /**
  * Recognizing one delete marker: which textbox and line it lands on and which words it covers,
- * measured with the device's text layout; and finding the typed replacement lines below a
- * textbox. Every decision is logged for "Save Diagnostics".
+ * measured with the device's text layout. Every decision is logged for "Save Diagnostics".
  */
 
 type TextElement = Element & {
@@ -273,61 +265,4 @@ export async function analyzeDeleteMarker(
       words,
     },
   };
-}
-
-export function findReplacementLinesForTextbox(
-  targetTextbox: TextElement,
-  replaceCandidateCount: number,
-  selectedTextboxes: TextElement[],
-  targetTextboxesByOrder: TextElement[],
-): ReplacementTextLine[] {
-  const targetIndex = targetTextboxesByOrder.findIndex(
-    textbox => textbox.uuid === targetTextbox.uuid,
-  );
-  const nextTarget = targetIndex >= 0 ? targetTextboxesByOrder[targetIndex + 1] : null;
-  const upperBoundTop = nextTarget ? nextTarget.textBox.textRect.top : Number.POSITIVE_INFINITY;
-
-  const eligibleTextboxes = selectedTextboxes.filter(textbox => {
-    if (textbox.uuid === targetTextbox.uuid) {
-      return false;
-    }
-
-    const textboxRect = textbox.textBox.textRect;
-    const targetRect = targetTextbox.textBox.textRect;
-    const belowTarget =
-      textboxRect.top >= targetTextbox.textBox.textRect.bottom &&
-      textboxRect.top < upperBoundTop &&
-      horizontalOverlapRatio(textboxRect, targetRect) >=
-        REPLACE_SOURCE_HORIZONTAL_OVERLAP_RATIO;
-    const rightOfTarget =
-      textboxRect.left >= targetRect.right &&
-      textboxRect.top < upperBoundTop &&
-      verticalOverlapRatio(textboxRect, targetRect) >=
-        REPLACE_SOURCE_VERTICAL_OVERLAP_RATIO;
-    const bottomRightOfTarget =
-      textboxRect.top >= targetRect.bottom &&
-      textboxRect.top < upperBoundTop &&
-      textboxRect.left >= targetRect.right;
-
-    return belowTarget || rightOfTarget || bottomRightOfTarget;
-  });
-
-  const replacementLines = eligibleTextboxes
-    .flatMap(parseReplacementLines)
-    .sort((left, right) => {
-      if (Math.abs(left.sortTop - right.sortTop) > 1) {
-        return left.sortTop - right.sortTop;
-      }
-
-      return left.sortLeft - right.sortLeft;
-    });
-
-  logEditMarker('replaceSourceResolution', {
-    targetTextbox: buildTextboxLogSummary(targetTextbox),
-    replaceCandidateCount,
-    eligibleTextboxes: eligibleTextboxes.map(buildTextboxLogSummary),
-    replacementLines: replacementLines.map(buildReplacementLineLogSummary),
-  });
-
-  return replacementLines;
 }

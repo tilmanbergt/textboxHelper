@@ -14,5 +14,5 @@ export const BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS = 6270;
 export const BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS = 6280;
 export const BUTTON_ID_IMPORT_TEXT_FILE = 6290;
 export const BUTTON_ID_EXPORT_DOCX = 6300;
-export const BUTTON_ID_TOOLBAR_TAG_REPLACEMENT = 6310;
-export const BUTTON_ID_TOOLBAR_TAG_INSERTION = 6320;
+/** "Insertion or Replacement": tags lassoed handwriting; the mark written before it says which. */
+export const BUTTON_ID_TOOLBAR_PEN_EDIT = 6310;

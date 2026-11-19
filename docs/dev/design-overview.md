@@ -81,16 +81,27 @@ and the checks that the result fits the page without colliding with other elemen
 ### Edit markers (`actions/editMarkers.ts`, `actions/editMarkerAnalysis.ts`)
 
 Handwritten edit markers on textboxes: a delete marker is a line through words; a replace marker
-is a delete line plus two crossing modifier lines, with the replacement taken from typed text.
-Freehand strokes and the Supernote straight-line tool are both recognized.
+is a delete line plus a small loop (or two crossing lines); a < or > or a step mark on its own
+breaks a paragraph. Freehand strokes and the Supernote straight-line tool are both recognized.
 `supernote/markerStrokeRead.ts` reads the strokes; `actions/editMarkerAnalysis.ts` maps one
 marker to words through the hit-testing core and the native measurement;
-`actions/editMarkers.ts` pairs replace marks, resolves replacement sources, builds the preview
-and applies the plan - for the lasso selection or the whole page. The pure parts are in
-`domain/markerStrokes.ts`, `domain/markerText.ts` and `domain/markerTypes.ts`. The preview
-shows each affected textbox as diff segments (`domain/markerDiff.ts`): the original text with the
-removed ranges struck through and replacements in bold, built from the same ranges the apply step
-uses, so the review shows exactly what will change.
+`actions/editMarkers.ts` pairs replace marks with their tagged text, places insertions, builds the
+preview and applies the plan - for the lasso selection or the whole page. The pure parts are in
+`domain/markerStrokes.ts`, `domain/markerText.ts`, `domain/markerTypes.ts`,
+`domain/markerAssembly.ts` and `domain/edgeShift.ts`. The analysis runs once; the preview is
+assembled from it, the tagged texts and the user's edge nudges (one character at a time), so the
+review updates without measuring again. It shows each affected textbox as diff segments
+(`domain/markerDiff.ts`): the original text with the removed ranges struck through and new text in
+bold, built from the same ranges the apply step uses, so the review shows exactly what will change.
+`actions/editMarkerDrop.ts` takes changes off the page without applying them.
+
+**Pen edits** (`actions/penEditTag.ts`, `actions/penEditReview.ts`, `storage/penEditStore.ts`,
+`domain/penEdit*.ts`): the "Insertion or Replacement" lasso button tags handwritten new text. The
+mark written just before it (a replace mark or a caret) decides what it is; badges with a number
+on the page show which text belongs to which mark. A snippet without a mark can be given one later
+(Select mark). The tagged strokes and a picture are stored in the plugin folder (`pen-edits/`);
+the review recognizes them while it is open and the user can edit the text in place.
+
 Every stage of a marker preview is also recorded in memory (`utils/editMarkerLog.ts`); "Save
 Diagnostics" (review → Details) writes that trace, with the stroke's raw sample points next to
 the points recognition used, as JSON to the EXPORT folder - only when the user taps it.

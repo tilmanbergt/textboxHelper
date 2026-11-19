@@ -23,17 +23,19 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 ### Edit Markers
 
 - Recognize handwritten delete markers
-- Recognize replace markers as a delete line plus two crossing modifier lines
+- Recognize replace markers as a delete line plus a small loop (or two crossing lines), with the new text tagged right after
 - Support both freehand strokes and Supernote straight-line geometry
 - Review all changes before applying them: removed words struck through, replacements in bold, one textbox at a time
 - Calibrate the text measurement and save diagnostics of a marker preview to the EXPORT folder (Details), for bug reports
 
 ### Replacement and Insertion
 
-- Tag handwritten new text with the lasso buttons "Replacement" or "Insertion" instead of converting it to text first
-- A replacement is written right after its replace mark; a small number at both shows which belong together
+- Tag handwritten new text with one lasso button, "Insertion or Replacement", instead of converting it to text first
+- The mark drawn just before the text decides: a replace mark makes it a replacement, a caret an insertion; a small number at both shows which belong together
+- No mark found? Select mark: draw or lasso the mark and tap the button again; the text never needs to be written again
 - An insertion is written right after a caret (a V on the line or a ∧ under it): between words, inside a word, or between paragraphs; paragraphs below move down to make room
-- The review recognizes the tagged text while you read, shows a picture of the handwriting, and lets you correct it with the Supernote's handwriting pad or skip it for later
+- The review recognizes the tagged text while you read, shows a picture of the handwriting, and lets you fix the text in place with the Supernote keyboard's handwriting input, or skip it for later
+- Fine-tune any change by one character (a comma, a space, a letter), and drop a change or an unused mark, keeping or erasing your handwriting
 - The handwriting and its picture are kept in the plugin folder (`pen-edits/`)
 
 ### Apply All Edit Markers
