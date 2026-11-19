@@ -167,10 +167,18 @@ function gapAround(
       };
 }
 
+/** How far past a paragraph's last word (pixels) a tip beside that line must be. */
+export const PAST_LAST_WORD_PX = 20;
+
 /**
- * Where a < or > points: only its tip's height counts. Between two lines of a paragraph it splits
- * there (at the start of the lower line); at a paragraph's first or last boundary, or between
- * paragraphs, it is the gap there. A tip in the middle of a line is unclear.
+ * Where a < or > points; only its tip's height counts, except beside a paragraph's last line.
+ * In order:
+ * 1. Above a paragraph's first line or below its last line: before or after the paragraph.
+ * 2. Near a boundary between two lines (within 30 % of a line height): a break there.
+ * 3. On an empty line: a break there.
+ * 4. Beside a line that ends a paragraph, at least 20 px past its last word: after that line.
+ * 5. Anything else is unclear.
+ * A break at a paragraph's first or last boundary is the gap before or after it.
  */
 export function locateSideways(
   tip: Point,
@@ -205,10 +213,28 @@ export function locateSideways(
   }
   const {textbox} = near;
   const lines = [...textbox.lines].sort((a, b) => a.top - b.top);
-  const boundaries = [
-    ...lines.map(line => line.top),
-    lines[lines.length - 1].bottom,
-  ];
+  const lastLine = lines[lines.length - 1];
+  const breakAt = (index: number): CaretTarget =>
+    index <= 0
+      ? gapAround(textbox, column, 'above')
+      : index >= lines.length
+      ? gapAround(textbox, column, 'below')
+      : {
+          kind: 'split',
+          uuid: textbox.uuid,
+          numInPage: textbox.numInPage,
+          offset: lines[index].start,
+        };
+
+  // 1. Outside the paragraph's lines.
+  if (tip.y < lines[0].top) {
+    return breakAt(0);
+  }
+  if (tip.y > lastLine.bottom) {
+    return breakAt(lines.length);
+  }
+  // 2. Near a boundary between two lines.
+  const boundaries = [...lines.map(line => line.top), lastLine.bottom];
   let best = 0;
   boundaries.forEach((y, index) => {
     if (Math.abs(tip.y - y) < Math.abs(tip.y - boundaries[best])) {
@@ -216,23 +242,32 @@ export function locateSideways(
     }
   });
   if (
-    Math.abs(tip.y - boundaries[best]) >
+    Math.abs(tip.y - boundaries[best]) <=
     lineHeightOf(textbox) * BOUNDARY_ZONE
   ) {
-    return {kind: 'unclear', reason: UNCLEAR_SIDEWAYS};
+    return breakAt(best);
   }
-  if (best === 0) {
-    return gapAround(textbox, column, 'above');
+  const lineIndex = lines.findIndex(
+    line => tip.y >= line.top && tip.y <= line.bottom,
+  );
+  const line = lines[lineIndex];
+  if (line) {
+    const words = textbox.words.filter(word => word.lineIndex === line.index);
+    const lineText = textbox.text.slice(line.start, line.end);
+    // 3. An empty line: the break goes there; empty lines are trimmed off the new paragraphs.
+    if (words.length === 0 || lineText.trim() === '') {
+      return breakAt(lineIndex);
+    }
+    // 4. Beside a line that ends a paragraph, in the free space after its last word.
+    const endsParagraph =
+      lineIndex === lines.length - 1 || /\n\s*$/.test(lineText);
+    const lastRight = Math.max(...words.map(word => word.right));
+    if (endsParagraph && tip.x >= lastRight + PAST_LAST_WORD_PX) {
+      return breakAt(lineIndex + 1);
+    }
   }
-  if (best === lines.length) {
-    return gapAround(textbox, column, 'below');
-  }
-  return {
-    kind: 'split',
-    uuid: textbox.uuid,
-    numInPage: textbox.numInPage,
-    offset: lines[best].start,
-  };
+  // 5. Unclear.
+  return {kind: 'unclear', reason: UNCLEAR_SIDEWAYS};
 }
 
 /**

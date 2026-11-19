@@ -109,10 +109,61 @@ describe('sideways carets mark a boundary between lines', () => {
     ).toEqual({kind: 'gap', above: 't5', below: 't3'});
   });
 
-  it('is unclear in the middle of a line (device case: the big < after "permission.")', () => {
+  it('is the gap after a paragraph for a tip just below its last line (device case: small < after "permission.")', () => {
+    expect(
+      locateCaret({x: 1147, y: 672}, 'left', [textbox5, textbox3]),
+    ).toEqual({kind: 'gap', above: 't5', below: 't3'});
+  });
+
+  it('is after the paragraph beside its last line, past the last word (device case: big < after "permission.")', () => {
     expect(
       locateCaret({x: 1093, y: 636}, 'left', [textbox5, textbox3]),
+    ).toEqual({kind: 'gap', above: 't5', below: 't3'});
+  });
+
+  it('is unclear in the middle of a line that runs on', () => {
+    expect(
+      locateCaret({x: 1150, y: 538}, 'left', [textbox5, textbox3]),
     ).toMatchObject({kind: 'unclear'});
+    // Touching the last word is not "past" it.
+    expect(
+      locateCaret({x: 280, y: 634}, 'left', [textbox5, textbox3]),
+    ).toMatchObject({kind: 'unclear'});
+  });
+
+  it('breaks at an empty line and after a line ending in a line break', () => {
+    const text = 'First part ends here.\n\nSecond part.\nThird line.';
+    const paragraphs: CaretTextbox = {
+      uuid: 'pp',
+      numInPage: 9,
+      rect: {left: 100, top: 100, right: 900, bottom: 292},
+      text,
+      lines: [
+        {index: 0, start: 0, end: 22, top: 100, bottom: 148},
+        {index: 1, start: 22, end: 23, top: 148, bottom: 196},
+        {index: 2, start: 23, end: 36, top: 196, bottom: 244},
+        {index: 3, start: 36, end: text.length, top: 244, bottom: 292},
+      ],
+      words: [
+        {start: 0, end: 5, lineIndex: 0, left: 115, right: 200},
+        {start: 17, end: 21, lineIndex: 0, left: 420, right: 480},
+        {start: 23, end: 29, lineIndex: 2, left: 115, right: 220},
+        {start: 30, end: 35, lineIndex: 2, left: 229, right: 320},
+        {start: 36, end: 41, lineIndex: 3, left: 115, right: 200},
+      ],
+    };
+    expect(locateCaret({x: 700, y: 172}, 'left', [paragraphs])).toEqual({
+      kind: 'split',
+      uuid: 'pp',
+      numInPage: 9,
+      offset: 22,
+    });
+    expect(locateCaret({x: 700, y: 220}, 'left', [paragraphs])).toEqual({
+      kind: 'split',
+      uuid: 'pp',
+      numInPage: 9,
+      offset: 36,
+    });
   });
 
   it('accepts sideways carets up to 250 px, V and ∧ only up to 130 px', () => {

@@ -21,9 +21,15 @@ separate textboxes; one textbox with line breaks may become a setting later.
 ### < and > (sideways carets)
 
 - One stroke or two strokes meeting at the tip (as for V/∧). Up to 250 px (V/∧ stay at 130).
-- Only the tip's height counts. The boundaries of a textbox are the tops of its lines and the
-  bottom of its last line. The tip must be within 30 % of a line height of a boundary; a tip in the
-  middle part of a line is unclear and goes to Ignored ("point the tip between two lines").
+- Where the tip points, in order (decided 2026-11-19 with two device pictures):
+  1. Above a paragraph's first line or below its last line: before or after the paragraph (no
+     distance limit; a small < just under "permission." means after the paragraph).
+  2. Within 30 % of a line height of a boundary between lines: a break there.
+  3. On an empty line: a break there.
+  4. Beside a line that ends a paragraph (its last line, or a line ending in a line break), at least
+     20 px past its last word: after that line (the big < far right of "permission.").
+  5. Anything else is unclear and goes to Ignored ("point it between two lines"); no further guessing.
+- New paragraphs lose empty lines and spaces at their start and end; empty parts are dropped.
 - Inner boundary (between line k−1 and line k): split exactly at the start of line k.
 - First or last boundary of a textbox (and between textboxes): no split.
   - As caret: the text becomes a new paragraph before or after that textbox (as the gap insertion
