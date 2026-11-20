@@ -134,6 +134,9 @@ export default function ReviewTab({
     const page = Number(key);
     if (key !== 'all' && unread.includes(page)) {
       review.readPages([page]);
+    } else if (key !== 'all') {
+      // A page read before is checked again in the background; its list updates if it changed.
+      review.recheckPage(page);
     }
   };
 
@@ -160,7 +163,7 @@ export default function ReviewTab({
               ...Array.from({length: pageCount}, (_, page) => ({
                 key: `${page}` as PageFilter,
                 label: chipLabel(page, pages[page]),
-                faint: unread.includes(page),
+                faint: unread.includes(page) || review.checking.includes(page),
                 accessibilityLabel: `Page ${page + 1}`,
               })),
             ]}

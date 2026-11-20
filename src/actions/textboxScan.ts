@@ -13,6 +13,7 @@ import type {ExportClassificationConfig} from '../domain/exportConfig';
 import {isPenEditNumberElement} from '../domain/textboxEditPlan';
 import type {PageElementData, Rect} from '../domain/textboxModel';
 import {assertApiSuccess, tryApiResult} from '../supernote/sdkResult';
+import {timed} from '../utils/perf';
 
 /**
  * The textbox scan behind "Export DOCX" and the Manuscript Outline: which pages to read, and every
@@ -121,7 +122,7 @@ export async function scanTextBoxes(params: ScanParams): Promise<ScanSummary> {
     let titles: RawTitle[] = [];
     if (useTitleRectHeadings) {
       const titleResult = tryApiResult<RawTitle[]>(
-        await PluginFileAPI.getTitles(params.notePath, [page]),
+        await timed('scan.titles', () => PluginFileAPI.getTitles(params.notePath, [page]), {page}),
       );
 
       if (titleResult === null) {
@@ -136,7 +137,7 @@ export async function scanTextBoxes(params: ScanParams): Promise<ScanSummary> {
 
     const elements =
       assertApiSuccess<RawElement[]>(
-      await PluginFileAPI.getElements(page, params.notePath),
+      await timed('scan.getElements', () => PluginFileAPI.getElements(page, params.notePath), {page}),
       `Could not read elements from page ${page + 1}.`,
       ) ?? [];
 

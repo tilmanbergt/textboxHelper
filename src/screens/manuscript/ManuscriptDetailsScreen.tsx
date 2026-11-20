@@ -1,9 +1,9 @@
 /**
- * Details of the Manuscript card: the calibration of the text measurement and Save Diagnostics.
- * Shares the review's state, so a calibration change re-reads the page the review shows when
- * going back.
+ * Details of the Manuscript card: the calibration of the text measurement, Save Diagnostics and
+ * the timings (Speed). Shares the review's state, so a calibration change re-reads the page the
+ * review shows when going back.
  */
-import React from 'react';
+import React, {useEffect} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import PillButton from '../../ui/PillButton';
 import ScreenFrame from '../../ui/ScreenFrame';
@@ -20,8 +20,10 @@ const OFFSET_STEP = 5;
 const WIDTH_STEP = 1;
 
 export default function ManuscriptDetailsScreen({review, onBack, onClose}: Props): React.JSX.Element {
-  const {calibration, loading, busy} = review;
+  const {calibration, loading, busy, timings} = review;
   const disabled = loading || busy;
+  const {update: updateTimings} = timings;
+  useEffect(updateTimings, [updateTimings]);
   return (
     <ScreenFrame
       title="Details"
@@ -65,6 +67,18 @@ export default function ManuscriptDetailsScreen({review, onBack, onClose}: Props
           </Text>
           <View style={styles.buttons}>
             <PillButton size="small" label="Save Diagnostics" disabled={disabled} onPress={review.saveDiagnostics} />
+          </View>
+        </Section>
+
+        <Section title="Speed">
+          <Text style={styles.hint}>
+            Records how long reading pages, recognizing and applying take. Save timings writes them as a file in
+            the EXPORT folder, to hand over when something feels slow. No text is in it.
+          </Text>
+          <Text style={styles.hint}>{timings.summary}</Text>
+          <View style={styles.buttons}>
+            <PillButton size="small" label="Save timings" disabled={busy} onPress={timings.save} />
+            <PillButton size="small" label="Clear" disabled={busy} onPress={timings.clear} />
           </View>
         </Section>
       </View>

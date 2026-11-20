@@ -8,6 +8,7 @@
  */
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {setBlockStatus} from '../../actions/blockStatus';
+import {cachedOutline, forgetOutline, rememberOutline} from '../../actions/manuscriptCache';
 import {
   applyOutlinePlan,
   checkRebuild,
@@ -35,6 +36,7 @@ import {readBlockStatuses} from '../../storage/blockStatusStore';
 import {getSettings} from '../../storage/settingsFile';
 import type {NoteInfo} from '../../supernote/noteElements';
 import type {FrameStatus} from '../../ui/ScreenFrame';
+import {perfEvent, timed} from '../../utils/perf';
 
 export interface Outline {
   blocks: OutlineBlock[] | null;
@@ -78,25 +80,51 @@ export function useOutline(
   const [checking, setChecking] = useState(false);
   const [applied, setApplied] = useState(false);
 
+  const pageCount = note?.pageCount ?? 0;
+  const planRef = useRef(plan);
+  planRef.current = plan;
+
+  // A scan cached for this note shows at once and is checked by scanning again; the new scan
+  // replaces it unless something is planned (technical-design-manuscript-cache.md §5).
+  const scanning = useRef(false);
   const load = useCallback(() => {
-    if (!notePath || loading) {
+    if (!notePath || loading || scanning.current) {
       return;
     }
-    setLoading(true);
-    setFrameStatus({text: 'Reading the outline…'});
+    scanning.current = true;
+    const cached = cachedOutline(notePath, pageCount);
+    if (cached) {
+      setItems(cached);
+      perfEvent('outline.cacheShown', {blocks: cached.length});
+    }
+    setLoading(!cached);
+    setFrameStatus({text: cached ? 'Checking the outline…' : 'Reading the outline…'});
     Promise.all([
-      scanTextBoxes({
-        notePath,
-        currentPage: null,
-        scope: 'wholeNote',
-        config: getSettings().export.rules,
-      }),
+      timed(
+        'outline.scan',
+        () =>
+          scanTextBoxes({
+            notePath,
+            currentPage: null,
+            scope: 'wholeNote',
+            config: getSettings().export.rules,
+          }),
+        {pages: pageCount, cached: !!cached},
+      ),
       readBlockStatuses(),
     ])
       .then(([scan, stored]) => {
-        setItems(scan.items);
+        rememberOutline(notePath, pageCount, scan.items);
         setStatuses(stored);
-        setFrameStatus(null);
+        const changed = !cached || JSON.stringify(cached) !== JSON.stringify(scan.items);
+        if (changed && cached && planRef.current.length > 0) {
+          setFrameStatus({
+            text: 'The note changed since the outline was read. Apply checks every page first.',
+          });
+          return;
+        }
+        setItems(scan.items);
+        setFrameStatus(changed && cached ? {text: 'The note changed: the outline is updated.'} : null);
       })
       .catch(error => {
         console.warn('[Outline] not read', String(error));
@@ -105,8 +133,11 @@ export function useOutline(
           text: userMessage(error, 'Could not read the outline.'),
         });
       })
-      .finally(() => setLoading(false));
-  }, [loading, notePath]);
+      .finally(() => {
+        scanning.current = false;
+        setLoading(false);
+      });
+  }, [loading, notePath, pageCount]);
 
   const blocks = useMemo(
     () => (items ? buildOutline(items, statuses, pages) : null),
@@ -118,7 +149,6 @@ export function useOutline(
   );
 
   // The Review's knowledge of the pages: edits waiting on each, and pages not read yet.
-  const pageCount = note?.pageCount ?? 0;
   const reviewPages = useMemo(() => {
     const pendingByPage = new Map<number, number>();
     for (const [page, review] of Object.entries(pages)) {
@@ -153,7 +183,7 @@ export function useOutline(
     }
     let alive = true;
     setChecking(true);
-    checkRebuild(notePath, pageCount, current, currentPlan, currentPages)
+    timed('outline.check', () => checkRebuild(notePath, pageCount, current, currentPlan, currentPages))
       .then(result => alive && setCheck(result))
       .catch(error => {
         console.warn('[Outline] check failed', String(error));
@@ -190,10 +220,16 @@ export function useOutline(
       return;
     }
     setBusy(true);
-    applyOutlinePlan(notePath, pageCount, blocks, planned, check, message =>
-      setFrameStatus({text: message}),
+    timed(
+      'outline.apply',
+      () =>
+        applyOutlinePlan(notePath, pageCount, blocks, planned, check, message =>
+          setFrameStatus({text: message}),
+        ),
+      {changes: plan.length},
     )
       .then(result => {
+        forgetOutline(notePath);
         setApplied(true);
         setPlan([]);
         setItems(null);
@@ -209,7 +245,7 @@ export function useOutline(
         });
       })
       .finally(() => setBusy(false));
-  }, [blocks, busy, check, notePath, pageCount, planned]);
+  }, [blocks, busy, check, notePath, pageCount, plan.length, planned]);
 
   const setStatus = useCallback(
     (block: OutlineBlock, next: BlockStatus) => {
@@ -221,6 +257,8 @@ export function useOutline(
         .then(({id, statuses: stored}) => {
           setStatuses(stored);
           if (!block.tagId) {
+            // The cached scan doesn't know the new tag: the next opening scans again.
+            forgetOutline(notePath);
             // The textbox carries its new tag now: the block's key becomes its id.
             setItems(current =>
               (current ?? []).map(item =>

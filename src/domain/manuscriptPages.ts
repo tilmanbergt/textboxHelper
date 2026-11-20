@@ -107,3 +107,27 @@ export function readPages(pages: Record<number, PageReview>): number[] {
     .filter(page => pages[page].state === 'read')
     .sort((a, b) => a - b);
 }
+
+/**
+ * The order pages read before are checked in when the card opens (technical-design-manuscript-cache.md
+ * §4): the current page first, then the others nearest first (the earlier page on a tie).
+ */
+export function checkOrder(current: number, pages: number[]): number[] {
+  return [...new Set(pages)].sort((a, b) => {
+    const distance = Math.abs(a - current) - Math.abs(b - current);
+    return distance !== 0 ? distance : a - b;
+  });
+}
+
+/** True when two reads of a page show different lists (changes or marks needing attention). */
+export function listChanged(before: PageReview | undefined, after: EditMarkerPreview): boolean {
+  if (before?.state !== 'read') {
+    return true;
+  }
+  const keys = (preview: EditMarkerPreview) =>
+    JSON.stringify([
+      preview.hunks.map(hunk => [hunk.label, hunk.before, hunk.after, hunk.segments]),
+      preview.ignoredMarkers.map(marker => marker.reason),
+    ]);
+  return keys(before.preview) !== keys(after);
+}

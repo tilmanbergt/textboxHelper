@@ -16,7 +16,8 @@ import {
   saveEditMarkerDiagnostics,
   setEditMarkerCalibration,
 } from '../../actions/markerCalibration';
-import {analyzeMarkerPage} from '../../actions/markerPageAnalysis';
+import {forgetPages, openCachedNote} from '../../actions/manuscriptCache';
+import {currentPenStates, readMarkerPage, type MarkerPageRead} from '../../actions/markerPageAnalysis';
 import {
   resetRecognition,
   setPenEditCorrection,
@@ -25,7 +26,9 @@ import {
 } from '../../actions/penEditReview';
 import {nudgeShift, type EdgeShift} from '../../domain/edgeShift';
 import {
+  checkOrder,
   combinePages,
+  listChanged,
   readPages as readPageList,
   type ManuscriptView,
   type PageReview,
@@ -36,7 +39,10 @@ import {fileNameOf, userMessage} from '../../domain/userMessage';
 import {updateSettings} from '../../storage/settingsFile';
 import {readNoteInfo, type NoteInfo} from '../../supernote/noteElements';
 import type {FrameStatus} from '../../ui/ScreenFrame';
+import {perfEvent, startTiming, timed} from '../../utils/perf';
+import {usePageChecks} from './usePageChecks';
 import {usePenRecognitionQueue} from './usePenRecognitionQueue';
+import {useTimingsExport} from './useTimingsExport';
 
 export interface ManuscriptReview {
   note: NoteInfo | null;
@@ -45,6 +51,10 @@ export interface ManuscriptReview {
   view: ManuscriptView;
   /** Reads these pages (one after the other); a page read before is read again. */
   readPages: (pages: number[]) => void;
+  /** Checks a page read before again, in the background (a tapped chip). */
+  recheckPage: (page: number) => void;
+  /** Pages being checked in the background (shown from what was read before until then). */
+  checking: number[];
   /**
    * Drops changes from a page without applying them (pen edits keep or lose their handwriting),
    * then reads that page again.
@@ -61,8 +71,12 @@ export interface ManuscriptReview {
   calibration: EditMarkerCalibration;
   changeCalibration: (next: Partial<EditMarkerCalibration>) => void;
   resetCalibration: () => void;
+  /** Reads every page read so far again, from scratch (Details: Refresh preview). */
   refresh: () => void;
+  /** Checks every page read so far again; unchanged pages keep their analysis (after an Outline apply). */
+  recheck: () => void;
   saveDiagnostics: () => void;
+  timings: ReturnType<typeof useTimingsExport>;
   apply: () => void;
   /** Recognize the selected pen edit first. */
   setSelectedPenEdit: (id: string | null) => void;
@@ -93,7 +107,7 @@ export function useManuscriptReview(): ManuscriptReview {
   const noteRef = useRef<NoteInfo | null>(null);
 
   /** Reads pages one after the other; each shows in the list as soon as it is read. */
-  const read = useCallback(async (pages: number[], keepStatus = false) => {
+  const read = useCallback(async (pages: number[], keepStatus = false, reuse = false) => {
     const info = noteRef.current;
     if (!info || pages.length === 0) {
       return;
@@ -106,7 +120,7 @@ export function useManuscriptReview(): ManuscriptReview {
         setStatus({text: pages.length > 1 ? `Reading page ${page + 1}…` : 'Reading the page…'});
       }
       try {
-        const preview = await analyzeMarkerPage(info.notePath, page);
+        const {preview} = await readMarkerPage(info.notePath, page, {reuse});
         setAnalyses(current => ({...current, [page]: {state: 'read', preview}}));
         setPenStates(current => ({...current, ...(preview.base?.penStates ?? {})}));
       } catch (error) {
@@ -123,20 +137,82 @@ export function useManuscriptReview(): ManuscriptReview {
     setLoading(false);
   }, []);
 
+  const onCheckedRef = useRef<(page: number, result: MarkerPageRead) => void>(() => undefined);
+  const checks = usePageChecks(
+    useCallback(() => noteRef.current?.notePath ?? null, []),
+    useCallback((page: number, result: MarkerPageRead) => onCheckedRef.current(page, result), []),
+    useCallback(() => undefined, []),
+  );
+  const {enqueue, pause, resume, stop} = checks;
+
+  // Opening: pages read before show at once from the cache; the current page is read (or checked,
+  // when cached) first, then the cached pages are checked nearest first
+  // (technical-design-manuscript-cache.md §4).
   useEffect(() => {
     clearMarkerDiagnostics();
-    readNoteInfo()
-      .then(info => {
+    const endFirstList = startTiming('card.firstList');
+    timed('card.noteInfo', readNoteInfo)
+      .then(async info => {
         noteRef.current = info;
+        const cached = openCachedNote(info.notePath, info.pageCount);
+        perfEvent('card.open', {
+          page: info.currentPage,
+          pageCount: info.pageCount,
+          cachedPages: cached.size,
+          currentCached: cached.has(info.currentPage),
+        });
+        if (cached.size > 0) {
+          const states = await currentPenStates(
+            [...cached.values()].flatMap(preview => Object.keys(preview.base?.penStates ?? {})),
+          );
+          setAnalyses(Object.fromEntries([...cached].map(([page, preview]) => [page, {state: 'read', preview}])));
+          setPenStates(states);
+        }
         setNote(info);
-        return read([info.currentPage]);
+        if (!cached.has(info.currentPage)) {
+          await read([info.currentPage]);
+        } else {
+          setLoading(false);
+          setStatus(null);
+        }
+        endFirstList({fromCache: cached.has(info.currentPage)});
+        enqueue(checkOrder(info.currentPage, [...cached.keys()]));
       })
       .catch(error => {
         console.warn('[Manuscript] note not read', String(error));
         setLoading(false);
         setStatus({kind: 'error', text: userMessage(error, 'Could not read this note.')});
       });
-  }, [read]);
+  }, [enqueue, read]);
+
+  // A page checked in the background: unchanged → only its pen edits' states are new; changed →
+  // its new analysis replaces the shown one, and the status line says so when the list differs.
+  onCheckedRef.current = (page: number, result: MarkerPageRead) => {
+    const {preview, reused} = result;
+    const before = analyses[page];
+    setPenStates(current => {
+      const next = {...current};
+      Object.entries(preview.base?.penStates ?? {}).forEach(([id, state]) => {
+        if (next[id]?.status !== 'recognizing') {
+          next[id] = state;
+        }
+      });
+      return next;
+    });
+    if (reused) {
+      return;
+    }
+    if (before?.state === 'read') {
+      const oldIds = new Set(before.preview.operations.map(operation => operation.id));
+      setPlainShifts(current =>
+        Object.fromEntries(Object.entries(current).filter(([id]) => !oldIds.has(id))),
+      );
+    }
+    setAnalyses(current => ({...current, [page]: {state: 'read', preview}}));
+    if (listChanged(before, preview)) {
+      setStatus({text: `Page ${page + 1} changed since it was read: its list is updated.`});
+    }
+  };
 
   // Re-assembled whenever a pen edit's text arrives or changes; no new measuring.
   const pages = useMemo(() => {
@@ -258,34 +334,51 @@ export function useManuscriptReview(): ManuscriptReview {
       if (loading || busy) {
         return;
       }
-      startSelectMark(id, 'review')
+      stop()
+        .then(() => startSelectMark(id, 'review'))
         .then(onDone)
         .catch(error => {
           console.warn('[Manuscript] select mark not stored', String(error));
           setStatus({kind: 'error', text: 'Could not remember the text for Select mark. Please try again.'});
         });
     },
-    [busy, loading],
+    [busy, loading, stop],
   );
 
-  /** Reads every page read so far again (after a calibration change, an apply or a drop). */
+  /**
+   * Reads every page read so far again (after a calibration change, an apply or a drop); with
+   * `reuse`, pages whose fingerprint is unchanged keep their analysis.
+   */
   const rereadAll = useCallback(
-    (keepStatus = false) => {
+    async (keepStatus = false, reuse = true) => {
+      await stop();
       clearMarkerDiagnostics();
       setPlainShifts({});
       setSwapOptions({});
-      return read(readPageList(analyses), keepStatus);
+      return read(readPageList(analyses), keepStatus, reuse);
     },
-    [analyses, read],
+    [analyses, read, stop],
   );
 
   const readPages = useCallback(
     (list: number[]) => {
       if (!loading && !busy) {
-        void read(list);
+        // A foreground read waits for the page being checked; the checks go on after it.
+        void pause()
+          .then(() => read(list))
+          .finally(resume);
       }
     },
-    [busy, loading, read],
+    [busy, loading, pause, read, resume],
+  );
+
+  const recheckPage = useCallback(
+    (page: number) => {
+      if (!busy && analyses[page]?.state === 'read') {
+        enqueue([page], true);
+      }
+    },
+    [analyses, busy, enqueue],
   );
 
   // Calibration is kept between sessions so it can be tuned over time (settings file).
@@ -315,9 +408,17 @@ export function useManuscriptReview(): ManuscriptReview {
 
   const refresh = useCallback(() => {
     if (!loading && !busy) {
-      void rereadAll();
+      void rereadAll(false, false);
     }
   }, [busy, loading, rereadAll]);
+
+  const recheck = useCallback(() => {
+    if (!loading && !busy) {
+      void rereadAll(false, true);
+    }
+  }, [busy, loading, rereadAll]);
+
+  const timings = useTimingsExport(setStatus);
 
   const saveDiagnostics = useCallback(() => {
     if (loading || busy) {
@@ -336,11 +437,24 @@ export function useManuscriptReview(): ManuscriptReview {
       return;
     }
     setBusy(true);
-    applyMarkerPlans(view.plans, {
-      onProgress: update => setStatus({text: update.message}),
-      leftForLater: view.pendingCount,
-    })
+    const appliedPages = view.plans.map(plan => plan.page);
+    const notePath = noteRef.current?.notePath;
+    stop()
+      .then(() =>
+        timed(
+          'review.apply',
+          () =>
+            applyMarkerPlans(view.plans, {
+              onProgress: update => setStatus({text: update.message}),
+              leftForLater: view.pendingCount,
+            }),
+          {pages: appliedPages.length, edits: view.readyCount},
+        ),
+      )
       .then(async result => {
+        if (notePath) {
+          forgetPages(notePath, appliedPages);
+        }
         setApplied(true);
         setStatus({text: `${result.message} Backup: ${fileNameOf(result.backupPath)}`});
         await rereadAll(true);
@@ -350,7 +464,7 @@ export function useManuscriptReview(): ManuscriptReview {
         setStatus({kind: 'error', text: userMessage(error, 'The changes could not be applied.')});
       })
       .finally(() => setBusy(false));
-  }, [busy, loading, rereadAll, view]);
+  }, [busy, loading, rereadAll, stop, view]);
 
   const drop = useCallback(
     (page: number, items: DropItem[], eraseHandwriting: boolean) => {
@@ -360,9 +474,16 @@ export function useManuscriptReview(): ManuscriptReview {
       }
       setBusy(true);
       setStatus({text: eraseHandwriting ? 'Writing the backup…' : 'Dropping…'});
-      dropItems(review.preview, items, eraseHandwriting)
+      stop()
+        .then(() =>
+          timed('review.drop', () => dropItems(review.preview, items, eraseHandwriting), {
+            page,
+            items: items.length,
+          }),
+        )
         .then(async result => {
           setStatus({text: result.message});
+          forgetPages(review.preview.base?.notePath ?? noteRef.current?.notePath ?? '', [page]);
           await read([page], true);
         })
         .catch(error => {
@@ -371,7 +492,7 @@ export function useManuscriptReview(): ManuscriptReview {
         })
         .finally(() => setBusy(false));
     },
-    [busy, loading, pages, read],
+    [busy, loading, pages, read, stop],
   );
 
   const setFixCase = useCallback(
@@ -388,6 +509,8 @@ export function useManuscriptReview(): ManuscriptReview {
     pages,
     view,
     readPages,
+    recheckPage,
+    checking: checks.checking,
     drop,
     nudge,
     setFixCase,
@@ -399,7 +522,9 @@ export function useManuscriptReview(): ManuscriptReview {
     changeCalibration,
     resetCalibration,
     refresh,
+    recheck,
     saveDiagnostics,
+    timings,
     apply,
     setSelectedPenEdit: setSelectedPenId,
     recognizeAgain,

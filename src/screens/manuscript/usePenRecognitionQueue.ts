@@ -8,6 +8,7 @@ import {useEffect, useRef} from 'react';
 import {recognizePenEdit} from '../../actions/penEditReview';
 import type {PenTextState} from '../../domain/markerTypes';
 import {cancelRecognition} from '../../supernote/strokeRecognition';
+import {timed} from '../../utils/perf';
 
 export function usePenRecognitionQueue(
   order: string[],
@@ -46,7 +47,7 @@ export function usePenRecognitionQueue(
     const before = states[next];
     running.current = next;
     onStateRef.current(next, {...before, status: 'recognizing'});
-    recognizePenEdit(next, page)
+    timed('pen.recognize', () => recognizePenEdit(next, page), {page})
       .then(result => {
         running.current = null;
         if (mounted.current) {

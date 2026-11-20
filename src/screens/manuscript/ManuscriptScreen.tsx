@@ -62,9 +62,10 @@ export default function ManuscriptScreen({
       clearOutline();
     }
   }, [clearOutline, review.applied]);
-  // And the Outline's changes move textboxes: the Review reads its pages again.
-  const refreshReview = useRef(review.refresh);
-  refreshReview.current = review.refresh;
+  // And the Outline's changes move textboxes: the Review checks its pages again (pages the
+  // Outline didn't touch keep their analysis).
+  const refreshReview = useRef(review.recheck);
+  refreshReview.current = review.recheck;
   useEffect(() => {
     if (outline.applied) {
       refreshReview.current();

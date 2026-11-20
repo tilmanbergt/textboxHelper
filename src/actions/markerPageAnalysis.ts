@@ -25,11 +25,13 @@ import type {
   MarkerStrokeAnalysis,
   MarkerTextboxBase,
   OperationDraft,
+  PenTextState,
 } from '../domain/markerTypes';
 import {coveredSpan} from '../domain/edgeShift';
 import type {PenEditEntry} from '../domain/penEditModel';
 import {parsePenEditUserData} from '../domain/penEditTags';
 import {isNormalTextElement, sortTextElements} from '../domain/textboxEditPlan';
+import {pageFingerprint, snippetIdsOnPage, type FingerprintElement} from '../domain/pageFingerprint';
 import {DEFAULT_FONT_SIZE} from '../domain/textboxModel';
 import {loadMarkerStrokeStats} from '../supernote/markerStrokeRead';
 import {
@@ -39,11 +41,14 @@ import {
   type PageContext,
 } from '../supernote/noteElements';
 import {resetFontWarnings} from '../supernote/textboxMetrics';
+import {readPenEditIndex} from '../storage/penEditStore';
 import {logEditMarker} from '../utils/editMarkerLog';
+import {perfEvent, startTiming, timed} from '../utils/perf';
 import {analyzeDeleteMarker, type MarkerCandidate} from './editMarkerAnalysis';
 import {getEditMarkerCalibration, noteDiagnosticsPage} from './markerCalibration';
 import {createTextboxMeasurer} from './markerMeasure';
-import {loadPenEditContext, placeCaretInsertions, type PenEditContext} from './penEditReview';
+import {cachedPage, rememberPage} from './manuscriptCache';
+import {loadPenEditContext, placeCaretInsertions, stateOf, type PenEditContext} from './penEditReview';
 import {findShapeMarks} from './shapeMarks';
 
 /**
@@ -70,22 +75,107 @@ const REPLACE_WITHOUT_TEXT =
  * ignored, and the preview's font warning says so (technical-design-swap-space-marks.md §2).
  */
 export async function analyzeMarkerPage(notePath: string, page: number): Promise<EditMarkerPreview> {
+  return (await readMarkerPage(notePath, page, {reuse: false})).preview;
+}
+
+export type MarkerPageRead = {
+  preview: EditMarkerPreview;
+  /** True when the page was as cached and its analysis was reused (only the pen states are new). */
+  reused: boolean;
+};
+
+/**
+ * Reads a page of the Manuscript card (technical-design-manuscript-cache.md §2, §4): with `reuse`,
+ * the page's elements are read and compared with the cached fingerprint first, and the cached
+ * analysis is kept when nothing changed. Every read is remembered in the cache.
+ */
+export async function readMarkerPage(
+  notePath: string,
+  page: number,
+  options: {reuse: boolean},
+): Promise<MarkerPageRead> {
   resetFontWarnings();
   let pageElements: Element[] = [];
   const calibration = getEditMarkerCalibration();
+  const endRead = startTiming('page.read', {page, reuse: options.reuse});
   try {
-    const context = await readPageContext(notePath, page);
+    const context = await timed('page.getElements', () => readPageContext(notePath, page), {page});
     pageElements = context.pageElements;
+    const cached = options.reuse ? cachedPage(notePath, page) : null;
+    if (cached) {
+      const check = await timed('page.fingerprint', () => fingerprintOf(pageElements, calibration), {page});
+      if (check.fingerprint === cached.fingerprint) {
+        perfEvent('page.cacheHit', {page});
+        endRead({reused: true, elements: pageElements.length});
+        return {preview: withPenStates(cached.preview, check.penEntries), reused: true};
+      }
+      perfEvent('page.cacheMiss', {page});
+    }
     noteDiagnosticsPage(page);
     logEditMarker('previewStart', {page, calibration});
     const preview = await analyzePage(context, calibration);
     if (preview.fontWarning) {
       logEditMarker('fontWarning', {fontWarning: preview.fontWarning});
     }
-    return preview;
+    // After the analysis: it may have moved pen edits to this page in the index.
+    const {fingerprint} = await timed('page.fingerprint', () => fingerprintOf(pageElements, calibration), {page});
+    rememberPage(notePath, page, fingerprint, preview);
+    endRead({
+      reused: false,
+      elements: pageElements.length,
+      textboxes: pageElements.filter(isNormalTextElement).length,
+      changes: preview.operations.length,
+      penEdits: preview.penEdits.length,
+    });
+    return {preview, reused: false};
   } finally {
-    await recycleElements(pageElements);
+    await timed('page.recycle', () => recycleElements(pageElements), {page});
   }
+}
+
+/** The page's fingerprint, with the pen edits tagged on it (their states refresh a cached preview). */
+async function fingerprintOf(
+  elements: Element[],
+  calibration: ReturnType<typeof getEditMarkerCalibration>,
+): Promise<{fingerprint: string; penEntries: PenEditEntry[]}> {
+  const ids = snippetIdsOnPage(elements, userData => {
+    const tag = parsePenEditUserData(userData);
+    return tag?.role === 'snippet' ? tag.id : null;
+  });
+  const penEntries =
+    ids.size === 0
+      ? []
+      : (await readPenEditIndex()).index.entries.filter(entry => entry.state === 'active' && ids.has(entry.id));
+  return {
+    fingerprint: pageFingerprint(elements as unknown as FingerprintElement[], penEntries, calibration),
+    penEntries,
+  };
+}
+
+/** The pen edits' states as the index has them now (cached previews shown when the card opens). */
+export async function currentPenStates(ids: string[]): Promise<Record<string, PenTextState>> {
+  if (ids.length === 0) {
+    return {};
+  }
+  const wanted = new Set(ids);
+  const {index} = await readPenEditIndex();
+  return Object.fromEntries(
+    index.entries.filter(entry => wanted.has(entry.id)).map(entry => [entry.id, stateOf(entry)]),
+  );
+}
+
+/** A cached preview with the pen edits' text, corrections and edges as the index has them now. */
+function withPenStates(preview: EditMarkerPreview, entries: PenEditEntry[]): EditMarkerPreview {
+  if (!preview.base || entries.length === 0) {
+    return preview;
+  }
+  const penStates = {...preview.base.penStates};
+  entries.forEach(entry => {
+    if (penStates[entry.id]) {
+      penStates[entry.id] = stateOf(entry);
+    }
+  });
+  return {...preview, base: {...preview.base, penStates}};
 }
 
 async function analyzePage(
@@ -93,35 +183,47 @@ async function analyzePage(
   calibration: ReturnType<typeof getEditMarkerCalibration>,
 ): Promise<EditMarkerPreview> {
   const {notePath, page, pageElements} = context;
-  const pen = await loadPenEditContext(notePath, page, pageElements);
+  const pen = await timed('page.penContext', () => loadPenEditContext(notePath, page, pageElements), {page});
 
   // Tagged snippets' handwriting and Textbox Tools' own badges and numbers are never markers.
   const markers = pageElements.filter(
     element => isSupportedEditMarkerElement(element) && !pen.isExcluded(element),
   );
   const pageTextboxes = pageElements.filter(isNormalTextElement);
-  await logContext(context, markers, pageTextboxes);
+  await timed('page.diagnosticsContext', () => logContext(context, markers, pageTextboxes), {page});
   if (markers.length === 0 && pen.entries.length === 0) {
     return createEmptyPreview();
   }
 
   const measurer = createTextboxMeasurer(calibration);
-  const strokeAnalyses = await readStrokeAnalyses(markers);
+  const strokeAnalyses = await timed('page.strokes', () => readStrokeAnalyses(markers), {
+    page,
+    markers: markers.length,
+  });
   const strokeStatsByUuid = new Map(
     strokeAnalyses.map(analysis => [analysis.marker.uuid, analysis.strokeStats]),
   );
 
   // Marks read from their shape first: paragraph breaks, spaces, swaps
   // (technical-design-swap-space-marks.md §6.1). Their strokes never reach the delete analysis.
-  const shapeMarks = await findShapeMarks(markers, strokeStatsByUuid, pageTextboxes, measurer);
+  const shapeMarks = await timed(
+    'page.shapeMarks',
+    () => findShapeMarks(markers, strokeStatsByUuid, pageTextboxes, measurer),
+    {page},
+  );
   const isFree = (element: Element) => !shapeMarks.consumedNums.has(element.numInPage);
   // Strokes used by a shape mark are never a replace mark's verticals or loop.
   const modifierAnalyses = strokeAnalyses.filter(analysis => isFree(analysis.marker));
   const lineMarkers = markers.filter(isFree);
-  const candidateResults = await Promise.all(
-    lineMarkers.map(marker =>
-      analyzeDeleteMarker(marker, pageTextboxes, measurer, strokeStatsByUuid.get(marker.uuid)),
-    ),
+  const candidateResults = await timed(
+    'page.lineMarks',
+    () =>
+      Promise.all(
+        lineMarkers.map(marker =>
+          analyzeDeleteMarker(marker, pageTextboxes, measurer, strokeStatsByUuid.get(marker.uuid)),
+        ),
+      ),
+    {page, lineMarks: lineMarkers.length},
   );
 
   // Tagged replacements whose strike is on a textbox with an unreadable font.
@@ -150,7 +252,11 @@ async function analyzePage(
   ignoredMarkers.push(...unpairedPenEdits(pen.entries, pairedPenEditIds, lockedPenIds));
 
   // Insertions: into the paragraph their caret points to, or as a new paragraph between two.
-  const placed = await placeCaretInsertions(pen.entries, pen.carets, pageTextboxes, measurer);
+  const placed = await timed(
+    'page.carets',
+    () => placeCaretInsertions(pen.entries, pen.carets, pageTextboxes, measurer),
+    {page},
+  );
   placed.ignored.forEach(({entry, reason}) => {
     ignoredMarkers.push(penEditIgnored(entry, `Insertion ${entry.number}`, reason));
   });
@@ -175,7 +281,9 @@ async function analyzePage(
     penEdits: pen.views.filter(view => pairedPenEditIds.has(view.id) || insertedIds.has(view.id)),
     penStates: pen.states,
   };
+  const endAssemble = startTiming('page.assemble', {page});
   const preview = assembleMarkerPreview(base, pen.states);
+  endAssemble();
 
   logEditMarker('previewResult', {
     markerCount: markers.length,
