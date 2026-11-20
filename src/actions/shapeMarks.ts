@@ -17,7 +17,7 @@ import {
   spaceSnippet,
   type ShortStroke,
 } from '../domain/spaceMark';
-import {analyzeSwapPiece, pairSwapPieces, type PlacedPiece} from '../domain/swapMark';
+import {pairSwapPieces, placeSwapPiece, type PlacedPiece} from '../domain/swapMark';
 import {swapSummary} from '../domain/swapText';
 import type {Rect} from '../domain/textboxModel';
 import {pointInRect} from '../domain/geometry';
@@ -259,6 +259,7 @@ export async function findShapeMarks(
   const placed: PlacedPiece[] = [];
   const boxes = new Map<string, CaretTextbox>();
   for (const stroke of free()) {
+    const near: CaretTextbox[] = [];
     for (const textbox of pageTextboxes) {
       const rect = textbox.textBox.textRect;
       if (
@@ -270,16 +271,18 @@ export async function findShapeMarks(
         continue;
       }
       const measured = await measurer.measure(textbox);
-      if (!measured || !measured.fontReadable) {
-        // Marks on an unreadable font are reported by the delete analysis.
-        continue;
+      // Marks on an unreadable font are reported by the delete analysis.
+      if (measured && measured.fontReadable) {
+        near.push(measured.box);
       }
-      const piece = analyzeSwapPiece(stroke.points, measured.box, stroke.rect);
-      if (piece) {
-        boxes.set(textbox.uuid, measured.box);
-        placed.push({uuid: stroke.marker.uuid, boxUuid: textbox.uuid, piece, rect: stroke.rect});
-        break;
+    }
+    const item = placeSwapPiece(stroke.marker.uuid, stroke.points, stroke.rect, near);
+    if (item) {
+      const box = near.find(candidate => candidate.uuid === item.boxUuid);
+      if (box) {
+        boxes.set(box.uuid, box);
       }
+      placed.push(item);
     }
   }
   const {swaps, refused} = pairSwapPieces(placed, [...boxes.values()]);
@@ -329,15 +332,18 @@ export async function findShapeMarks(
   }
   for (const entry of refused) {
     const parts = strokesOf(entry.strokeUuids).filter(stroke => !consumed.has(stroke.marker.uuid));
-    // Only what lies on a textbox is reported (and offered for Drop); the rest may be handwriting.
+    if (parts.length === 0) {
+      continue;
+    }
+    // A swap piece never becomes a delete. Only what lies on a textbox is reported (and offered
+    // for Drop); the rest may be handwriting and is left alone.
+    use(parts);
     const onText = parts.every(part =>
       pageTextboxes.some(textbox => intersects(part.rect, textbox.textBox.textRect)),
     );
-    if (parts.length === 0 || !onText) {
-      continue;
+    if (onText) {
+      ignored.push(ignoredFor(parts.map(part => part.marker), entry.reason));
     }
-    use(parts);
-    ignored.push(ignoredFor(parts.map(part => part.marker), entry.reason));
   }
   for (const step of bareSteps) {
     if (!consumed.has(step.marker.uuid)) {

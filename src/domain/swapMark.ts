@@ -19,22 +19,54 @@ type Run = {side: Side; from: number; to: number; minX: number; maxX: number; mi
 
 /** A stroke read against one line: what kind of swap piece it is there. */
 export type PieceShape =
-  | {kind: 'whole'; aAbove: boolean; left: number; split: number; right: number}
+  | {
+      kind: 'whole';
+      aAbove: boolean;
+      left: number;
+      split: number;
+      right: number;
+      /** Which outer uprights were drawn: one alone can also be the middle piece joined to a corner. */
+      leftUpright: boolean;
+      rightUpright: boolean;
+    }
   | {kind: 'split'; aAbove: boolean; split: number; leftRun: [number, number]; rightRun: [number, number]}
   | {kind: 'start'; aAbove: boolean; x: number}
   | {kind: 'end'; aAbove: boolean; x: number}
   | {kind: 'line'};
 
-/** Points this far (in line heights) from a line's middle are above or below it. */
-const SIDE_BAND = 0.2;
-/** A run must reach this far (in line heights) from the middle: over or under the text. */
-const RUN_REACH = 0.3;
+/**
+ * Where a line's letters are (page y): the baseline, the top of the small letters, and their
+ * middle. Marks are judged against the letters, not the line's whole band with its spacing: a
+ * line drawn over the text is above the small letters, one under it below the baseline, and a
+ * corner's upright crosses the small letters' middle.
+ */
+export type LetterZone = {base: number; xTop: number; mid: number; xHeight: number};
 
-function runsOf(points: Point[], cy: number, h: number): Run[] {
+/** Small letters' height per line band when neither the baseline nor the x-height is known. */
+const FALLBACK_X_HEIGHT_PER_BAND = 0.4;
+const FALLBACK_BASE_PER_BAND = 0.79;
+
+export function letterZone(
+  line: {top: number; bottom: number; baseline?: number},
+  xHeight?: number,
+): LetterZone {
+  const band = Math.max(1, line.bottom - line.top);
+  const base = line.baseline ?? line.top + band * FALLBACK_BASE_PER_BAND;
+  const height = xHeight && xHeight > 0 ? xHeight : band * FALLBACK_X_HEIGHT_PER_BAND;
+  return {base, xTop: base - height, mid: base - height / 2, xHeight: height};
+}
+
+/** How far (in small-letter heights) into the letters a point still counts as above or below. */
+const SIDE_INSIDE = 0.15;
+/** How far beyond the letters a run must reach (in small-letter heights) below the baseline. */
+const BELOW_REACH = 0.2;
+
+function runsOf(points: Point[], zone: LetterZone): Run[] {
+  const inside = SIDE_INSIDE * zone.xHeight;
   const runs: Run[] = [];
   points.forEach((point, index) => {
     const side: Side | null =
-      point.y < cy - SIDE_BAND * h ? 'above' : point.y > cy + SIDE_BAND * h ? 'below' : null;
+      point.y < zone.xTop + inside ? 'above' : point.y > zone.base - inside ? 'below' : null;
     if (!side) {
       return;
     }
@@ -54,14 +86,30 @@ function runsOf(points: Point[], cy: number, h: number): Run[] {
 
 const widthOf = (run: Run) => run.maxX - run.minX;
 
-/** A stretch of the stroke that goes up or down more than it goes sideways. */
-function verticalBetween(
+/**
+ * An upright at one end of the stroke: from the corner where the line turns (`corner`, the run's
+ * point nearest that end) to the stroke's end. It must go up or down more than sideways and be
+ * at least as tall as the small letters.
+ */
+function uprightAt(
   points: Point[],
-  from: number,
-  to: number,
-  h: number,
+  run: Run,
+  atStart: boolean,
+  zone: LetterZone,
 ): {x: number; minY: number; maxY: number} | null {
-  if (to <= from) {
+  // The corner: walk back into the run while the stroke stays near the upright's x.
+  const endIndex = atStart ? 0 : points.length - 1;
+  const step = atStart ? 1 : -1;
+  const runEdge = atStart ? run.from : run.to;
+  const edgeX = points[runEdge].x;
+  let corner = runEdge;
+  const runLimit = atStart ? run.to : run.from;
+  while (corner !== runLimit && Math.abs(points[corner + step].x - edgeX) <= 8) {
+    corner += step;
+  }
+  const from = Math.min(endIndex, corner);
+  const to = Math.max(endIndex, corner);
+  if (to - from < 1) {
     return null;
   }
   const part = points.slice(from, to + 1);
@@ -69,13 +117,13 @@ function verticalBetween(
   const ys = part.map(point => point.y);
   const dy = Math.max(...ys) - Math.min(...ys);
   const dx = Math.max(...xs) - Math.min(...xs);
-  if (dy < h * 0.45 || dx > Math.max(20, dy * 0.6)) {
+  if (dy < zone.xHeight * 0.8 || dx > Math.max(20, dy * 0.6)) {
     return null;
   }
   return {x: xs.reduce((sum, x) => sum + x, 0) / xs.length, minY: Math.min(...ys), maxY: Math.max(...ys)};
 }
 
-/** Where the stroke crosses the line's middle between two runs (by the stroke's order). */
+/** Where the stroke crosses the letters' middle between two runs (by the stroke's order). */
 function crossingX(points: Point[], from: number, to: number, cy: number): number {
   for (let index = from; index < to; index += 1) {
     const a = points[index];
@@ -88,14 +136,14 @@ function crossingX(points: Point[], from: number, to: number, cy: number): numbe
   return part.reduce((sum, point) => sum + point.x, 0) / Math.max(1, part.length);
 }
 
-/** What swap piece a stroke is against a line with middle `cy` and height `h`, or null. */
-export function pieceOnLine(points: Point[], cy: number, h: number): PieceShape | null {
+/** What swap piece a stroke is against a line's letters, or null. */
+export function pieceOnLine(points: Point[], zone: LetterZone): PieceShape | null {
   if (points.length < 3) {
     return null;
   }
-  let runs = runsOf(points, cy, h);
-  // Short runs at the ends are the outer verticals' tips beyond the band.
-  const tiny = (run: Run) => widthOf(run) < Math.max(12, h * 0.3);
+  let runs = runsOf(points, zone);
+  // Short runs at the ends are the outer uprights' tips beyond the letters.
+  const tiny = (run: Run) => widthOf(run) < Math.max(12, zone.xHeight * 0.6);
   while (runs.length > 0 && tiny(runs[0])) {
     runs = runs.slice(1);
   }
@@ -106,14 +154,18 @@ export function pieceOnLine(points: Point[], cy: number, h: number): PieceShape 
     return null;
   }
   const reaches = (run: Run) =>
-    run.side === 'above' ? run.minY <= cy - RUN_REACH * h : run.maxY >= cy + RUN_REACH * h;
+    run.side === 'above' ? run.minY <= zone.xTop : run.maxY >= zone.base + BELOW_REACH * zone.xHeight;
   if (!runs.every(reaches)) {
     return null;
   }
   const first = runs[0];
   const last = runs[runs.length - 1];
-  const startVertical = verticalBetween(points, 0, first.from, h);
-  const endVertical = verticalBetween(points, last.to, points.length - 1, h);
+  const crossesLetters = (upright: {minY: number; maxY: number} | null) =>
+    !!upright &&
+    upright.minY <= zone.mid + 0.25 * zone.xHeight &&
+    upright.maxY >= zone.mid - 0.25 * zone.xHeight;
+  const startUpright = uprightAt(points, first, true, zone);
+  const endUpright = uprightAt(points, last, false, zone);
 
   if (runs.length === 2) {
     const [left, right] = [...runs].sort((a, b) => a.minX + a.maxX - (b.minX + b.maxX));
@@ -121,29 +173,39 @@ export function pieceOnLine(points: Point[], cy: number, h: number): PieceShape 
     if (overlap > Math.min(widthOf(left), widthOf(right)) * 0.2) {
       return null;
     }
-    const split = crossingX(points, first.to, last.from, cy);
+    const split = crossingX(points, first.to, last.from, zone.mid);
     if (split < left.maxX - 20 || split > right.minX + 20) {
       return null;
     }
     const aAbove = left.side === 'above';
-    if (startVertical || endVertical) {
+    const uprights = [startUpright, endUpright].filter(crossesLetters) as Array<{x: number}>;
+    if (uprights.length > 0) {
       const xs = points.map(point => point.x);
-      return {kind: 'whole', aAbove, left: Math.min(...xs), split, right: Math.max(...xs)};
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const middle = (minX + maxX) / 2;
+      return {
+        kind: 'whole',
+        aAbove,
+        left: minX,
+        split,
+        right: maxX,
+        leftUpright: uprights.some(upright => upright.x < middle),
+        rightUpright: uprights.some(upright => upright.x >= middle),
+      };
     }
     return {kind: 'split', aAbove, split, leftRun: [left.minX, left.maxX], rightRun: [right.minX, right.maxX]};
   }
 
   const run = first;
-  if (startVertical && endVertical) {
+  const atStart = crossesLetters(startUpright) ? startUpright : null;
+  const atEnd = crossesLetters(endUpright) ? endUpright : null;
+  if (atStart && atEnd) {
     return null;
   }
-  const vertical = startVertical ?? endVertical;
+  const vertical = atStart ?? atEnd;
   if (!vertical) {
-    return {kind: 'line'};
-  }
-  // A corner's vertical crosses the middle of its own line.
-  if (vertical.minY > cy + 0.15 * h || vertical.maxY < cy - 0.15 * h) {
-    return null;
+    return startUpright || endUpright ? null : {kind: 'line'};
   }
   const atLeft = vertical.x <= run.minX + widthOf(run) * 0.25;
   const atRight = vertical.x >= run.maxX - widthOf(run) * 0.25;
@@ -158,9 +220,6 @@ export function pieceOnLine(points: Point[], cy: number, h: number): PieceShape 
 /** A stroke read as a swap piece on a line of a textbox. */
 export type SwapPiece = PieceShape & {lineIndex: number};
 
-function lineMiddle(line: {top: number; bottom: number}) {
-  return {cy: (line.top + line.bottom) / 2, h: Math.max(1, line.bottom - line.top)};
-}
 
 /**
  * What swap piece a stroke is in a textbox: the line it fits. A piece that fits two lines is
@@ -169,11 +228,11 @@ function lineMiddle(line: {top: number; bottom: number}) {
 export function analyzeSwapPiece(points: Point[], box: CaretTextbox, rect: Rect): SwapPiece | null {
   const found: SwapPiece[] = [];
   for (const line of box.lines) {
-    const {cy, h} = lineMiddle(line);
+    const h = Math.max(1, line.bottom - line.top);
     if (rect.bottom < line.top - h || rect.top > line.bottom + h) {
       continue;
     }
-    const shape = pieceOnLine(points, cy, h);
+    const shape = pieceOnLine(points, letterZone(line, box.xHeight));
     if (shape) {
       found.push({...shape, lineIndex: line.index});
     }
@@ -186,6 +245,33 @@ export function analyzeSwapPiece(points: Point[], box: CaretTextbox, rect: Rect)
     return found[0];
   }
   return null;
+}
+
+/**
+ * Which textbox a stroke is a swap piece in: every textbox near it is tried (a corner drawn just
+ * above a paragraph is also near the one before); a real piece wins over a plain line, and among
+ * equals the textbox the stroke's middle is in, else the nearest.
+ */
+export function placeSwapPiece(
+  uuid: string,
+  points: Point[],
+  rect: Rect,
+  boxes: CaretTextbox[],
+): PlacedPiece | null {
+  const middle = {x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2};
+  const distance = (box: CaretTextbox) =>
+    Math.max(0, box.rect.top - middle.y, middle.y - box.rect.bottom) +
+    Math.max(0, box.rect.left - middle.x, middle.x - box.rect.right);
+  const found = boxes
+    .map(box => ({box, piece: analyzeSwapPiece(points, box, rect)}))
+    .filter((entry): entry is {box: CaretTextbox; piece: SwapPiece} => !!entry.piece)
+    .sort(
+      (a, b) =>
+        Number(a.piece.kind === 'line') - Number(b.piece.kind === 'line') ||
+        distance(a.box) - distance(b.box),
+    );
+  const best = found[0];
+  return best ? {uuid, boxUuid: best.box.uuid, piece: best.piece, rect} : null;
 }
 
 /** A place in the text from a vertical's x on a line; `inside` when it cuts a word. */
@@ -254,6 +340,8 @@ export type SwapFound = {
   zones: SwapZones;
   aAbove: boolean;
   lineIndex: number;
+  /** The line of its last piece: the same as `lineIndex` for a one-line mark. */
+  lastLineIndex: number;
   /** Set when an edge cuts a word: worth a look. */
   uncertain?: string;
 };
@@ -346,23 +434,71 @@ export function pairSwapPieces(
       zones: result.zones,
       aAbove: (first.piece as {aAbove: boolean}).aAbove,
       lineIndex: first.piece.lineIndex,
+      lastLineIndex: strokes[strokes.length - 1].piece.lineIndex,
       ...(places.some(place => place?.inside) ? {uncertain: CUT_INSIDE_WORD} : {}),
     });
   };
 
-  for (const item of placed) {
-    const box = boxOf.get(item.boxUuid);
-    if (item.piece.kind !== 'whole' || !box) {
-      continue;
-    }
-    accept([item], box, [placeOf(item, item.piece.left), placeOf(item, item.piece.split), placeOf(item, item.piece.right)], item);
-  }
-
   const offsetOf = (item: PlacedPiece): number | null => {
     const piece = item.piece;
-    const x = piece.kind === 'split' ? piece.split : piece.kind === 'start' || piece.kind === 'end' ? piece.x : null;
+    const x =
+      piece.kind === 'split' || piece.kind === 'whole'
+        ? piece.split
+        : piece.kind === 'start' || piece.kind === 'end'
+        ? piece.x
+        : null;
     return x === null ? null : placeOf(item, x)?.offset ?? null;
   };
+  /** The nearest free corner of a kind before (start) or after (end) a place, same orientation. */
+  const cornerFor = (item: PlacedPiece, kind: 'start' | 'end', at: number, aAbove: boolean) =>
+    placed
+      .filter(
+        other =>
+          other.boxUuid === item.boxUuid &&
+          !used.has(other.uuid) &&
+          other.piece.kind === kind &&
+          (other.piece as {aAbove: boolean}).aAbove === aAbove,
+      )
+      .map(other => ({other, at: offsetOf(other)}))
+      .filter((entry): entry is {other: PlacedPiece; at: number} => entry.at !== null)
+      .filter(entry => (kind === 'start' ? entry.at <= at : entry.at >= at))
+      .sort((a, b) => (kind === 'start' ? b.at - a.at : a.at - b.at))[0];
+
+  // A one-line mark; with only one outer upright it may be the middle piece joined to the end
+  // corner (‾|___|) or to the start corner (|‾‾‾|_): then the other corner comes before or after.
+  for (const item of placed) {
+    const box = boxOf.get(item.boxUuid);
+    const piece = item.piece;
+    if (piece.kind !== 'whole' || !box) {
+      continue;
+    }
+    const split = offsetOf(item);
+    if (split !== null && piece.rightUpright && !piece.leftUpright) {
+      const start = cornerFor(item, 'start', split, piece.aAbove);
+      if (start) {
+        accept(
+          [start.other, item],
+          box,
+          [placeOf(start.other, (start.other.piece as {x: number}).x), placeOf(item, piece.split), placeOf(item, piece.right)],
+          start.other,
+        );
+        continue;
+      }
+    }
+    if (split !== null && piece.leftUpright && !piece.rightUpright) {
+      const end = cornerFor(item, 'end', split, piece.aAbove);
+      if (end) {
+        accept(
+          [item, end.other],
+          box,
+          [placeOf(item, piece.left), placeOf(item, piece.split), placeOf(end.other, (end.other.piece as {x: number}).x)],
+          item,
+        );
+        continue;
+      }
+    }
+    accept([item], box, [placeOf(item, piece.left), placeOf(item, piece.split), placeOf(item, piece.right)], item);
+  }
   const splits = placed
     .filter(item => item.piece.kind === 'split')
     .map(item => ({item, offset: offsetOf(item)}))
@@ -437,7 +573,7 @@ export function pairSwapPieces(
       continue;
     }
     const swap = swaps.find(found => {
-      if (found.boxUuid !== item.boxUuid || found.strokeUuids.length < 3) {
+      if (found.boxUuid !== item.boxUuid || found.lineIndex === found.lastLineIndex) {
         return false;
       }
       const box = boxOf.get(found.boxUuid);

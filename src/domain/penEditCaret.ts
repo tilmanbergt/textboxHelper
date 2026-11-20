@@ -202,7 +202,11 @@ export type CaretTextbox = {
     end: number;
     top: number;
     bottom: number;
+    /** Page y of the line's baseline, when measured. */
+    baseline?: number;
   }>;
+  /** Height of small letters in pixels, when measured. */
+  xHeight?: number;
   words: Array<{
     start: number;
     end: number;

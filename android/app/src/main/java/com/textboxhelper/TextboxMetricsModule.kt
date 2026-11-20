@@ -144,6 +144,8 @@ class TextboxMetricsModule(
         putInt("layoutHeight", layout.height)
         putInt("lineCount", layout.lineCount)
         putDouble("maxLineWidth", maxLineWidth)
+        putDouble("xHeight", measurement.xHeight)
+        putDouble("capHeight", measurement.capHeight)
         putArray("lines", lines)
         putArray("words", words)
       }
@@ -161,7 +163,9 @@ class TextboxMetricsModule(
     val includePad: Boolean,
     val fontPath: String?,
     val typefaceStatus: String,
-    val layout: StaticLayout
+    val layout: StaticLayout,
+    val xHeight: Double,
+    val capHeight: Double
   )
 
   /** The typeface used for a measurement, and why: "default: no fontPath", "loaded", "missing", ... */
@@ -225,6 +229,14 @@ class TextboxMetricsModule(
       )
     }
 
+    // How tall small and capital letters are drawn above the baseline: marks drawn over, through
+    // or under the text are judged against the letters, not the whole line with its spacing.
+    val bounds = android.graphics.Rect()
+    paint.getTextBounds("x", 0, 1, bounds)
+    val xHeight = (-bounds.top).toDouble()
+    paint.getTextBounds("H", 0, 1, bounds)
+    val capHeight = (-bounds.top).toDouble()
+
     return MeasurementContext(
       text = text,
       width = width,
@@ -232,7 +244,9 @@ class TextboxMetricsModule(
       includePad = includePad,
       fontPath = fontPath,
       typefaceStatus = typefaceResult.status,
-      layout = layout
+      layout = layout,
+      xHeight = xHeight,
+      capHeight = capHeight
     )
   }
 

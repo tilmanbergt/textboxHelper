@@ -266,3 +266,25 @@ Tests (Jest, pure): `fontLockedReason`; `charOffsetAtX` (edges, fallback, mismat
   (`SwapOptions`, kept while the review is open) when it applies, or that the swap waits. Swaps and
   spaces can be dropped like other plain marks. Refused swap pieces and bare steps are listed (and
   droppable) only when they lie on a textbox.
+- **Device round 1** (page with three swaps, diagnostics of 2026-11-20): only the one-line swap
+  worked. Four causes, fixed in the fourth commit:
+  1. A start corner drawn just above a paragraph was tried against the textbox before it first,
+     read there as a plain underline, and the search stopped. `placeSwapPiece` now tries every
+     near textbox; a real piece wins over a plain line, then the textbox the stroke's middle is in.
+  2. The zones were taken from the line's band (48 px, with the line spacing), so a corner's
+     upright reaching the top of the small letters didn't count. The text was in the right place
+     (baselines and word edges match the screenshot within 1–3 px); the band was the wrong ruler.
+     Shapes are now judged against the letters (`letterZone`): above the small letters, below the
+     baseline, uprights crossing the small letters' middle. The native measurement gives the
+     x-height and cap height (`getTextBounds`), with 0.53 / 0.73 of the font size as fallback.
+     An upright is measured from the corner where the line turns (`uprightAt`).
+  3. The middle piece and the end corner drawn in one stroke (‾|___|) was read as a one-line
+     swap. A one-line mark with only one outer upright now joins the matching corner before
+     (right upright) or after (left upright) it, when there is one.
+  4. Unused swap pieces fell through to the delete analysis and became deletes. Refused pieces
+     are now always kept out of it (reported only when they lie on a textbox). Plain lines are
+     still left to it: a strike through one line is also a "line" below the line above.
+  The page is a test fixture (`__tests__/fixtures/swap-page-2026-11-20.json`: textbox 3 as
+  measured, textbox 4 laid out from the screenshot, strokes traced along their recorded bounds).
+  The < / > test for "tip between two lines" still uses the band; unchanged, as it was
+  device-tested good.

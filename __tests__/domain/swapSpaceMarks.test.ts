@@ -8,9 +8,11 @@ import {
 } from '../../src/domain/spaceMark';
 import {
   analyzeSwapPiece,
+  letterZone,
   offsetAtX,
   pairSwapPieces,
   pieceOnLine,
+  placeSwapPiece,
   swapZones,
   type PlacedPiece,
 } from '../../src/domain/swapMark';
@@ -48,9 +50,8 @@ function rectOf(points: Point[]) {
   };
 }
 
-// A line from y 80 to 120 (middle 100, height 40).
-const CY = 100;
-const H = 40;
+// A line from y 80 to 120, without measured letters: baseline 111.6, small letters 16 px high.
+const ZONE = letterZone({top: 80, bottom: 120});
 
 /**
  * One textbox: "the big red car and more words here" on line 0 (y 80–120) and line 1
@@ -161,7 +162,7 @@ describe('insert-space mark: ∧ or V with a cross', () => {
 describe('swap shapes on one line', () => {
   it('reads the square mark with outer verticals as a whole swap (A above)', () => {
     // | up at 136, over "big", down at 172, under "red", up at 208.
-    const shape = pieceOnLine(path([136, 112], [136, 72], [172, 72], [172, 128], [208, 128], [208, 90]), CY, H);
+    const shape = pieceOnLine(path([136, 112], [136, 72], [172, 72], [172, 128], [208, 128], [208, 90]), ZONE);
     expect(shape?.kind).toBe('whole');
     if (shape?.kind === 'whole') {
       expect(shape.aAbove).toBe(true);
@@ -170,33 +171,33 @@ describe('swap shapes on one line', () => {
   });
 
   it('reads the mirrored mark, a rounded S and one drawn right to left', () => {
-    expect(pieceOnLine(path([136, 88], [136, 128], [172, 128], [172, 72], [208, 72], [208, 110]), CY, H)).toMatchObject({
+    expect(pieceOnLine(path([136, 88], [136, 128], [172, 128], [172, 72], [208, 72], [208, 110]), ZONE)).toMatchObject({
       kind: 'whole',
       aAbove: false,
     });
     const rounded = path([138, 110], [140, 76], [150, 70], [166, 74], [172, 100], [178, 126], [194, 130], [204, 124], [206, 92]);
-    expect(pieceOnLine(rounded, CY, H)?.kind).toBe('whole');
+    expect(pieceOnLine(rounded, ZONE)?.kind).toBe('whole');
     const reversed = path([208, 90], [208, 128], [172, 128], [172, 72], [136, 72], [136, 112]);
-    expect(pieceOnLine(reversed, CY, H)).toMatchObject({kind: 'whole', aAbove: true});
+    expect(pieceOnLine(reversed, ZONE)).toMatchObject({kind: 'whole', aAbove: true});
   });
 
   it('a mark with only one outer vertical is still whole; without any it is a middle piece', () => {
-    expect(pieceOnLine(path([136, 112], [136, 72], [172, 72], [172, 128], [208, 128]), CY, H)?.kind).toBe('whole');
-    expect(pieceOnLine(path([100, 72], [172, 72], [172, 128], [250, 128]), CY, H)?.kind).toBe('split');
+    expect(pieceOnLine(path([136, 112], [136, 72], [172, 72], [172, 128], [208, 128]), ZONE)?.kind).toBe('whole');
+    expect(pieceOnLine(path([100, 72], [172, 72], [172, 128], [250, 128]), ZONE)?.kind).toBe('split');
   });
 
   it('is not a strike, a wave or handwriting', () => {
-    expect(pieceOnLine(path([100, 100], [250, 102]), CY, H)).toBeNull();
+    expect(pieceOnLine(path([100, 100], [250, 102]), ZONE)).toBeNull();
     expect(
-      pieceOnLine(path([100, 72], [130, 72], [130, 128], [160, 128], [160, 72], [190, 72], [190, 128], [220, 128]), CY, H),
+      pieceOnLine(path([100, 72], [130, 72], [130, 128], [160, 128], [160, 72], [190, 72], [190, 128], [220, 128]), ZONE),
     ).toBeNull();
   });
 
   it('reads corners: start (vertical then a line) and end (a line then a vertical)', () => {
-    expect(pieceOnLine(path([136, 112], [136, 72], [240, 72]), CY, H)).toMatchObject({kind: 'start', aAbove: true});
-    expect(pieceOnLine(path([100, 128], [208, 128], [208, 90]), CY, H)).toMatchObject({kind: 'end', aAbove: true});
-    expect(pieceOnLine(path([136, 88], [136, 128], [240, 128]), CY, H)).toMatchObject({kind: 'start', aAbove: false});
-    expect(pieceOnLine(path([100, 72], [240, 72]), CY, H)).toEqual({kind: 'line'});
+    expect(pieceOnLine(path([136, 112], [136, 72], [240, 72]), ZONE)).toMatchObject({kind: 'start', aAbove: true});
+    expect(pieceOnLine(path([100, 128], [208, 128], [208, 90]), ZONE)).toMatchObject({kind: 'end', aAbove: true});
+    expect(pieceOnLine(path([136, 88], [136, 128], [240, 128]), ZONE)).toMatchObject({kind: 'start', aAbove: false});
+    expect(pieceOnLine(path([100, 72], [240, 72]), ZONE)).toEqual({kind: 'line'});
   });
 });
 
@@ -361,5 +362,45 @@ describe('a swap with other changes', () => {
   it('decides the capital on the edited parts', () => {
     const result = composeSwap('Big red car', {a0: 0, a1: 3, b0: 4, b1: 7}, [], true);
     expect(result).toMatchObject({kind: 'ok', text: 'Red big', capsAvailable: true});
+  });
+});
+
+describe('the device page of 2026-11-20: three swaps', () => {
+  const page = require('../fixtures/swap-page-2026-11-20.json') as {
+    boxes: CaretTextbox[];
+    strokes: Record<string, Point[]>;
+  };
+  const placed = Object.entries(page.strokes)
+    .map(([num, points]) => placeSwapPiece(num, points, rectOf(points), page.boxes))
+    .filter((item): item is PlacedPiece => !!item);
+  const {swaps, refused} = pairSwapPieces(placed, page.boxes);
+  const parts = (swap: (typeof swaps)[number]) => {
+    const text = page.boxes.find(item => item.uuid === swap.boxUuid)?.text ?? '';
+    const {a0, a1, b0, b1} = swap.zones;
+    return [text.slice(a0, a1), text.slice(b0, b1)];
+  };
+
+  it('reads each stroke as its piece, in its own textbox', () => {
+    const kinds = Object.fromEntries(placed.map(item => [item.uuid, `${item.boxUuid}:${item.piece.kind}`]));
+    expect(kinds).toEqual({
+      '26': 't3:start',
+      '31': 't3:split',
+      '33': 't3:end',
+      '34': 't4:whole',
+      '35': 't4:start',
+      '36': 't4:whole',
+    });
+  });
+
+  it('makes the three swaps that were meant, and nothing else', () => {
+    expect(refused).toEqual([]);
+    expect(swaps.map(parts)).toEqual(
+      expect.arrayContaining([
+        ['This simplicity is not dullness. It is vivid. It lets things be just what they are before they are', 'recruited into our story about ourselves. The face of another person, the steam above tea,'],
+        ['have to manipulate', 'the world'],
+        ['not trying to secure oneself through every encounter. There is room for', 'things to appear,'],
+      ]),
+    );
+    expect(swaps).toHaveLength(3);
   });
 });

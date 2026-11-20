@@ -7,6 +7,7 @@ import {
 import type {CaretTextbox} from '../domain/penEditCaret';
 import {
   textLeftX,
+  X_HEIGHT_PER_FONT_SIZE,
   type NativeDetailedMeasurement,
   type TextboxMeasurementCalibration,
 } from '../domain/textboxLayout';
@@ -58,7 +59,12 @@ export function caretTextboxOf(
       end: line.end,
       top: y + line.top,
       bottom: y + line.bottom,
+      baseline: y + line.baseline,
     })),
+    xHeight:
+      measurement.xHeight && measurement.xHeight > 0
+        ? measurement.xHeight
+        : (textbox.textBox.fontSize || DEFAULT_FONT_SIZE) * X_HEIGHT_PER_FONT_SIZE,
     words: measurement.words.map(word => ({
       start: word.start,
       end: word.end,
