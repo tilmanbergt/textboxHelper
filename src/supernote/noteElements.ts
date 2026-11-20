@@ -6,9 +6,8 @@ import {
   TextBox,
 } from 'sn-plugin-lib';
 import type {Size} from '../domain/importPlan';
-import type {EditMarkerPreviewScope} from '../domain/markerTypes';
 import type {PreparedTextInsert} from '../domain/textboxEditPlan';
-import {assertApiSuccess} from './sdkResult';
+import {assertApiSuccess, assertBooleanSuccess} from './sdkResult';
 
 /**
  * Reading and changing the current page through the SDK: note path, page, page size, page and
@@ -148,54 +147,43 @@ export async function getLassoElements(): Promise<Element[]> {
   );
 }
 
-export type PreviewContext = {
+/** A page of the open note as read for the Manuscript card. */
+export type PageContext = {
   notePath: string;
   page: number;
-  lassoElements: Element[];
   pageElements: Element[];
-  previewScope: EditMarkerPreviewScope;
-  effectiveSelection: Element[];
 };
 
-export async function getPreviewContext(
-  previewScope: EditMarkerPreviewScope,
-): Promise<PreviewContext> {
-  const fileResponse = await PluginCommAPI.getCurrentFilePath();
-  const pageResponse = await PluginCommAPI.getCurrentPageNum();
+export async function readPageContext(notePath: string, page: number): Promise<PageContext> {
+  const pageElements = await readPageElements(notePath, page, `Could not read page ${page + 1}.`);
+  return {notePath, page, pageElements};
+}
 
+/** The open note: its path, the page shown, and how many pages it has. */
+export type NoteInfo = {notePath: string; currentPage: number; pageCount: number};
+
+/** Shows `page` (0-based) of the open note in NOTE, under the plugin view. */
+export async function jumpToNotePage(page: number): Promise<void> {
+  assertBooleanSuccess(
+    (await PluginCommAPI.jumpToPage(page)) as {success?: boolean; result?: boolean; error?: {message?: string}},
+    `Could not go to page ${page + 1}.`,
+  );
+}
+
+export async function readNoteInfo(): Promise<NoteInfo> {
   const notePath = assertApiSuccess(
-    fileResponse as {success?: boolean; result?: string; error?: {message?: string}},
+    (await PluginCommAPI.getCurrentFilePath()) as {success?: boolean; result?: string; error?: {message?: string}},
     'Could not determine the current note path.',
   );
-  const page = assertApiSuccess(
-    pageResponse as {success?: boolean; result?: number; error?: {message?: string}},
+  const currentPage = assertApiSuccess(
+    (await PluginCommAPI.getCurrentPageNum()) as {success?: boolean; result?: number; error?: {message?: string}},
     'Could not determine the current page.',
   );
-
-  const pageElementsResponse = await PluginFileAPI.getElements(page, notePath);
-  const pageElements = assertApiSuccess(
-    pageElementsResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
-    'Could not read the current page elements.',
+  const pageCount = assertApiSuccess(
+    (await PluginFileAPI.getNoteTotalPageNum(notePath)) as {success?: boolean; result?: number; error?: {message?: string}},
+    'Could not determine the note page count.',
   );
-
-  let lassoElements: Element[] = [];
-
-  if (previewScope === 'lasso') {
-    const lassoResponse = await PluginCommAPI.getLassoElements();
-    lassoElements = assertApiSuccess(
-      lassoResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
-      'Could not read the current lasso selection.',
-    );
-  }
-
-  return {
-    notePath,
-    page,
-    lassoElements,
-    pageElements,
-    previewScope,
-    effectiveSelection: previewScope === 'page' ? pageElements : lassoElements,
-  };
+  return {notePath, currentPage, pageCount};
 }
 
 export async function saveCurrentNoteForConsistency(reason: string): Promise<void> {

@@ -1,19 +1,34 @@
 import type {CaretInsertMode} from './penEditCaret';
+import type {SwapZones} from './swapMark';
 
 /**
- * Fine-tuning where a change starts and ends, one character at a time
- * (technical-design-pen-edits-2.md §6). Marks are accurate at word level; what is left to fix is a
- * comma, a space or a letter at the edge. A shift is in characters, signed; a zero-length change
- * (an insertion at a caret, a paragraph break) moves as one by `start`.
+ * Fine-tuning a change's edges, one character at a time (technical-design-pen-edits-2.md §6,
+ * technical-design-manuscript.md §4.4). Marks are accurate at word level; what is left to fix is a
+ * comma, a space or a letter at the edge. A change has one edge (the place of an insertion, a
+ * paragraph break or a space), two (start and end of a delete or replace) or three (a swap: start of
+ * the first part, where the parts meet, end of the second part). A shift holds one signed character
+ * count per edge; missing entries count as 0.
  */
 
-export type EdgeShift = {start: number; end: number};
+export type EdgeShift = number[];
 
-export const NO_SHIFT: EdgeShift = {start: 0, end: 0};
+export const NO_SHIFT: EdgeShift = [];
 
 export function isNoShift(shift: EdgeShift | null | undefined): boolean {
-  return !shift || (shift.start === 0 && shift.end === 0);
+  return !shift || shift.every(delta => delta === 0);
 }
+
+/** The shift with edge `index` moved by `delta`. */
+export function nudgeShift(shift: EdgeShift | null | undefined, index: number, delta: number): EdgeShift {
+  const next = [...(shift ?? NO_SHIFT)];
+  while (next.length <= index) {
+    next.push(0);
+  }
+  next[index] += delta;
+  return next;
+}
+
+const deltaOf = (shift: EdgeShift | null | undefined, index: number) => shift?.[index] ?? 0;
 
 type Span = {start: number; end: number};
 
@@ -22,20 +37,19 @@ const clamp = (value: number, low: number, high: number) => Math.min(high, Math.
 /**
  * The spans of one textbox after their shifts: each moved, kept inside the text and kept from
  * running into its neighbours (a later span starts where an earlier one ends at the soonest).
- * Returned in the order given.
+ * A zero-length span moves as one by its only edge. Returned in the order given.
  */
 export function shiftSpans(
   textLength: number,
   items: Array<Span & {shift: EdgeShift | null | undefined; zeroLength: boolean}>,
 ): Span[] {
   const moved = items.map((item, index) => {
-    const shift = item.shift ?? NO_SHIFT;
     if (item.zeroLength) {
-      const at = clamp(item.start + shift.start, 0, textLength);
-      return {index, start: at, end: at, zeroLength: true};
+      const place = clamp(item.start + deltaOf(item.shift, 0), 0, textLength);
+      return {index, start: place, end: place, zeroLength: true};
     }
-    const start = clamp(item.start + shift.start, 0, textLength);
-    const end = clamp(item.end + shift.end, start, textLength);
+    const start = clamp(item.start + deltaOf(item.shift, 0), 0, textLength);
+    const end = clamp(item.end + deltaOf(item.shift, 1), start, textLength);
     return {index, start, end, zeroLength: false};
   });
   const ordered = [...moved].sort((a, b) => a.start - b.start || a.end - b.end);
@@ -48,6 +62,19 @@ export function shiftSpans(
     floor = span.end;
   }
   return moved.map(({start, end}) => ({start, end}));
+}
+
+/**
+ * A swap's parts after its three edges moved: the start of the first part, the meeting point
+ * (the gap between the parts moves as one) and the end of the second part. Each part keeps at
+ * least one character, and everything stays inside the text.
+ */
+export function shiftSwapZones(zones: SwapZones, shift: EdgeShift | null | undefined, textLength: number): SwapZones {
+  const gap = zones.b0 - zones.a1;
+  const b1 = clamp(zones.b1 + deltaOf(shift, 2), Math.min(textLength, zones.a0 + gap + 2), textLength);
+  const a0 = clamp(zones.a0 + deltaOf(shift, 0), 0, b1 - gap - 2);
+  const a1 = clamp(zones.a1 + deltaOf(shift, 1), a0 + 1, b1 - gap - 1);
+  return {a0, a1, b0: a1 + gap, b1};
 }
 
 /** Letters and digits (Latin with accents, Greek, Cyrillic); no Unicode property classes, which

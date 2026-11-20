@@ -2,6 +2,8 @@ import {PluginCommAPI, PluginNoteAPI, TextBox, type Element} from 'sn-plugin-lib
 import {NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
 import {PEN_EDIT_NUMBER_FONT_SIZE, penEditUserData, type PenEditRole} from '../domain/penEditTags';
 import {ELEMENT_TYPE_GEO, MAIN_LAYER, TEXT_TYPE_NORMAL, type Point, type Rect} from '../domain/textboxModel';
+import {sdkErrorText, type SdkResponse} from './sdkResult';
+import {recycleByUuid} from './sdkElements';
 
 /**
  * The page elements a pen-edit tag adds (technical-design-pen-edits.md §3.2): the badges (geometry
@@ -36,28 +38,12 @@ export type TagElementsResult = {
   saveMs: number;
 };
 
-type Response<T> = {success?: boolean; result?: T; error?: {code?: number; message?: string}} | null | undefined;
-
-function errText(response: Response<unknown>, fallback: string): string {
-  return response?.error ? `${response.error.code ?? ''}: ${response.error.message ?? ''}` : fallback;
-}
-
 const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
-function recycle(elements: Element[]): void {
-  for (const element of elements) {
-    try {
-      PluginCommAPI.recycleElement(element.uuid);
-    } catch {
-      // silent: a failed recycle only keeps a cached element a little longer
-    }
-  }
-}
-
 async function create(type: number): Promise<Element> {
-  const created = (await PluginCommAPI.createElement(type)) as Response<Element>;
+  const created = (await PluginCommAPI.createElement(type)) as SdkResponse<Element>;
   if (!created?.success || !created.result) {
-    throw new Error('createElement: ' + errText(created, 'failed'));
+    throw new Error('createElement: ' + sdkErrorText(created, 'failed'));
   }
   return created.result;
 }
@@ -78,7 +64,7 @@ async function buildElements(request: TagElementsRequest): Promise<Element[]> {
       built.push(await create(type));
     }
   } catch (error) {
-    recycle(built);
+    recycleByUuid(built);
     throw error;
   }
 
@@ -124,16 +110,16 @@ async function insertOnce(request: TagElementsRequest): Promise<string | null> {
   const elements = await buildElements(request);
   lastCreateMs = Date.now() - createStart;
   try {
-    const response = (await PluginCommAPI.insertPageElements(elements, request.page, null)) as Response<boolean>;
-    return response?.success ? null : 'insertPageElements: ' + errText(response, 'failed');
+    const response = (await PluginCommAPI.insertPageElements(elements, request.page, null)) as SdkResponse<boolean>;
+    return response?.success ? null : 'insertPageElements: ' + sdkErrorText(response, 'failed');
   } finally {
-    recycle(elements);
+    recycleByUuid(elements);
   }
 }
 
 async function saveCurrentNote(): Promise<boolean> {
   try {
-    const response = (await PluginNoteAPI.saveCurrentNote()) as Response<boolean>;
+    const response = (await PluginNoteAPI.saveCurrentNote()) as SdkResponse<boolean>;
     return !!response?.success && response.result !== false;
   } catch (error) {
     console.warn('[PenEditElements] saveCurrentNote threw', String(error));
@@ -192,8 +178,8 @@ export async function tagUserStrokes(
       strokes.map(item => item.element),
       page,
       null,
-    )) as Response<number[]>;
-    const error = response?.success ? null : 'modifyPageElements: ' + errText(response, 'failed');
+    )) as SdkResponse<number[]>;
+    const error = response?.success ? null : 'modifyPageElements: ' + sdkErrorText(response, 'failed');
     return {tagged: error === null, error, ms: Date.now() - start};
   } catch (caught) {
     return {tagged: false, error: caught instanceof Error ? caught.message : String(caught), ms: Date.now() - start};

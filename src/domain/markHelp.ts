@@ -117,31 +117,35 @@ export const MARK_HELP_KEYS = {
 
 export const REVIEW_HELP: HelpBlock[] = [
   {
-    title: 'From where',
-    text: 'The note button reads every mark on the page, the lasso toolbar button only the lassoed marks and textboxes. Strokes away from any textbox are your own handwriting and are left alone.',
+    title: 'Manuscript',
+    text: 'The Manuscript button in the note toolbar reads every mark on the page. Strokes away from any textbox are your own handwriting and are left alone.',
+  },
+  {
+    title: 'The list',
+    text: 'Every change in reading order: the changed text in full, struck through or in bold, with a few words around it. Tap a change to see it on the right, with more of its text.',
   },
   {
     title: 'Tagged text',
-    text: 'The review recognizes it while you read; until then a grey placeholder stands in, with a picture of the handwriting below. Tap the text to fix it with the Supernote keyboard’s handwriting input, then Done.',
+    text: 'It is recognized while you read; until then a grey placeholder stands in. On the right, tap the recognized text to correct it with the Supernote keyboard’s handwriting input, then Done. The handwriting is shown below it.',
   },
   {
-    title: 'No mark found?',
-    text: 'A card says so right after tagging. Select mark now: draw the mark (or lasso the one you drew), lasso only the mark and tap Insertion or Replacement again within 5 minutes. Or Fix in review: the text waits under Ignored, where Select mark does the same.',
+    title: 'Needs attention',
+    text: 'Above the list: tagged text without a mark, and marks that could not be used, each with the reason. A card also says so right after tagging. Select mark: draw the mark (or lasso the one you drew), lasso only the mark and tap Insertion or Replacement within 5 minutes.',
   },
   {
     title: 'A comma, a space, a letter',
-    text: 'Below the selected change, Start and End show the characters around its edges; ‹ › move an edge by one character (an insertion or paragraph break has one Place).',
+    text: 'On the right, ‹ › move an edge of the change by one character: one Place for an insertion, Start and End for a delete or replace, and for a swap the start of the first part, where the parts meet, and the end of the second part.',
   },
   {
-    title: 'Not used, or not wanted',
-    text: 'Ignored lists what the review could not use, each with the reason. Drop takes a mark or tagged text off the page without applying it; for tagged text you keep your handwriting or erase it too.',
+    title: 'Not wanted',
+    text: 'Drop takes a mark or tagged text off the page without applying it; it asks on the right first. For tagged text you keep your handwriting or erase it too.',
   },
   {
     title: 'Apply',
-    text: 'Applies every change that is ready, after writing a backup of the page. Skip for later leaves a change on the page for another pass. Used marks, numbers and tagged handwriting are removed.',
+    text: 'Applies every change that is ready, after writing a backup of the page. Tagged text still being recognized stays on the page for another pass. Used marks, numbers and tagged handwriting are removed.',
   },
   {
     title: 'Wrong words picked?',
-    text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/TextboxHelper/fonts and open the review again. Details has the calibration and Save Diagnostics for a bug report.',
+    text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/TextboxHelper/fonts and open Manuscript again. Details has the calibration and Save Diagnostics for a bug report.',
   },
 ];

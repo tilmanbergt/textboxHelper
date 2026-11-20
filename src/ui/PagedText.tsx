@@ -20,7 +20,6 @@ import {
   View,
   type NativeSyntheticEvent,
   type TextLayoutEventData,
-  type TextStyle,
 } from 'react-native';
 import {
   lineRanges,
@@ -30,8 +29,8 @@ import {
   sliceSegments,
   type MeasuredLine,
   type TextSegment,
-  type TextSegmentStyle,
 } from '../domain/textPages';
+import {renderSegments} from './Segments';
 import PageHeader from './PageHeader';
 import {useMeasuredHeight} from './useMeasuredHeight';
 import {COLORS, FONT, LINE_HEIGHT} from './theme';
@@ -123,33 +122,6 @@ export default function PagedText({
     </View>
   );
 }
-
-function renderSegments(segments: TextSegment[]): React.ReactNode[] {
-  return segments.map((segment, index) =>
-    segment.style ? (
-      <Text key={index} style={SEGMENT_STYLES[segment.style]}>
-        {segment.text}
-      </Text>
-    ) : (
-      segment.text
-    ),
-  );
-}
-
-const SEGMENT_STYLES = StyleSheet.create<Record<TextSegmentStyle, TextStyle>>({
-  removed: {
-    textDecorationLine: 'line-through',
-  },
-  inserted: {
-    fontWeight: '700',
-  },
-  heading: {
-    fontWeight: '700',
-  },
-  muted: {
-    color: COLORS.muted,
-  },
-});
 
 const styles = StyleSheet.create({
   root: {

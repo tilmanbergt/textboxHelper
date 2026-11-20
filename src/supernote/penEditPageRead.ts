@@ -1,4 +1,4 @@
-import {PluginCommAPI, PluginFileAPI, type Element} from 'sn-plugin-lib';
+import {PluginFileAPI, type Element} from 'sn-plugin-lib';
 import {
   buildRecognizeRect,
   buildStrokeStats,
@@ -22,6 +22,8 @@ import {isSecondUpright, isStepSizedRect} from '../domain/paragraphMarks';
 import {isPenEditDecoration, parsePenEditUserData} from '../domain/penEditTags';
 import type {Rect} from '../domain/textboxModel';
 import {readAccessorRange} from './markerStrokeRead';
+import type {SdkResponse} from './sdkResult';
+import {recycleByUuid} from './sdkElements';
 
 /**
  * The look-back reads of a replacement tag (technical-design-pen-edits.md §3.5): the elements
@@ -30,8 +32,6 @@ import {readAccessorRange} from './markerStrokeRead';
  * rect, or a straight line's points): no stroke points are read. Never throws; an unreadable
  * number is skipped. `isComplete` ends the reads early, once the window holds a whole mark.
  */
-
-type Response<T> = {success?: boolean; result?: T} | null | undefined;
 
 function windowStroke(element: Element): WindowStroke | null {
   if (isStraightLineGeometryElement(element)) {
@@ -85,7 +85,7 @@ export async function readLookBackWindow(
         notePath,
         page,
         num,
-      )) as Response<Element>;
+      )) as SdkResponse<Element>;
       element = response?.success && response.result ? response.result : null;
       if (!element) {
         continue;
@@ -116,23 +116,15 @@ export async function readLookBackWindow(
       );
     } finally {
       if (element) {
-        recycle(element);
+        recycleByUuid([element]);
       }
     }
   }
   return {window, elements, read, ms: Date.now() - start};
 }
 
-function recycle(element: Element): void {
-  try {
-    PluginCommAPI.recycleElement(element.uuid);
-  } catch {
-    // silent: a failed recycle only keeps a cached element a little longer
-  }
-}
-
 export function recycleWindow(elements: Map<string, Element>): void {
-  elements.forEach(recycle);
+  recycleByUuid([...elements.values()]);
   elements.clear();
 }
 

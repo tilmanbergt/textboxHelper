@@ -12,6 +12,10 @@ export type TextRole = 'heading' | 'paragraph' | 'comment' | 'meta' | 'unknown';
 
 export type ScannedTextBox = {
   page: number;
+  /** Valid until the page changes (host facts §3); the Outline uses it to find the textbox again. */
+  numInPage: number;
+  /** The textbox's `userData` (a block tag, technical-design-manuscript.md §5.2), or null. */
+  userData: string | null;
   text: string;
   role: TextRole;
   styleSignature: string;

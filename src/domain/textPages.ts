@@ -35,6 +35,42 @@ export type TextPage = {
   lineCount: number;
 };
 
+/** Average character width as a share of the font size; on the generous side for a sans font. */
+export const CHAR_WIDTH_SHARE = 0.55;
+
+/**
+ * How many lines `text` takes at `width` (word wrap, estimated, no measuring). Line breaks in the
+ * text start a new line. `charWidthShare` is the average character width as a share of the font
+ * size; pass more for text with bold parts.
+ */
+export function estimateLines(
+  text: string,
+  width: number,
+  fontSize: number,
+  charWidthShare: number = CHAR_WIDTH_SHARE,
+): number {
+  const perLine = Math.max(8, Math.floor(width / (fontSize * charWidthShare)));
+  return text.split('\n').reduce((sum, paragraph) => sum + wrappedLines(paragraph, perLine), 0);
+}
+
+function wrappedLines(paragraph: string, perLine: number): number {
+  let lines = 1;
+  let used = 0;
+  for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+    const length = word.length;
+    if (used === 0) {
+      used = Math.min(length, perLine);
+      lines += Math.floor(Math.max(0, length - 1) / perLine);
+    } else if (used + 1 + length <= perLine) {
+      used += 1 + length;
+    } else {
+      lines += 1 + Math.floor(Math.max(0, length - 1) / perLine);
+      used = Math.min(length, perLine);
+    }
+  }
+  return lines;
+}
+
 export function segmentsText(segments: TextSegment[]): string {
   return segments.map(segment => segment.text).join('');
 }

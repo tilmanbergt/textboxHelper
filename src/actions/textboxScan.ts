@@ -13,15 +13,17 @@ import type {ExportClassificationConfig} from '../domain/exportConfig';
 import {isPenEditNumberElement} from '../domain/textboxEditPlan';
 import type {PageElementData, Rect} from '../domain/textboxModel';
 import {assertApiSuccess, tryApiResult} from '../supernote/sdkResult';
+import {timed} from '../utils/perf';
 
 /**
- * The textbox scan behind "Export DOCX": which pages to read, and every textbox on them with its
- * role and style. Reads the note only; the classification is in
+ * The textbox scan behind "Export DOCX" and the Manuscript Outline: which pages to read, and every
+ * textbox on them with its role and style. Reads the note only; the classification is in
  * `src/domain/exportClassification.ts`.
  */
 
 type RawElement = {
   type?: number;
+  numInPage?: number;
   userData?: string | null;
   textBox?: {
     textContentFull?: string | null;
@@ -120,7 +122,7 @@ export async function scanTextBoxes(params: ScanParams): Promise<ScanSummary> {
     let titles: RawTitle[] = [];
     if (useTitleRectHeadings) {
       const titleResult = tryApiResult<RawTitle[]>(
-        await PluginFileAPI.getTitles(params.notePath, [page]),
+        await timed('scan.titles', () => PluginFileAPI.getTitles(params.notePath, [page]), {page}),
       );
 
       if (titleResult === null) {
@@ -135,7 +137,7 @@ export async function scanTextBoxes(params: ScanParams): Promise<ScanSummary> {
 
     const elements =
       assertApiSuccess<RawElement[]>(
-      await PluginFileAPI.getElements(page, params.notePath),
+      await timed('scan.getElements', () => PluginFileAPI.getElements(page, params.notePath), {page}),
       `Could not read elements from page ${page + 1}.`,
       ) ?? [];
 
@@ -183,6 +185,8 @@ export async function scanTextBoxes(params: ScanParams): Promise<ScanSummary> {
 
       items.push({
         page,
+        numInPage: Number(element.numInPage ?? -1),
+        userData: typeof element.userData === 'string' ? element.userData : null,
         text,
         role: classifyTextRole({
           fontSize,

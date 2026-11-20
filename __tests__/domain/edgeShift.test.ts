@@ -3,7 +3,7 @@ import {assembleMarkerPreview} from '../../src/domain/markerAssembly';
 import type {MarkerPreviewBase, OperationDraft, PenTextState} from '../../src/domain/markerTypes';
 
 describe('shiftSpans', () => {
-  const span = (start: number, end: number, shift: {start: number; end: number} | null = null, zeroLength = false) => ({
+  const span = (start: number, end: number, shift: number[] | null = null, zeroLength = false) => ({
     start,
     end,
     shift,
@@ -11,20 +11,20 @@ describe('shiftSpans', () => {
   });
 
   it('grows and shrinks a span by characters, inside the text', () => {
-    expect(shiftSpans(40, [span(14, 20, {start: 0, end: 1})])).toEqual([{start: 14, end: 21}]);
-    expect(shiftSpans(40, [span(14, 20, {start: 2, end: -1})])).toEqual([{start: 16, end: 19}]);
-    expect(shiftSpans(40, [span(1, 39, {start: -5, end: 5})])).toEqual([{start: 0, end: 40}]);
+    expect(shiftSpans(40, [span(14, 20, [0, 1])])).toEqual([{start: 14, end: 21}]);
+    expect(shiftSpans(40, [span(14, 20, [2, -1])])).toEqual([{start: 16, end: 19}]);
+    expect(shiftSpans(40, [span(1, 39, [-5, 5])])).toEqual([{start: 0, end: 40}]);
     // The end never passes the start.
-    expect(shiftSpans(40, [span(14, 16, {start: 0, end: -9})])).toEqual([{start: 14, end: 14}]);
+    expect(shiftSpans(40, [span(14, 16, [0, -9])])).toEqual([{start: 14, end: 14}]);
   });
 
   it('moves a zero-length change as one', () => {
-    expect(shiftSpans(40, [span(10, 10, {start: -2, end: 0}, true)])).toEqual([{start: 8, end: 8}]);
-    expect(shiftSpans(40, [span(10, 10, {start: 50, end: 0}, true)])).toEqual([{start: 40, end: 40}]);
+    expect(shiftSpans(40, [span(10, 10, [-2], true)])).toEqual([{start: 8, end: 8}]);
+    expect(shiftSpans(40, [span(10, 10, [50], true)])).toEqual([{start: 40, end: 40}]);
   });
 
   it('keeps spans from running into each other, in the order given', () => {
-    expect(shiftSpans(40, [span(20, 25, {start: -6, end: 0}), span(10, 15, {start: 0, end: 3})])).toEqual([
+    expect(shiftSpans(40, [span(20, 25, [-6, 0]), span(10, 15, [0, 3])])).toEqual([
       {start: 18, end: 25},
       {start: 10, end: 18},
     ]);
@@ -132,8 +132,6 @@ describe('assembly with edge nudges', () => {
   const base = (drafts: OperationDraft[]): MarkerPreviewBase => ({
     notePath: '/n.note',
     page: 1,
-    selectedMarkerCount: 1,
-    selectedTextboxCount: 0,
     drafts,
     ignored: [],
     textboxes: [textbox],
@@ -145,21 +143,22 @@ describe('assembly with edge nudges', () => {
     status: 'done',
     text: 'quite',
     correctedText: null,
-    review: 'open',
-    edges,
+      edges,
   });
 
   it('applies a plain mark nudged one character further', () => {
-    const preview = assembleMarkerPreview(base([deleteDraft]), {}, null, {d: {start: -1, end: 0}});
+    const preview = assembleMarkerPreview(base([deleteDraft]), {}, null, {d: [-1, 0]});
     expect(preview.applyPlan?.textMutations[0].nextText).toBe('This can feel but not because');
-    expect(preview.operations[0].edgeView).toMatchObject({start: 13, end: 20, zeroLength: false});
+    expect(preview.operations[0].edgeView?.edges.map(edge => edge.label)).toEqual(['Start', 'End']);
+    expect(preview.operations[0].edgeView?.edges[0]).toEqual({label: 'Start', before: 's can feel', after: ' humble bu'});
     expect(preview.operations[0].textStart).toBe(13);
   });
 
   it('moves an insertion with its stored nudge and joins it again at the new place', () => {
     const between = assembleMarkerPreview(base([insertDraft]), {pe1: ready()});
     expect(between.applyPlan?.textMutations[0].nextText).toBe('This can quite feel humble but not because');
-    const inside = assembleMarkerPreview(base([insertDraft]), {pe1: ready({start: -2, end: 0})});
+    const inside = assembleMarkerPreview(base([insertDraft]), {pe1: ready([-2])});
+    expect(inside.operations[0].edgeView?.edges.map(edge => edge.label)).toEqual(['Place']);
     expect(inside.operations[0].insertMode).toBe('inWord');
     expect(inside.applyPlan?.textMutations[0].nextText).toBe('This caquiten feel humble but not because');
     expect(inside.operations[0].edgeView?.result).toContain('caquiten');

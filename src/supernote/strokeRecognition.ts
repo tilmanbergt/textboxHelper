@@ -1,6 +1,8 @@
 import {PluginCommAPI, type Element} from 'sn-plugin-lib';
 import type {PageSize, StoredStroke} from '../domain/penEditModel';
 import {ELEMENT_TYPE_STROKE} from '../domain/textboxModel';
+import {sdkErrorText, type SdkResponse} from './sdkResult';
+import {recycleByUuid} from './sdkElements';
 
 /**
  * Handwriting recognition from stored strokes (ported from Kept GTD's
@@ -18,8 +20,6 @@ export type RecognitionResult = {
   ms: number;
 };
 
-type Response<T> = {success?: boolean; result?: T; error?: {code?: number; message?: string}} | null | undefined;
-
 type Accessor<T> = {
   size(): Promise<number>;
   add(index: number, value: T): Promise<boolean>;
@@ -33,10 +33,6 @@ function serial<T>(job: () => Promise<T>): Promise<T> {
   // The caller gets the error from `run`; this tail only keeps the queue going.
   chain = run.catch(() => undefined);
   return run;
-}
-
-function errText(response: Response<unknown>, fallback: string): string {
-  return response?.error ? `${response.error.code ?? ''}: ${response.error.message ?? ''}` : fallback;
 }
 
 /** Fills an empty accessor: one batch setRange first, else one add() per value. */
@@ -70,23 +66,13 @@ async function fillAccessor<T>(accessor: Accessor<T>, values: T[]): Promise<bool
   return true;
 }
 
-function recycle(elements: Element[]): void {
-  for (const element of elements) {
-    try {
-      PluginCommAPI.recycleElement(element.uuid);
-    } catch {
-      // silent: a failed recycle only keeps a cached element a little longer
-    }
-  }
-}
-
 async function buildStrokes(strokes: StoredStroke[], page: number): Promise<Element[]> {
   const built: Element[] = [];
   try {
     for (const stored of strokes) {
-      const created = (await PluginCommAPI.createElement(ELEMENT_TYPE_STROKE)) as Response<Element>;
+      const created = (await PluginCommAPI.createElement(ELEMENT_TYPE_STROKE)) as SdkResponse<Element>;
       if (!created?.success || !created.result) {
-        throw new Error('createElement: ' + errText(created, 'failed'));
+        throw new Error('createElement: ' + sdkErrorText(created, 'failed'));
       }
       const element = created.result;
       built.push(element);
@@ -118,7 +104,7 @@ async function buildStrokes(strokes: StoredStroke[], page: number): Promise<Elem
       }
     }
   } catch (error) {
-    recycle(built);
+    recycleByUuid(built);
     throw error;
   }
   return built;
@@ -144,16 +130,16 @@ export function recognizeStrokes(strokes: StoredStroke[], size: PageSize | null,
       }
       built = await buildStrokes(strokes, page);
       buildMs = Date.now() - start;
-      const response = (await PluginCommAPI.recognizeElements(built, size)) as Response<string>;
+      const response = (await PluginCommAPI.recognizeElements(built, size)) as SdkResponse<string>;
       if (response?.success) {
         text = (response.result ?? '').trim();
       } else {
-        error = errText(response, 'recognition failed');
+        error = sdkErrorText(response, 'recognition failed');
       }
     } catch (caught) {
       error = caught instanceof Error ? caught.message : String(caught);
     } finally {
-      recycle(built);
+      recycleByUuid(built);
     }
     const ms = Date.now() - start;
     if (error) {

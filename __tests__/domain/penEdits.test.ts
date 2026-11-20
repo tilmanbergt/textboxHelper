@@ -153,7 +153,6 @@ const entry = (overrides: Partial<PenEditEntry> = {}): PenEditEntry => ({
   hasPicture: true,
   recognition: WAITING_RECOGNITION,
   correctedText: null,
-  review: 'open',
   state: 'active',
   awaitingMark: null,
   edges: null,
@@ -180,14 +179,12 @@ describe('pen edit index', () => {
   });
 
   it('fills defaults for optional fields', () => {
-    const {recognition, review, state, mark, ...required} = entry();
+    const {recognition, state, mark, ...required} = entry();
     void recognition;
-    void review;
     void state;
     void mark;
     const parsed = parsePenEditIndex(JSON.stringify({version: 1, entries: [required]})).index.entries[0];
     expect(parsed.recognition).toEqual(WAITING_RECOGNITION);
-    expect(parsed.review).toBe('open');
     expect(parsed.state).toBe('active');
     expect(parsed.mark).toBeNull();
   });

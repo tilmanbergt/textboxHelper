@@ -65,33 +65,21 @@ export type TextboxActionResult = {
 
 export type TextboxActionProgressUpdate = {
   message: string;
-  canCancel: boolean;
 };
 
 type TextElement = Element & {
   textBox: TextBox;
 };
 type TextboxActionExecutionOptions = {
-  isCancelled?: () => boolean;
   onProgress?: (update: TextboxActionProgressUpdate) => void;
 };
 const TEXTBOX_GAP = 16;
-export const TEXTBOX_ACTION_CANCELLED_MESSAGE = 'Action cancelled.';
 
 function reportTextboxActionProgress(
   options: TextboxActionExecutionOptions | undefined,
   message: string,
-  canCancel: boolean,
 ): void {
-  options?.onProgress?.({message, canCancel});
-}
-
-function throwIfTextboxActionCancelled(
-  options: TextboxActionExecutionOptions | undefined,
-): void {
-  if (options?.isCancelled?.()) {
-    throw new Error(TEXTBOX_ACTION_CANCELLED_MESSAGE);
-  }
+  options?.onProgress?.({message});
 }
 
 async function estimateTextBoxHeightForInsert(
@@ -211,11 +199,7 @@ async function insertTextBoxes(
   for (let index = 0; index < inserts.length; index += 1) {
     const insert = inserts[index];
     await insertTextboxElement(insert);
-    reportTextboxActionProgress(
-      options,
-      `Created ${index + 1} out of ${inserts.length} textboxes.`,
-      false,
-    );
+    reportTextboxActionProgress(options, `Created ${index + 1} out of ${inserts.length} textboxes.`);
   }
 }
 
@@ -252,11 +236,11 @@ async function runTextboxAction(
 
   try {
     if (action === 'log') {
-      reportTextboxActionProgress(options, 'Logging all textboxes on this page...', false);
+      reportTextboxActionProgress(options, 'Logging all textboxes on this page...');
       return await logAllCurrentPageTextboxes();
     }
 
-    reportTextboxActionProgress(options, 'Checking selection...', true);
+    reportTextboxActionProgress(options, 'Checking selection...');
     const context = await getPageContext();
     lassoElements = context.lassoElements;
     pageElements = context.pageElements;
@@ -293,8 +277,7 @@ async function runTextboxAction(
       ensureClearlyOrderedColumn(textElements);
     }
 
-    throwIfTextboxActionCancelled(options);
-    reportTextboxActionProgress(options, 'Creating backup...', true);
+    reportTextboxActionProgress(options, 'Creating backup...');
     const backupPayload = createBackupPayload(
       action,
       context.notePath,
@@ -302,7 +285,6 @@ async function runTextboxAction(
       textElements,
     );
     const {backupPath, clipboardSummary} = await writeBackupFile(backupPayload);
-    throwIfTextboxActionCancelled(options);
 
     if (action === 'clean') {
       const sourceTextBox = textElements[0].textBox;
@@ -317,7 +299,7 @@ async function runTextboxAction(
         throw new Error('No unnecessary spaces were found in the selected textbox.');
       }
 
-      reportTextboxActionProgress(options, 'Applying change...', false);
+      reportTextboxActionProgress(options, 'Applying change...');
       await modifySelectedTextbox({
         ...sourceTextBox,
         textContentFull: cleanedText,
@@ -347,7 +329,7 @@ async function runTextboxAction(
         throw new Error('No line breaks were found in the selected textbox.');
       }
 
-      reportTextboxActionProgress(options, 'Applying change...', false);
+      reportTextboxActionProgress(options, 'Applying change...');
       await modifySelectedTextbox({
         ...sourceTextBox,
         textContentFull: unwrappedText,
@@ -364,7 +346,7 @@ async function runTextboxAction(
       };
     }
 
-    reportTextboxActionProgress(options, 'Preparing textboxes...', true);
+    reportTextboxActionProgress(options, 'Preparing textboxes...');
 
     let inserts: PreparedTextInsert[];
 
@@ -385,9 +367,8 @@ async function runTextboxAction(
 
     ensureLayoutFitsPage(newRects, context.pageWidth, context.pageHeight);
     ensureNoCollision(newRects, pageElements, textElements);
-    throwIfTextboxActionCancelled(options);
 
-    reportTextboxActionProgress(options, 'Applying change...', false);
+    reportTextboxActionProgress(options, 'Applying change...');
     await deleteLassoElements();
 
     await insertTextBoxes(inserts, action === 'split' ? options : undefined);

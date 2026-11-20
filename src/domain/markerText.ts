@@ -1,4 +1,3 @@
-import {plural} from './plural';
 import {cloneRect} from './geometry';
 import type {
   EditMarkerCalibration,
@@ -37,44 +36,6 @@ export function roundRect(rect: Rect): Rect {
     right: roundNumber(rect.right),
     bottom: roundNumber(rect.bottom),
   };
-}
-
-export function buildSelectionMessage(
-  selectedMarkerCount: number,
-  selectedTextboxCount: number,
-): string {
-  const parts: string[] = [];
-
-  parts.push(
-    selectedMarkerCount === 1 ? '1 marker selected' : `${selectedMarkerCount} markers selected`,
-  );
-
-  if (selectedTextboxCount > 0) {
-    parts.push(
-      selectedTextboxCount === 1
-        ? '1 textbox also selected'
-        : `${selectedTextboxCount} textboxes also selected`,
-    );
-  }
-
-  return parts.join(' · ');
-}
-
-export function buildSummaryMessage(
-  operationCount: number,
-  ignoredCount: number,
-  selectedMarkerCount: number,
-): string {
-  if (selectedMarkerCount === 0) {
-    return 'No edit markers found.';
-  }
-  if (operationCount === 0) {
-    return ignoredCount > 0
-      ? `No changes recognized; ${plural(ignoredCount, 'marker')} could not be used (see Ignored).`
-      : 'No changes recognized yet.';
-  }
-  const ignored = ignoredCount > 0 ? ` ${plural(ignoredCount, 'marker')} ignored.` : '';
-  return `${plural(operationCount, 'change')} recognized.${ignored}`;
 }
 
 export function shortenSnippet(text: string, limit = 44): string {
@@ -283,20 +244,10 @@ export function applyTextMutationRanges(
   return applyTextMutationRangesDetailed(text, ranges).text;
 }
 
-export function createEmptyPreview(
-  selectedMarkerCount = 0,
-  selectedTextboxCount = 0,
-): EditMarkerPreview {
+/** The preview of a page without edit marks or pen edits. */
+export function createEmptyPreview(): EditMarkerPreview {
   return {
-    selectedMarkerCount,
-    selectedTextboxCount,
-    recognizedOperationCount: 0,
-    selectionMessage: buildSelectionMessage(selectedMarkerCount, selectedTextboxCount),
-    summaryMessage:
-      selectedMarkerCount === 0
-        ? 'No edit markers found.'
-        : 'No changes recognized yet.',
-    textboxes: [],
+    hunks: [],
     fontWarning: null,
     operations: [],
     ignoredMarkers: [],
@@ -305,7 +256,6 @@ export function createEmptyPreview(
     base: null,
     penEdits: [],
     pendingCount: 0,
-    skippedCount: 0,
   };
 }
 

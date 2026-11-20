@@ -1,26 +1,23 @@
-import {buildDiffSegments} from './markerDiff';
-import {
-  applyTextMutationRanges,
-  buildSummaryMessage,
-  buildSelectionMessage,
-  formatOperationSnippet,
-} from './markerText';
+import {buildHunk, buildSwapHunk} from './markerHunks';
+import {applyTextMutationRanges, formatOperationSnippet} from './markerText';
 import type {
+  ChangeHunk,
   EditMarkerApplyPlan,
   EditMarkerPreview,
-  EditMarkerTextboxPreview,
+  EdgePoint,
   EdgeView,
   InsertionPlan,
   MarkerPreviewBase,
   PenOperationStatus,
   PenTextState,
   RecognizedEditOperation,
+  SwapInfo,
   TextMutationPlan,
   TextMutationRange,
 } from './markerTypes';
 import {cloneRect} from './geometry';
 import {caretInsertionText} from './penEditCaret';
-import {edgeContext, insertModeAt, shiftSpans, type EdgeShift} from './edgeShift';
+import {edgeContext, insertModeAt, shiftSpans, shiftSwapZones, type EdgeShift} from './edgeShift';
 import {
   SPLIT_SHOWN,
   SPLIT_SIGN,
@@ -36,8 +33,8 @@ import type {IgnoredEditMarker} from './markerTypes';
  * once; this runs again whenever a recognition finishes or the user skips or corrects one, so the
  * review updates without measuring again.
  *
- * Only ready changes go into the apply plan. A pen edit still recognizing, skipped or without
- * text stays on the page for a later pass, and its marks are not removed.
+ * Only ready changes go into the apply plan. A pen edit still recognizing or without text stays
+ * on the page for a later pass, and its marks are not removed.
  */
 
 export type {PenTextState};
@@ -47,9 +44,6 @@ export function penOperationStatus(
 ): PenOperationStatus {
   if (!state) {
     return 'recognizing';
-  }
-  if (state.review === 'skipped') {
-    return 'skipped';
   }
   if (state.correctedText !== null) {
     return state.correctedText.trim() ? 'ready' : 'empty';
@@ -84,14 +78,27 @@ function placeholder(
       return `‹${what} being recognized…›`;
     case 'failed':
       return `‹${what} not recognized - Correct›`;
-    case 'empty':
-      return `‹${what} has no text - Correct›`;
     default:
-      return `‹${what} skipped›`;
+      return `‹${what} has no text - Correct›`;
   }
 }
 
-/** How a change reads in place: the text around it with the change made. */
+const edgeAt = (original: string, label: string, offset: number): EdgePoint => ({
+  label,
+  ...edgeContext(original, offset),
+});
+
+/** The text around [start, end) with `inserted` in its place, as the change will read. */
+function resultLine(original: string, start: number, end: number, inserted: string): string {
+  const around = 24;
+  const head = original.slice(Math.max(0, start - around), start);
+  const tail = original.slice(end, end + around);
+  return `${start - around > 0 ? '…' : ''}${head}${inserted}${tail}${
+    end + around < original.length ? '…' : ''
+  }`.replace(/\n/g, ' ¶ ');
+}
+
+/** A change's edges (one Place, or Start and End) and how it reads. */
 function edgeViewOf(
   original: string,
   start: number,
@@ -99,18 +106,11 @@ function edgeViewOf(
   zeroLength: boolean,
   inserted: string,
 ): EdgeView {
-  const around = 24;
-  const head = original.slice(Math.max(0, start - around), start);
-  const tail = original.slice(end, end + around);
   return {
-    start,
-    end,
-    zeroLength,
-    startContext: edgeContext(original, start),
-    endContext: edgeContext(original, end),
-    result: `${start - around > 0 ? '…' : ''}${head}${inserted}${tail}${
-      end + around < original.length ? '…' : ''
-    }`.replace(/\n/g, ' ¶ '),
+    edges: zeroLength
+      ? [edgeAt(original, 'Place', start)]
+      : [edgeAt(original, 'Start', start), edgeAt(original, 'End', end)],
+    result: resultLine(original, start, end, inserted),
   };
 }
 
@@ -176,7 +176,8 @@ export function assembleMarkerPreview(
   const readyOperations: RecognizedEditOperation[] = [];
   const readyPenIds: string[] = [];
   let pendingCount = 0;
-  let skippedCount = 0;
+  // What the review shows of each change, for its hunk (the swap's composed range included).
+  const shownByOp = new Map<string, TextMutationRange[]>();
 
   let currentOpId = '';
   const add = (
@@ -185,6 +186,9 @@ export function assembleMarkerPreview(
     range: TextMutationRange,
   ) => {
     map.set(uuid, [...(map.get(uuid) ?? []), {...range, opId: currentOpId}]);
+    if (map === displayRanges) {
+      shownByOp.set(currentOpId, [...(shownByOp.get(currentOpId) ?? []), range]);
+    }
   };
 
   const originalTextOf = new Map(
@@ -253,11 +257,7 @@ export function assembleMarkerPreview(
           replacementText: joined,
         });
       } else {
-        if (status === 'skipped') {
-          skippedCount += 1;
-        } else {
-          pendingCount += 1;
-        }
+        pendingCount += 1;
         const pendingText = isParagraph
           ? showSplits(splitChangeText(shown))
           : ` ${shown} `;
@@ -325,11 +325,7 @@ export function assembleMarkerPreview(
         replacementText: text,
       });
     } else {
-      if (status === 'skipped') {
-        skippedCount += 1;
-      } else {
-        pendingCount += 1;
-      }
+      pendingCount += 1;
       add(displayRanges, uuid, {
         ...range,
         kind: 'replace',
@@ -339,8 +335,22 @@ export function assembleMarkerPreview(
     }
   }
 
-  // Swaps: the changes inside each part first, then the parts change places (§6.2).
+  // Swaps: the changes inside each part first, then the parts change places (§6.2). Their three
+  // edges move with the user's nudges (technical-design-manuscript.md §4.4).
   const insideSwap = new Map<string, string>();
+  const swapHunks = new Map<string, ChangeHunk>();
+  const swapZones = new Map(
+    swapDrafts
+      .filter(({operation}) => operation.swap)
+      .map(({operation}) => [
+        operation.id,
+        shiftSwapZones(
+          (operation.swap as SwapInfo).zones,
+          plainShifts[operation.id],
+          (originalTextOf.get(operation.targetTextboxUuid) ?? '').length,
+        ),
+      ]),
+  );
   for (const {operation} of swapDrafts) {
     const info = operation.swap;
     const uuid = operation.targetTextboxUuid;
@@ -348,15 +358,25 @@ export function assembleMarkerPreview(
     if (!info) {
       continue;
     }
-    const zones = info.zones;
-    const overlapsSwap = swapDrafts.some(
-      other =>
-        other.operation.id !== operation.id &&
-        other.operation.targetTextboxUuid === uuid &&
-        other.operation.swap &&
-        other.operation.swap.zones.a0 < zones.b1 &&
-        zones.a0 < other.operation.swap.zones.b1,
-    );
+    const zones = swapZones.get(operation.id) ?? info.zones;
+    const overlapsSwap = swapDrafts.some(({operation: other}) => {
+      const otherZones = swapZones.get(other.id);
+      return (
+        other.id !== operation.id &&
+        other.targetTextboxUuid === uuid &&
+        !!otherZones &&
+        otherZones.a0 < zones.b1 &&
+        zones.a0 < otherZones.b1
+      );
+    });
+    const swapEdges: EdgeView = {
+      edges: [
+        edgeAt(original, 'Start of A', zones.a0),
+        edgeAt(original, 'A | B', zones.a1),
+        edgeAt(original, 'End of B', zones.b1),
+      ],
+      result: '',
+    };
     const shown = displayRanges.get(uuid) ?? [];
     const applied = applyRanges.get(uuid) ?? [];
     const changes: ChangeNearSwap[] = shown
@@ -386,10 +406,13 @@ export function assembleMarkerPreview(
       continue;
     }
     if (result.kind === 'waiting') {
-      operations.push({
+      const waiting: RecognizedEditOperation = {
         ...operation,
-        swap: {...info, fixCase, waitingFor: result.waitingIds},
-      });
+        swap: {...info, zones, fixCase, waitingFor: result.waitingIds},
+        edgeView: swapEdges,
+      };
+      operations.push(waiting);
+      swapHunks.set(operation.id, buildSwapHunk(waiting, original, zones, null));
       continue;
     }
     const inner = new Set(result.innerIds);
@@ -410,10 +433,15 @@ export function assembleMarkerPreview(
         original.slice(zones.b0, zones.b1),
       )}`,
       replacementText: result.text,
-      swap: {...info, fixCase, capsAvailable: result.capsAvailable},
+      swap: {...info, zones, fixCase, capsAvailable: result.capsAvailable},
+      edgeView: {
+        ...swapEdges,
+        result: resultLine(original, zones.a0, zones.b1, result.text),
+      },
     };
     operations.push(assembled);
     readyOperations.push(assembled);
+    swapHunks.set(operation.id, buildSwapHunk(assembled, original, zones, result.text));
   }
   if (insideSwap.size > 0) {
     operations.forEach((operation, index) => {
@@ -424,21 +452,11 @@ export function assembleMarkerPreview(
     });
   }
 
-  const textboxes: EditMarkerTextboxPreview[] = [];
   const textMutations: TextMutationPlan[] = [];
   for (const textbox of base.textboxes) {
-    const shownRanges = displayRanges.get(textbox.uuid);
-    if (!shownRanges) {
+    if (!displayRanges.has(textbox.uuid)) {
       continue;
     }
-    textboxes.push({
-      uuid: textbox.uuid,
-      numInPage: textbox.numInPage,
-      segments: buildDiffSegments(textbox.originalText, shownRanges),
-      changeCount: operations.filter(
-        operation => operation.targetTextboxUuid === textbox.uuid,
-      ).length,
-    });
     const nextText = applyTextMutationRanges(
       textbox.originalText,
       applyRanges.get(textbox.uuid) ?? [],
@@ -454,6 +472,7 @@ export function assembleMarkerPreview(
   }
 
   const insertions: InsertionPlan[] = [];
+  const newParagraphs = new Map<string, {order: number; segments: ChangeHunk['segments']}>();
   for (const insertion of base.insertions) {
     const state = penStates[insertion.penEditId];
     const status = penOperationStatus(state);
@@ -482,17 +501,9 @@ export function assembleMarkerPreview(
       penStatus: status,
     };
     operations.push(operation);
-    textboxes.push({
-      uuid,
-      numInPage: 0,
-      title:
-        insertion.aboveNumInPage !== null
-          ? `New paragraph after textbox ${insertion.aboveNumInPage}`
-          : `New paragraph before textbox ${
-              insertion.belowNumInPage ?? ''
-            }`.trim(),
+    newParagraphs.set(operation.id, {
+      order: newParagraphOrder(base, insertion),
       segments: [{text: shown, style: text ? 'inserted' : 'muted'}],
-      changeCount: 1,
     });
     if (status === 'ready') {
       readyOperations.push(operation);
@@ -506,8 +517,6 @@ export function assembleMarkerPreview(
         aboveRect: insertion.aboveRect,
         belowRect: insertion.belowRect,
       });
-    } else if (status === 'skipped') {
-      skippedCount += 1;
     } else {
       pendingCount += 1;
     }
@@ -534,7 +543,6 @@ export function assembleMarkerPreview(
     ? {
         notePath: base.notePath,
         page: base.page,
-        selectedMarkerCount: base.selectedMarkerCount,
         operations: readyOperations,
         recognizedMarkerNums,
         textMutations,
@@ -543,20 +551,33 @@ export function assembleMarkerPreview(
       }
     : null;
 
+  // The list in reading order: by textbox (in the order the analysis read them), then by place.
+  const textboxOrder = new Map(base.textboxes.map((textbox, index) => [textbox.uuid, index]));
+  const hunks = operations
+    .map(operation => {
+      const paragraph = newParagraphs.get(operation.id);
+      if (paragraph) {
+        return {
+          order: paragraph.order,
+          at: 0,
+          hunk: {...buildHunk(operation, '', []), segments: paragraph.segments},
+        };
+      }
+      const original = originalTextOf.get(operation.targetTextboxUuid) ?? '';
+      const hunk =
+        swapHunks.get(operation.id) ??
+        buildHunk(operation, original, shownByOp.get(operation.id) ?? []);
+      return {
+        order: textboxOrder.get(operation.targetTextboxUuid) ?? base.textboxes.length,
+        at: operation.swap ? operation.swap.zones.a0 : operation.textStart,
+        hunk,
+      };
+    })
+    .sort((left, right) => left.order - right.order || left.at - right.at)
+    .map(entry => entry.hunk);
+
   return {
-    selectedMarkerCount: base.selectedMarkerCount,
-    selectedTextboxCount: base.selectedTextboxCount,
-    recognizedOperationCount: operations.length,
-    selectionMessage: buildSelectionMessage(
-      base.selectedMarkerCount,
-      base.selectedTextboxCount,
-    ),
-    summaryMessage: buildSummaryMessage(
-      operations.length,
-      ignoredMarkers.length,
-      Math.max(base.selectedMarkerCount, operations.length),
-    ),
-    textboxes,
+    hunks,
     fontWarning,
     operations,
     ignoredMarkers,
@@ -565,6 +586,25 @@ export function assembleMarkerPreview(
     base,
     penEdits: base.penEdits,
     pendingCount,
-    skippedCount,
   };
+}
+
+/**
+ * Where a new paragraph comes in the list: right after the textbox above it (or before the one
+ * below it) when that textbox has changes too, else between the changed textboxes by height.
+ */
+function newParagraphOrder(base: MarkerPreviewBase, insertion: MarkerPreviewBase['insertions'][number]): number {
+  const index = (num: number | null) =>
+    num === null ? -1 : base.textboxes.findIndex(textbox => textbox.numInPage === num);
+  const above = index(insertion.aboveNumInPage);
+  if (above >= 0) {
+    return above + 0.5;
+  }
+  const below = index(insertion.belowNumInPage);
+  if (below >= 0) {
+    return below - 0.5;
+  }
+  const y = insertion.aboveRect?.bottom ?? insertion.belowRect?.top ?? Infinity;
+  const next = base.textboxes.findIndex(textbox => textbox.textRect.top > y);
+  return (next < 0 ? base.textboxes.length : next) - 0.5;
 }

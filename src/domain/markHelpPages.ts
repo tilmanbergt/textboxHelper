@@ -6,6 +6,7 @@
  * before anything is drawn; ui/MarkHelp.tsx draws with the same sizes as `MARK_HELP_LAYOUT`.
  */
 import type {HelpBlock, MarkHelpEntry} from './markHelp';
+import {estimateLines as estimateTextLines} from './textPages';
 
 /** Sizes (dp) shared with ui/MarkHelp.tsx, so estimate and drawing agree. */
 export const MARK_HELP_LAYOUT = {
@@ -26,27 +27,9 @@ export const MARK_HELP_LAYOUT = {
   minPictureHeight: 80,
 } as const;
 
-/** Average character width as a share of the font size; on the generous side for a sans font. */
-const CHAR_WIDTH = 0.55;
-
-/** How many lines `text` takes at `width` (word wrap, estimated). */
-export function estimateLines(text: string, width: number, fontSize: number = MARK_HELP_LAYOUT.fontSize): number {
-  const perLine = Math.max(8, Math.floor(width / (fontSize * CHAR_WIDTH)));
-  let lines = 1;
-  let used = 0;
-  for (const word of text.split(/\s+/).filter(Boolean)) {
-    const length = word.length;
-    if (used === 0) {
-      used = Math.min(length, perLine);
-      lines += Math.floor(Math.max(0, length - 1) / perLine);
-    } else if (used + 1 + length <= perLine) {
-      used += 1 + length;
-    } else {
-      lines += 1 + Math.floor(Math.max(0, length - 1) / perLine);
-      used = Math.min(length, perLine);
-    }
-  }
-  return lines;
+/** Lines of help text at the help's font size. */
+export function estimateLines(text: string, width: number): number {
+  return estimateTextLines(text, width, MARK_HELP_LAYOUT.fontSize);
 }
 
 /** The height of a mark's text below its picture: "Draw: …" and "Keep in mind:" with its points. */

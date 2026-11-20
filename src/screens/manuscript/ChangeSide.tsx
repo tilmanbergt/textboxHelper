@@ -1,21 +1,25 @@
 /**
- * The detail area under the selected change in the edit-marker review
- * (technical-design-pen-edits-2.md §5–§7): for a tagged snippet its picture and its text, which is
- * edited right here (the Supernote keyboard's handwriting input fills the field); for every change
- * inside a textbox the edge control, which moves its start and end (or its place) one character
- * at a time; and the actions. Drop asks first, in this same area: a tagged snippet's handwriting
- * can stay on the page or go.
+ * The side bar of the Manuscript Review (technical-design-manuscript.md §6): the selected change.
+ * From the top: its name and place; for a tagged snippet the recognized text, edited right here
+ * (high up, so the writing pad never covers it) with the handwriting below; the change in its
+ * text; a swap's options; the edges, each moved one character at a time (one for an insertion,
+ * two for a delete or replace, three for a swap); the actions. Drop asks first, in place of the
+ * actions: a tagged snippet's handwriting can stay on the page or go.
  */
 import React, {useEffect, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
 import {loadPenEditStrokePoints} from '../../actions/penEditReview';
+import {firstWords, lastWords} from '../../domain/markerHunks';
 import type {
+  ChangeHunk,
+  EdgePoint,
   EdgeView,
   PenEditView,
   PenOperationStatus,
   RecognizedEditOperation,
 } from '../../domain/markerTypes';
 import Checkbox from '../../ui/Checkbox';
+import PagedText from '../../ui/PagedText';
 import PillButton from '../../ui/PillButton';
 import StrokeDrawing from '../../ui/StrokeDrawing';
 import {COLORS, FONT, RADII, SPACING} from '../../ui/theme';
@@ -27,130 +31,156 @@ export type PenDetail = {
   text: string;
 };
 
+/** Words of context the side bar shows on each side of a change. */
+const SIDE_CONTEXT_WORDS = 24;
+
 interface Props {
   operation: RecognizedEditOperation;
+  hunk: ChangeHunk;
   pen: PenDetail | null;
   editing: boolean;
   onEditing: (editing: boolean) => void;
   busy: boolean;
   onSaveText: (text: string | null) => void;
-  onSkip: (skipped: boolean) => void;
   onRecognizeAgain: () => void;
-  onNudge: (edge: 'start' | 'end', delta: number) => void;
+  onNudge: (edge: number, delta: number) => void;
   /** A swap's "Fix capitals" switched on or off. */
   onFixCase: (fixCase: boolean) => void;
   /** Null when the change can't be dropped (nothing of it may be removed from the page). */
   onDrop: (() => void) | null;
+  /** Drop's question, shown in place of the actions while it is asked. */
+  dropConfirm: React.ReactNode;
 }
 
-export default function ChangeDetail({
+export default function ChangeSide({
   operation,
+  hunk,
   pen,
   editing,
   onEditing,
   busy,
   onSaveText,
-  onSkip,
   onRecognizeAgain,
   onNudge,
   onFixCase,
   onDrop,
+  dropConfirm,
 }: Props): React.JSX.Element {
-  const [draft, setDraft] = useState(pen?.text ?? '');
-  useEffect(() => {
-    if (!editing) {
-      setDraft(pen?.text ?? '');
-    }
-  }, [editing, pen?.text]);
-
-  if (pen && editing) {
-    return (
-      <View style={styles.area}>
-        <View style={styles.penRow}>
-          <Handwriting view={pen.view} />
-          <View style={styles.penInfo}>
-            <Text style={styles.label}>Editing the text of {pen.view.number}</Text>
-            <TextInput
-              style={styles.field}
-              value={draft}
-              onChangeText={setDraft}
-              multiline
-              autoFocus
-              textAlignVertical="top"
-              accessibilityLabel={`Text of ${pen.view.number}`}
-            />
-          </View>
-        </View>
-        <View style={styles.buttons}>
-          <PillButton
-            size="small"
-            primary
-            label="Done"
-            onPress={() => {
-              onSaveText(draft.trim() ? draft : null);
-              onEditing(false);
-            }}
-          />
-          <PillButton size="small" label="Cancel" onPress={() => onEditing(false)} />
-          <Text style={styles.hint}>Only this text changes; the note page stays as it is.</Text>
-        </View>
-        {operation.edgeView ? <ResultLine view={operation.edgeView} /> : null}
-      </View>
-    );
-  }
-
-  const skipped = pen?.status === 'skipped';
   return (
-    <View style={styles.area}>
+    <View style={styles.side}>
+      <View>
+        <Text style={styles.title}>{hunk.label}</Text>
+        <Text style={styles.meta}>{hunk.meta}</Text>
+      </View>
       {pen ? (
-        <View style={styles.penRow}>
-          <Handwriting view={pen.view} />
-          <View style={styles.penInfo}>
-            <Text style={styles.label}>
-              {pen.status === 'recognizing' ? 'Being recognized…' : 'Recognized · tap to edit'}
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Edit the text of ${pen.view.number}`}
-              disabled={busy || pen.status === 'recognizing'}
-              onPress={() => onEditing(true)}
-              style={styles.textButton}>
-              <Text style={styles.penText} numberOfLines={3}>
-                {pen.text || STATUS_HINT[pen.status]}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
+        <PenText
+          pen={pen}
+          editing={editing}
+          onEditing={onEditing}
+          busy={busy}
+          onSaveText={onSaveText}
+        />
       ) : null}
       {operation.uncertain ? <Text style={styles.check}>Check the place: {operation.uncertain}</Text> : null}
       {operation.insideSwap ? (
         <Text style={styles.hint}>Inside a swap: this change is made first, then the parts change places.</Text>
       ) : null}
-      {operation.swap ? (
-        <SwapDetail operation={operation} disabled={busy} onFixCase={onFixCase} />
-      ) : null}
-      {operation.edgeView ? (
-        <EdgeControl view={operation.edgeView} disabled={busy} onNudge={onNudge} />
-      ) : null}
-      <View style={styles.buttons}>
-        {pen ? (
-          <>
-            <PillButton
-              size="small"
-              label={skipped ? 'Include' : 'Skip for later'}
-              onPress={() => onSkip(!skipped)}
-              disabled={busy}
-            />
+      <Text style={styles.label}>In its text</Text>
+      <View style={styles.context}>
+        <PagedText
+          segments={[
+            {text: lastWords(hunk.before, SIDE_CONTEXT_WORDS)},
+            ...hunk.segments,
+            {text: firstWords(hunk.after, SIDE_CONTEXT_WORDS)},
+          ]}
+          resetKey={hunk.operationId}
+        />
+      </View>
+      {operation.swap ? <SwapDetail operation={operation} disabled={busy} onFixCase={onFixCase} /> : null}
+      {operation.edgeView ? <EdgeControl view={operation.edgeView} disabled={busy} onNudge={onNudge} /> : null}
+      {dropConfirm ?? (
+        <View style={styles.buttons}>
+          {pen ? (
             <PillButton
               size="small"
               label="Recognize again"
               onPress={onRecognizeAgain}
               disabled={busy || pen.status === 'recognizing'}
             />
-          </>
-        ) : null}
-        {onDrop ? <PillButton size="small" label="Drop" onPress={onDrop} disabled={busy} /> : null}
-      </View>
+          ) : null}
+          {onDrop ? <PillButton size="small" label="Drop…" onPress={onDrop} disabled={busy} /> : null}
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** A tagged snippet's text: tap to edit (the Supernote's handwriting input fills the field). */
+function PenText({
+  pen,
+  editing,
+  onEditing,
+  busy,
+  onSaveText,
+}: {
+  pen: PenDetail;
+  editing: boolean;
+  onEditing: (editing: boolean) => void;
+  busy: boolean;
+  onSaveText: (text: string | null) => void;
+}): React.JSX.Element {
+  const [draft, setDraft] = useState(pen.text);
+  useEffect(() => {
+    if (!editing) {
+      setDraft(pen.text);
+    }
+  }, [editing, pen.text]);
+
+  return (
+    <View style={styles.pen}>
+      {editing ? (
+        <>
+          <Text style={styles.label}>Text of {pen.view.number}</Text>
+          <TextInput
+            style={styles.field}
+            value={draft}
+            onChangeText={setDraft}
+            multiline
+            autoFocus
+            textAlignVertical="top"
+            accessibilityLabel={`Text of ${pen.view.number}`}
+          />
+          <View style={styles.buttons}>
+            <PillButton
+              size="small"
+              primary
+              label="Done"
+              onPress={() => {
+                onSaveText(draft.trim() ? draft : null);
+                onEditing(false);
+              }}
+            />
+            <PillButton size="small" label="Cancel" onPress={() => onEditing(false)} />
+          </View>
+        </>
+      ) : (
+        <>
+          <Text style={styles.label}>
+            {pen.status === 'recognizing' ? 'Being recognized…' : 'Recognized · tap to correct'}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Correct the text of ${pen.view.number}`}
+            disabled={busy || pen.status === 'recognizing'}
+            onPress={() => onEditing(true)}
+            style={styles.textButton}>
+            <Text style={styles.penText} numberOfLines={4}>
+              {pen.text || STATUS_HINT[pen.status]}
+            </Text>
+          </Pressable>
+          <Handwriting view={pen.view} />
+        </>
+      )}
     </View>
   );
 }
@@ -158,7 +188,6 @@ export default function ChangeDetail({
 const STATUS_HINT: Record<PenOperationStatus, string> = {
   recognizing: '…',
   ready: '',
-  skipped: 'skipped for later',
   failed: 'Not recognized: tap to write the text',
   empty: 'No text recognized: tap to write the text',
 };
@@ -235,10 +264,7 @@ function SwapDetail({
   );
 }
 
-/**
- * Start and End (or the one Place of an insertion or break): the characters around the edge with
- * a bar where it is, and ‹ › to move it by one character.
- */
+/** Each edge of the change (Place; Start and End; or a swap's three) with ‹ › to move it. */
 function EdgeControl({
   view,
   disabled,
@@ -246,58 +272,50 @@ function EdgeControl({
 }: {
   view: EdgeView;
   disabled: boolean;
-  onNudge: (edge: 'start' | 'end', delta: number) => void;
+  onNudge: (edge: number, delta: number) => void;
 }): React.JSX.Element {
   return (
     <View style={styles.edges}>
-      <EdgeRow
-        label={view.zeroLength ? 'Place' : 'Start'}
-        context={view.startContext}
-        disabled={disabled}
-        onMove={delta => onNudge('start', delta)}
-      />
-      {view.zeroLength ? null : (
-        <EdgeRow label="End" context={view.endContext} disabled={disabled} onMove={delta => onNudge('end', delta)} />
-      )}
-      <ResultLine view={view} />
+      {view.edges.map((edge, index) => (
+        <EdgeRow key={edge.label} edge={edge} disabled={disabled} onMove={delta => onNudge(index, delta)} />
+      ))}
+      {view.result ? <ResultLine view={view} /> : null}
     </View>
   );
 }
 
 function EdgeRow({
-  label,
-  context,
+  edge,
   disabled,
   onMove,
 }: {
-  label: string;
-  context: {before: string; after: string};
+  edge: EdgePoint;
   disabled: boolean;
   onMove: (delta: number) => void;
 }): React.JSX.Element {
   return (
     <View style={styles.edgeRow}>
-      <Text style={styles.edgeLabel}>{label}</Text>
+      <Text style={styles.edgeLabel}>{edge.label}</Text>
       <PillButton
         size="small"
         label="‹"
-        accessibilityLabel={`${label} one character earlier`}
+        accessibilityLabel={`${edge.label} one character earlier`}
         onPress={() => onMove(-1)}
         disabled={disabled}
       />
       <View style={styles.edgeText}>
         <Text style={styles.edgeChars} numberOfLines={1}>
-          {context.before}
+          {edge.before}
         </Text>
         <View style={styles.bar} />
         <Text style={styles.edgeChars} numberOfLines={1}>
-          {context.after}
+          {edge.after}
         </Text>
       </View>
       <PillButton
         size="small"
         label="›"
-        accessibilityLabel={`${label} one character later`}
+        accessibilityLabel={`${edge.label} one character later`}
         onPress={() => onMove(1)}
         disabled={disabled}
       />
@@ -331,7 +349,7 @@ export function DropConfirm({
   onCancel: () => void;
 }): React.JSX.Element {
   return (
-    <View style={[styles.area, styles.confirm]}>
+    <View style={styles.confirm}>
       <Text style={styles.confirmTitle}>{title}</Text>
       <Text style={styles.hint}>
         {withHandwriting
@@ -354,30 +372,35 @@ export function DropConfirm({
 }
 
 const styles = StyleSheet.create({
-  area: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: SPACING.sm,
-    marginTop: SPACING.sm,
+  side: {
+    flex: 1,
     gap: SPACING.sm,
   },
-  penRow: {
-    flexDirection: 'row',
-    gap: SPACING.md,
+  title: {
+    fontSize: FONT.medium,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  meta: {
+    fontSize: FONT.small,
+    color: COLORS.muted,
+  },
+  pen: {
+    gap: SPACING.xs,
+  },
+  context: {
+    flex: 1,
+    minHeight: 80,
   },
   picture: {
-    width: 220,
-    height: 110,
+    alignSelf: 'stretch',
+    height: 90,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   noPicture: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  penInfo: {
-    flex: 1,
-    gap: SPACING.xs,
   },
   label: {
     fontSize: FONT.small - 2,
@@ -424,7 +447,7 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   edgeLabel: {
-    width: 52,
+    width: 84,
     fontSize: FONT.small,
     color: COLORS.muted,
   },
@@ -464,6 +487,7 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
   },
   confirm: {
+    gap: SPACING.sm,
     borderWidth: 2,
     borderColor: COLORS.accent,
     borderRadius: RADII.md,

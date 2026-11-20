@@ -1,5 +1,5 @@
 /**
- * The edit-marker review's view of one textbox (technical-design-calmer-screens.md §3.4): the
+ * A textbox's text as the review shows its changes (technical-design-calmer-screens.md §3.4): the
  * original text with every removed range struck through and, for a replace, the replacement in
  * bold right after it. A pen edit whose text isn't there yet shows a muted placeholder instead.
  *

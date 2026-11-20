@@ -360,7 +360,6 @@ export async function tagPenEdit(
       hasPicture,
       recognition: WAITING_RECOGNITION,
       correctedText: null,
-      review: 'open',
       state: 'active',
       awaitingMark: null,
       edges: null,
@@ -550,7 +549,6 @@ async function attachSelectedMark(
       mark,
       strokesTagged: entry.strokesTagged && tagged.tagged,
       awaitingMark: null,
-      review: 'open',
     })),
   );
   console.log(

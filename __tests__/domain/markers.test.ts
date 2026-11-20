@@ -8,7 +8,6 @@ import {
 } from '../../src/domain/markerStrokes';
 import {
   applyTextMutationRangesDetailed,
-  buildSelectionMessage,
   formatOperationSnippet,
   mergeHighlightRanges,
 } from '../../src/domain/markerText';
@@ -133,20 +132,17 @@ describe('marker text changes', () => {
     ]);
   });
 
-  it('words the selection and the operations for the review', () => {
-    expect(buildSelectionMessage(1, 1)).toBe('1 marker selected · 1 textbox also selected');
-    expect(buildSelectionMessage(3, 0)).toBe('3 markers selected');
+  it('words the operations for the review', () => {
     expect(formatOperationSnippet('replace', ['old', 'text'], 'new')).toBe('Replace "old text" -> "new"');
     expect(formatOperationSnippet('delete', ['gone'])).toBe('Delete "gone"');
   });
 });
 
 describe('edit-marker backup', () => {
-  it('keeps the edit-marker summary header as before', () => {
+  it('holds every page of one apply', () => {
     const plan: EditMarkerApplyPlan = {
       notePath: '/note.note',
       page: 2,
-      selectedMarkerCount: 3,
       operations: [],
       recognizedMarkerNums: [],
       penEditIds: [],
@@ -171,10 +167,11 @@ describe('edit-marker backup', () => {
         },
       ],
     };
-    const payload = {...createEditMarkerBackupPayload(plan), createdAt: '2026-11-15T12:00:00.000Z'};
+    const payload = {...createEditMarkerBackupPayload([plan, {...plan, page: 4}]), createdAt: '2026-11-15T12:00:00.000Z'};
+    expect(payload.texts.map(text => text.page)).toEqual([2, 4]);
     expect(buildClipboardSummary(payload)).toBe(
-      'textboxHelper edit-markers backup\nCreated: 2026-11-15T12:00:00.000Z\nNote: /note.note\nPage: 2\n' +
-        'Selected markers: 3\nRecognized operations: 0\n\n#1\nOld text\n',
+      'textboxHelper edit-markers backup\nCreated: 2026-11-15T12:00:00.000Z\nNote: /note.note\nPages: 2, 4\n' +
+        'Recognized operations: 0\n\n#1\nOld text\n\n#2\nOld text\n',
     );
   });
 });
