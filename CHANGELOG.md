@@ -6,6 +6,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Added
 
+- Manuscript: "Go to page N ›" closes the card and shows that page in NOTE — in the Review for the chosen page (or the selected change's page), in the Outline for the selected block.
 - Manuscript Outline: move a block by tapping ← at the place it should go (between two blocks, or at the end), set it aside to a new page at the end of the note, or delete it. Changes are planned first and shown in place (moved underlined, set aside in italics, deleted struck through); Undo per block or Undo last. "Apply n changes" lays out the pages from the first change on, keeping the usual spacing, with one backup. Edits come first: a block with pending edits can't be moved, and pages with handwriting outside textboxes or not yet read are named instead of being rebuilt.
 - Manuscript covers the whole note: a strip with every page and its count of changes (✓ none, ? not read yet); tap a page to see only its changes, or "Read n pages" to read the rest. Apply applies the ready changes of every page read, with one backup and one save.
 - Manuscript Outline: a second tab lists every textbox of the note as a block in reading order (H for a heading, ¶ for a paragraph), with its first and last line, ✎ and the number of edits still pending on it, and its status on the right (○ open, ◐ review, ● final). Filter by pending edits or by status. Tap a block to read it whole in the panel below and set its status; "Review its edits" jumps to its page in the Review. The status is kept in the plugin (block-status.json); a textbox gets a small tag the first time its status is set.
@@ -42,6 +43,8 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Fixed
 
+- Manuscript Outline: the status (open, review, final) of the selected block can be set again; a long block shows its pages with ‹ › in the panel.
+- Manuscript Review: a selected row's frame no longer cuts the page line at its bottom or runs into the row above.
 - Imported textboxes are now written in NOTE's system font and sized for it, so their line spacing no longer changes when you edit one, and the last line is no longer cut off. Edit markers in textboxes without a font are measured in the same font, so the right words are struck.
 
 - Import Text File looks for the file in the Supernote's INBOX folder under the folder's exact name. It used "Inbox", and opening a file there could fail with "Permission denied".

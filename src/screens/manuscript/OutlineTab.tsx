@@ -63,12 +63,15 @@ interface Props {
   disabled: boolean;
   /** Switches to the Review, showing this page. */
   onReviewPage: (page: number) => void;
+  /** Close the card and show a page of the note in NOTE. */
+  onGoToPage: (page: number) => void;
 }
 
 export default function OutlineTab({
   outline,
   disabled,
   onReviewPage,
+  onGoToPage,
 }: Props): React.JSX.Element {
   const {blocks, loading, load, planned} = outline;
   const [filter, setFilter] = useState<ListFilter>('all');
@@ -198,6 +201,7 @@ export default function OutlineTab({
             disabled={disabled || outline.busy}
             onStatus={status => outline.setStatus(selected, status)}
             onReviewPage={onReviewPage}
+            onGoToPage={() => onGoToPage(selected.page)}
             onAside={() => outline.setAside(selected.key)}
             onDelete={() => outline.remove(selected.key)}
             onUndo={() => outline.undo(selected.key)}
@@ -348,6 +352,7 @@ function BlockPanel({
   disabled,
   onStatus,
   onReviewPage,
+  onGoToPage,
   onAside,
   onDelete,
   onUndo,
@@ -357,6 +362,7 @@ function BlockPanel({
   disabled: boolean;
   onStatus: (status: BlockStatus) => void;
   onReviewPage: (page: number) => void;
+  onGoToPage: () => void;
   onAside: () => void;
   onDelete: () => void;
   onUndo: () => void;
@@ -370,24 +376,19 @@ function BlockPanel({
       : `${plural(block.pendingEdits, 'pending edit')}`;
   return (
     <View style={styles.panelBody}>
-      <Text style={styles.panelTitle}>
-        Page {block.page + 1} · {block.heading ? 'heading' : 'paragraph'} ·{' '}
-        {pending}
-      </Text>
-      <View style={styles.panelText}>
-        <PagedText segments={[{text: block.text}]} resetKey={block.key} />
-      </View>
       <View style={styles.bar}>
-        <Segmented<BlockStatus>
-          options={BLOCK_STATUSES.map(status => ({
-            key: status,
-            label: `${STATUS_GLYPH[status]} ${STATUS_LABEL[status]}`,
-          }))}
-          value={block.status}
-          onChange={status => !disabled && onStatus(status)}
-          size="small"
-          accessibilityLabel="Status"
-        />
+        <View style={styles.statusSegment}>
+          <Segmented<BlockStatus>
+            options={BLOCK_STATUSES.map(status => ({
+              key: status,
+              label: `${STATUS_GLYPH[status]} ${STATUS_LABEL[status]}`,
+            }))}
+            value={block.status}
+            onChange={status => !disabled && onStatus(status)}
+            size="small"
+            accessibilityLabel="Status"
+          />
+        </View>
         {mark ? (
           <PillButton
             size="small"
@@ -419,6 +420,23 @@ function BlockPanel({
           />
         ) : null}
       </View>
+      <View style={styles.panelText}>
+        <PagedText
+          segments={[{text: block.text}]}
+          resetKey={block.key}
+          header={`Page ${block.page + 1} · ${
+            block.heading ? 'heading' : 'paragraph'
+          } · ${pending}`}
+          headerAccessory={
+            <PillButton
+              size="small"
+              label={`Go to page ${block.page + 1} ›`}
+              onPress={onGoToPage}
+              disabled={disabled}
+            />
+          }
+        />
+      </View>
     </View>
   );
 }
@@ -438,6 +456,8 @@ const styles = StyleSheet.create({
   },
   panel: {
     flex: 2,
+    minHeight: 0,
+    overflow: 'hidden',
     borderTopWidth: 2,
     borderTopColor: COLORS.accent,
     paddingHorizontal: SPACING.xl,
@@ -503,12 +523,9 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: SPACING.sm,
   },
-  panelTitle: {
-    fontSize: FONT.small,
-    color: COLORS.muted,
-  },
   panelText: {
     flex: 1,
+    minHeight: 0,
   },
   moved: {
     textDecorationLine: 'underline',
@@ -563,6 +580,10 @@ const styles = StyleSheet.create({
   },
   plannedTitle: {
     fontWeight: '700',
+  },
+  /** A fixed width: the segment's options share its width, and a wrapping bar gives it none. */
+  statusSegment: {
+    width: 300,
   },
   bar: {
     flexDirection: 'row',

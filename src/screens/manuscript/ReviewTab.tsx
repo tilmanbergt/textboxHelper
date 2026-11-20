@@ -49,6 +49,8 @@ interface Props {
   onBlockedChange: (blocked: boolean) => void;
   /** A page to show (from the Outline's "Review its edits"). */
   showPage: number | null;
+  /** Close the card and show a page of the note in NOTE. */
+  onGoToPage: (page: number) => void;
 }
 
 export default function ReviewTab({
@@ -57,6 +59,7 @@ export default function ReviewTab({
   focusPenEditId,
   onBlockedChange,
   showPage,
+  onGoToPage,
 }: Props): React.JSX.Element {
   const {note, pages, view, loading, busy, applied} = review;
   const [editing, setEditing] = useState(false);
@@ -138,6 +141,8 @@ export default function ReviewTab({
   const rowHeight = (entry: ManuscriptEntry) =>
     ROW_CHROME +
     estimateLines(rowText(entry.hunk), textWidth, FONT.medium, ROW_CHAR_WIDTH_SHARE) * LINE_HEIGHT.medium;
+  // The page "Go to page" opens: the chosen page, else the selected change's page.
+  const shownPage = pageFilter !== 'all' ? Number(pageFilter) : selected?.page ?? null;
   const header =
     pageFilter === 'all'
       ? applied
@@ -162,14 +167,24 @@ export default function ReviewTab({
             value={pageFilter}
             onChange={choosePage}
             trailing={
-              unread.length > 0 ? (
-                <PillButton
-                  size="small"
-                  label={`Read ${plural(unread.length, 'page')}`}
-                  onPress={() => review.readPages(unread)}
-                  disabled={loading || busy}
-                />
-              ) : undefined
+              <>
+                {unread.length > 0 ? (
+                  <PillButton
+                    size="small"
+                    label={`Read ${plural(unread.length, 'page')}`}
+                    onPress={() => review.readPages(unread)}
+                    disabled={loading || busy}
+                  />
+                ) : null}
+                {shownPage !== null ? (
+                  <PillButton
+                    size="small"
+                    label={`Go to page ${shownPage + 1} ›`}
+                    onPress={() => onGoToPage(shownPage)}
+                    disabled={busy}
+                  />
+                ) : null}
+              </>
             }
           />
         </View>

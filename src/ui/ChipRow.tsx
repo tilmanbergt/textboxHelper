@@ -78,5 +78,7 @@ const styles = StyleSheet.create({
   },
   trailing: {
     marginLeft: 'auto',
+    flexDirection: 'row',
+    gap: SPACING.sm,
   },
 });

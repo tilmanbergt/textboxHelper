@@ -9,6 +9,7 @@ import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {StyleSheet, View} from 'react-native';
 import {plural} from '../../domain/plural';
 import CountTabs from '../../ui/CountTabs';
+import {jumpToNotePage} from '../../supernote/noteElements';
 import ScreenFrame, {type FramePrimary} from '../../ui/ScreenFrame';
 import {SPACING} from '../../ui/theme';
 import ManuscriptDetailsScreen from './ManuscriptDetailsScreen';
@@ -35,6 +36,21 @@ export default function ManuscriptScreen({
   const [tab, setTab] = useState<Tab>('review');
   const [reviewBlocked, setReviewBlocked] = useState(false);
   const [showPage, setShowPage] = useState<number | null>(null);
+  const [jumpError, setJumpError] = useState<string | null>(null);
+  // Go to a page: NOTE shows it, and the card closes so it can be seen.
+  const goToPage = useCallback(
+    (page: number) => {
+      setJumpError(null);
+      jumpToNotePage(page).then(onClose, (error: unknown) =>
+        setJumpError(
+          error instanceof Error
+            ? error.message
+            : `Could not go to page ${page + 1}.`,
+        ),
+      );
+    },
+    [onClose],
+  );
   const onBlockedChange = useCallback(
     (blocked: boolean) => setReviewBlocked(blocked),
     [],
@@ -95,10 +111,11 @@ export default function ManuscriptScreen({
       : changes.attention.some(item => item.marker.penEditId === focusPenEditId)
       ? 'Mark selected, but the text still needs attention: see the line above the list.'
       : null;
-  const status =
-    tab === 'outline'
-      ? outline.status ?? review.status
-      : review.status ?? (focusNote ? {text: focusNote} : null);
+  const status = jumpError
+    ? {kind: 'error' as const, text: jumpError}
+    : tab === 'outline'
+    ? outline.status ?? review.status
+    : review.status ?? (focusNote ? {text: focusNote} : null);
 
   return (
     <ScreenFrame
@@ -127,12 +144,14 @@ export default function ManuscriptScreen({
           focusPenEditId={focusPenEditId}
           onBlockedChange={onBlockedChange}
           showPage={showPage}
+          onGoToPage={goToPage}
         />
       ) : (
         <OutlineTab
           outline={outline}
           disabled={busy || loading}
           onReviewPage={reviewPage}
+          onGoToPage={goToPage}
         />
       )}
     </ScreenFrame>

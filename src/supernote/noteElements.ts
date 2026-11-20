@@ -7,7 +7,7 @@ import {
 } from 'sn-plugin-lib';
 import type {Size} from '../domain/importPlan';
 import type {PreparedTextInsert} from '../domain/textboxEditPlan';
-import {assertApiSuccess} from './sdkResult';
+import {assertApiSuccess, assertBooleanSuccess} from './sdkResult';
 
 /**
  * Reading and changing the current page through the SDK: note path, page, page size, page and
@@ -161,6 +161,14 @@ export async function readPageContext(notePath: string, page: number): Promise<P
 
 /** The open note: its path, the page shown, and how many pages it has. */
 export type NoteInfo = {notePath: string; currentPage: number; pageCount: number};
+
+/** Shows `page` (0-based) of the open note in NOTE, under the plugin view. */
+export async function jumpToNotePage(page: number): Promise<void> {
+  assertBooleanSuccess(
+    (await PluginCommAPI.jumpToPage(page)) as {success?: boolean; result?: boolean; error?: {message?: string}},
+    `Could not go to page ${page + 1}.`,
+  );
+}
 
 export async function readNoteInfo(): Promise<NoteInfo> {
   const notePath = assertApiSuccess(
