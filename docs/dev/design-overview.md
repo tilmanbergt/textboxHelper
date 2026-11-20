@@ -11,13 +11,13 @@ confirmed change to the open note - rather than around a generic editor architec
 ## 1. From button press to changed note
 
 1. A toolbar button press enters through `index.js`, where every button is registered: the
-   lasso toolbar (split, join, clean, remove line breaks, apply edit markers, the Textbox Tools
-   panel) and the NOTE toolbar (apply all edit markers, import a text file, export DOCX). The
+   lasso toolbar (split, join, clean, remove line breaks, the pen-text tag, the Textbox Tools
+   panel) and the NOTE toolbar (Manuscript, import a text file, export DOCX). The
    button ids are in `src/domain/buttonIds.ts`.
 2. `src/supernote/pluginRouting.ts` receives the press and forwards it into React Native as an
    event; a press that arrives before the app listens is kept as pending and picked up at start.
 3. `App.tsx` makes sure the file permissions are granted, then routes the button to a screen: the
-   Textbox Tools panel, the direct-action dialog, the edit-marker review, the import view or the
+   Textbox Tools panel, the direct-action dialog, the Manuscript card, the import view or the
    export screen.
 4. The action flow in `src/actions/` builds a **preview**: it reads the lassoed or page elements
    through `src/supernote/`, lets `src/domain/` compute what would change, and the screen shows it.
@@ -57,7 +57,7 @@ check fail if the SDK types drift away from them.
 `App.tsx` owns permissions and button routing; it opens one screen per button, keyed by the press,
 so a screen opened again starts fresh. The button listener subscribes once and calls the latest
 router through a ref. Screens are built on `ui/ScreenFrame.tsx` and own their state in a hook next
-to them: `screens/markers/` (edit-marker review and Details), `screens/tools/` (the lasso screen,
+to them: `screens/manuscript/` (the Manuscript card: Review with its side bar `ChangeSide`, and Details), `screens/tools/` (the lasso screen,
 its Details with "Log All Textboxes"), `screens/direct/` (the toolbar actions' progress card),
 `screens/import/` (Import with its Layout sub-screen and the page drawing), `screens/export/`
 (Export with its Rules sub-screen). Every sub-screen (Details, Layout, Rules) is local state of its
@@ -78,7 +78,7 @@ in the lasso, `domain/textSplitting.ts` computes the new texts, `domain/textboxE
 preview of every action at once (with the reason an action can't be chosen), the new textboxes
 and the checks that the result fits the page without colliding with other elements; the new textboxes are sized through the native measurement.
 
-### Edit markers (`actions/editMarkers.ts`, `actions/editMarkerAnalysis.ts`, `actions/shapeMarks.ts`)
+### Edit markers (`actions/markerPageAnalysis.ts`, `actions/markerApply.ts`, `actions/editMarkerAnalysis.ts`, `actions/shapeMarks.ts`)
 
 Handwritten edit markers on textboxes: a delete marker is a line through words; a replace marker
 is a delete line plus a small loop (or two crossing lines); a < or >, or a step mark with a second
@@ -91,15 +91,17 @@ textbox once per review and locks textboxes whose font can't be read (their mark
 `domain/spaceMark.ts`, `domain/swapMark.ts`), and their strokes never reach the delete analysis;
 `actions/editMarkerAnalysis.ts` maps one marker to words through the hit-testing core and the
 native measurement (with each letter's edge, `domain/textOffsets.ts`);
-`actions/editMarkers.ts` pairs replace marks with their tagged text, places insertions, builds the
-preview and applies the plan - for the lasso selection or the whole page. The pure parts are in
+`actions/markerPageAnalysis.ts` pairs replace marks with their tagged text, places insertions and
+builds the preview of the current page in named steps; `actions/markerApply.ts`
+applies the plan; `actions/markerCalibration.ts` keeps the calibration and saves the diagnostics. The pure parts are in
 `domain/markerStrokes.ts`, `domain/markerText.ts`, `domain/markerTypes.ts`,
 `domain/markerAssembly.ts`, `domain/swapText.ts` (a swap makes the changes inside its parts
-first) and `domain/edgeShift.ts`. The analysis runs once; the preview is
-assembled from it, the tagged texts and the user's edge nudges (one character at a time), so the
-review updates without measuring again. It shows each affected textbox as diff segments
-(`domain/markerDiff.ts`): the original text with the removed ranges struck through and new text in
-bold, built from the same ranges the apply step uses, so the review shows exactly what will change.
+first) and `domain/edgeShift.ts` (one to three edges per change). The analysis runs once; the
+preview is assembled from it, the tagged texts and the user's edge nudges (one character at a
+time), so the review updates without measuring again. It lists every change as a hunk in reading
+order (`domain/markerHunks.ts`): the changed text with the removed ranges struck through and new
+text in bold (`domain/markerDiff.ts`), and the rest of its textbox as context, built from the same
+ranges the apply step uses, so the review shows exactly what will change.
 `actions/editMarkerDrop.ts` takes changes off the page without applying them.
 
 **Pen edits** (`actions/penEditTag.ts`, `actions/penEditReview.ts`, `storage/penEditStore.ts`,

@@ -12,7 +12,7 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {DeviceEventEmitter} from 'react-native';
 import {PluginManager} from 'sn-plugin-lib';
-import {setEditMarkerCalibration} from './src/actions/editMarkers';
+import {setEditMarkerCalibration} from './src/actions/markerCalibration';
 import {
   getPenEditOutcome,
   getReviewFocus,
@@ -27,26 +27,24 @@ import {PLUGIN_BUTTON_EVENT, checkPendingButton} from './src/supernote/pluginRou
 import {
   BUTTON_ID_EXPORT_DOCX,
   BUTTON_ID_IMPORT_TEXT_FILE,
-  BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS,
+  BUTTON_ID_NOTE_MANUSCRIPT,
   BUTTON_ID_TEXTBOX_TOOLS,
-  BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS,
   BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES,
   BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES,
   BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
   BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
   BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
 } from './src/domain/buttonIds';
-import type {EditMarkerPreviewScope} from './src/domain/markerTypes';
 import type {TextboxActionKind} from './src/domain/textboxActionKinds';
 import DirectActionScreen from './src/screens/direct/DirectActionScreen';
 import ExportScreen from './src/screens/export/ExportScreen';
 import ImportScreen from './src/screens/import/ImportScreen';
-import EditMarkerReviewScreen from './src/screens/markers/EditMarkerReviewScreen';
+import ManuscriptScreen from './src/screens/manuscript/ManuscriptScreen';
 import PenEditOutcomeScreen from './src/screens/penEdit/PenEditOutcomeScreen';
 import TextboxToolsScreen from './src/screens/tools/TextboxToolsScreen';
 import ScreenFrame from './src/ui/ScreenFrame';
 
-type Screen = 'routing' | 'permission' | 'tools' | 'markers' | 'direct' | 'import' | 'export';
+type Screen = 'routing' | 'permission' | 'tools' | 'manuscript' | 'direct' | 'import' | 'export';
 
 const DIRECT_ACTIONS: Record<number, TextboxActionKind> = {
   [BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX]: 'split',
@@ -60,7 +58,6 @@ function App(): React.JSX.Element | null {
   const [screen, setScreen] = useState<Screen>('routing');
   // Changes with every button press: the screen's key, so it starts fresh.
   const [launchKey, setLaunchKey] = useState(0);
-  const [markerScope, setMarkerScope] = useState<EditMarkerPreviewScope>('lasso');
   const [directAction, setDirectAction] = useState<TextboxActionKind>('split');
 
   // Set by a pen-edit tag that needs a word (index.js); shown before any other screen.
@@ -72,8 +69,8 @@ function App(): React.JSX.Element | null {
 
   useEffect(() => subscribePenEditOutcome(() => setPenEditOutcomeState(getPenEditOutcome())), []);
 
-  // A mark selected from the review (Select mark): the review opens again, for the whole page, at
-  // that snippet's change.
+  // A mark selected from the Manuscript card (Select mark): the card opens again at that snippet's
+  // change.
   const [focusPenEditId, setFocusPenEditId] = useState<string | null>(null);
   useEffect(() => {
     const openFocus = () => {
@@ -84,9 +81,8 @@ function App(): React.JSX.Element | null {
       setReviewFocus(null);
       setPenEditOutcome(null);
       setFocusPenEditId(focus.penEditId);
-      setMarkerScope('page');
       setLaunchKey(key => key + 1);
-      setScreen('markers');
+      setScreen('manuscript');
     };
     openFocus();
     return subscribeReviewFocus(openFocus);
@@ -104,9 +100,8 @@ function App(): React.JSX.Element | null {
       setScreen('tools');
       return;
     }
-    if (buttonId === BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS || buttonId === BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS) {
-      setMarkerScope(buttonId === BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS ? 'page' : 'lasso');
-      setScreen('markers');
+    if (buttonId === BUTTON_ID_NOTE_MANUSCRIPT) {
+      setScreen('manuscript');
       return;
     }
     if (DIRECT_ACTIONS[buttonId]) {
@@ -180,15 +175,8 @@ function App(): React.JSX.Element | null {
       );
     case 'tools':
       return <TextboxToolsScreen key={launchKey} onClose={closePluginView} />;
-    case 'markers':
-      return (
-        <EditMarkerReviewScreen
-          key={launchKey}
-          scope={markerScope}
-          focusPenEditId={focusPenEditId}
-          onClose={closePluginView}
-        />
-      );
+    case 'manuscript':
+      return <ManuscriptScreen key={launchKey} focusPenEditId={focusPenEditId} onClose={closePluginView} />;
     case 'direct':
       return <DirectActionScreen key={launchKey} action={directAction} onClose={closePluginView} />;
     case 'import':

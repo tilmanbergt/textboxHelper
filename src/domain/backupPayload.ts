@@ -41,7 +41,6 @@ export type EditMarkerBackupPayload = {
   createdAt: string;
   notePath: string;
   page: number;
-  selectedMarkerCount: number;
   recognizedOperationCount: number;
   texts: BackupText[];
   /** The applied pen edits and their handwriting, so deleted snippets can be restored. */
@@ -61,7 +60,6 @@ export function buildClipboardSummary(payload: BackupPayload): string {
   ];
   if (payload.action === 'edit-markers') {
     lines.push(
-      `Selected markers: ${payload.selectedMarkerCount}`,
       `Recognized operations: ${payload.recognizedOperationCount}`,
     );
   }
@@ -112,7 +110,6 @@ export function createEditMarkerBackupPayload(plan: EditMarkerApplyPlan): EditMa
     createdAt: new Date().toISOString(),
     notePath: plan.notePath,
     page: plan.page,
-    selectedMarkerCount: plan.selectedMarkerCount,
     recognizedOperationCount: plan.operations.length,
     texts: plan.textMutations.map(text => ({
       uuid: text.uuid,

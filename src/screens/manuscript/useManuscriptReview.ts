@@ -1,33 +1,31 @@
 /**
- * State and flows of the edit-marker review (technical-design-calmer-screens.md §3.4,
- * technical-design-pen-edits.md §3.6): reads the markers once when the screen opens, re-reads
- * after a calibration change, recognizes the pen edits while the screen is open, keeps skips and
- * corrections, applies the ready changes, and keeps the status line. After a successful apply the screen stays open with the
- * result; the preview is read again so the page's new state shows.
+ * State and flows of the Manuscript card's Review (technical-design-manuscript.md §4.6, from the
+ * edit-marker review of technical-design-pen-edits.md §3.6): reads the current page's marks when
+ * the card opens and again after a calibration change, recognizes the pen edits while it is open,
+ * keeps corrections and edge nudges, applies the ready changes, drops changes, and keeps the
+ * status line. After an apply the card stays open and the page is read again.
  */
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {dropItems, type DropItem} from '../../actions/editMarkerDrop';
+import {applyEditMarkerPreview} from '../../actions/markerApply';
 import {
-  applyEditMarkerPreview,
   getEditMarkerCalibration,
-  getEditMarkerPreview,
   resetEditMarkerCalibration,
   saveEditMarkerDiagnostics,
   setEditMarkerCalibration,
-} from '../../actions/editMarkers';
+} from '../../actions/markerCalibration';
+import {getEditMarkerPreview} from '../../actions/markerPageAnalysis';
 import {
   resetRecognition,
   setPenEditCorrection,
   setPenEditEdges,
-  setPenEditReview,
   startSelectMark,
 } from '../../actions/penEditReview';
-import {NO_SHIFT, type EdgeShift} from '../../domain/edgeShift';
+import {nudgeShift, type EdgeShift} from '../../domain/edgeShift';
 import {assembleMarkerPreview, type SwapOptions} from '../../domain/markerAssembly';
 import type {
   EditMarkerCalibration,
   EditMarkerPreview,
-  EditMarkerPreviewScope,
   PenTextState,
   RecognizedEditOperation,
 } from '../../domain/markerTypes';
@@ -36,15 +34,15 @@ import {updateSettings} from '../../storage/settingsFile';
 import type {FrameStatus} from '../../ui/ScreenFrame';
 import {usePenRecognitionQueue} from './usePenRecognitionQueue';
 
-export interface EditMarkerReview {
+export interface ManuscriptReview {
   preview: EditMarkerPreview | null;
   /**
    * Drops changes from the page without applying them (pen edits keep or lose their handwriting),
    * then reads the page again.
    */
   drop: (items: DropItem[], eraseHandwriting: boolean) => void;
-  /** Moves a change's start, end or (zero-length) place by one character. */
-  nudge: (operation: RecognizedEditOperation, edge: 'start' | 'end', delta: number) => void;
+  /** Moves one of a change's edges (its index in `edgeView.edges`) by one character. */
+  nudge: (operation: RecognizedEditOperation, edge: number, delta: number) => void;
   /** A swap's "Fix capitals" on or off (kept while the review is open). */
   setFixCase: (operationId: string, fixCase: boolean) => void;
   loading: boolean;
@@ -59,18 +57,17 @@ export interface EditMarkerReview {
   apply: () => void;
   /** Recognize the selected pen edit first. */
   setSelectedPenEdit: (id: string | null) => void;
-  setSkipped: (id: string, skipped: boolean) => void;
   recognizeAgain: (id: string) => void;
   correct: (id: string, text: string | null) => void;
   /**
-   * Select mark: the snippet waits for its mark and the review closes (`onDone`); the next tap of
-   * "Insertion or Replacement" on the mark opens the review again at this change.
+   * Select mark: the snippet waits for its mark and the card closes (`onDone`); the next tap of
+   * the pen-text button on the mark opens the card again at this change.
    */
   selectMark: (id: string, onDone: () => void) => void;
   penStates: Record<string, PenTextState>;
 }
 
-export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerReview {
+export function useManuscriptReview(): ManuscriptReview {
   const [analysis, setAnalysis] = useState<EditMarkerPreview | null>(null);
   const [penStates, setPenStates] = useState<Record<string, PenTextState>>({});
   const [selectedPenId, setSelectedPenId] = useState<string | null>(null);
@@ -90,7 +87,7 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
         setStatus({text: 'Reading markers…'});
       }
       try {
-        const next = await getEditMarkerPreview(scope);
+        const next = await getEditMarkerPreview();
         setAnalysis(next);
         setPenStates(next.base?.penStates ?? {});
         setPlainShifts({});
@@ -99,20 +96,17 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
           setStatus(next.fontWarning ? {text: next.fontWarning} : null);
         }
       } catch (error) {
-        console.warn('[EditMarkerReview] preview failed', String(error));
+        console.warn('[Manuscript] preview failed', String(error));
         setAnalysis(null);
         setStatus({
           kind: 'error',
-          text: userMessage(
-            error,
-            scope === 'page' ? 'Could not read the markers on this page.' : 'Could not read the lasso selection.',
-          ),
+          text: userMessage(error, 'Could not read the marks on this page.'),
         });
       } finally {
         setLoading(false);
       }
     },
-    [scope],
+    [],
   );
 
   useEffect(() => {
@@ -138,21 +132,10 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
   const store = useCallback((id: string, write: () => Promise<void>, state: PenTextState) => {
     updatePenState(id, state);
     write().catch(error => {
-      console.warn('[EditMarkerReview] pen edit not stored', String(error));
+      console.warn('[Manuscript] pen edit not stored', String(error));
       setStatus({kind: 'error', text: 'The change to this pen edit could not be stored; it applies only now.'});
     });
   }, [updatePenState]);
-
-  const setSkipped = useCallback(
-    (id: string, skipped: boolean) => {
-      const current = penStates[id];
-      if (current) {
-        const review = skipped ? 'skipped' : 'open';
-        store(id, () => setPenEditReview(id, review), {...current, review});
-      }
-    },
-    [penStates, store],
-  );
 
   const recognizeAgain = useCallback(
     (id: string) => {
@@ -170,10 +153,7 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
       const current = penStates[id];
       if (current) {
         const correctedText = text === null ? null : text.trim();
-        store(id, () => setPenEditCorrection(id, correctedText), {...current, correctedText, review: 'open'});
-        if (current.review === 'skipped') {
-          setPenEditReview(id, 'open').catch(() => undefined);
-        }
+        store(id, () => setPenEditCorrection(id, correctedText), {...current, correctedText});
       }
     },
     [penStates, store],
@@ -187,22 +167,21 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
   }, []);
 
   const nudge = useCallback(
-    (operation: RecognizedEditOperation, edge: 'start' | 'end', delta: number) => {
+    (operation: RecognizedEditOperation, edge: number, delta: number) => {
       if (busy || applied) {
         return;
       }
-      const move = (shift: EdgeShift): EdgeShift =>
-        edge === 'start' ? {...shift, start: shift.start + delta} : {...shift, end: shift.end + delta};
+      const move = (shift: EdgeShift | null | undefined): EdgeShift => nudgeShift(shift, edge, delta);
       const penId = operation.penEditId;
       if (!penId) {
-        setPlainShifts(current => ({...current, [operation.id]: move(current[operation.id] ?? NO_SHIFT)}));
+        setPlainShifts(current => ({...current, [operation.id]: move(current[operation.id])}));
         return;
       }
       const current = penStates[penId];
       if (!current) {
         return;
       }
-      const edges = move(current.edges ?? NO_SHIFT);
+      const edges = move(current.edges);
       updatePenState(penId, {...current, edges});
       const pending = edgeWrites.current.get(penId);
       if (pending) {
@@ -213,7 +192,7 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
         setTimeout(() => {
           edgeWrites.current.delete(penId);
           setPenEditEdges(penId, edges).catch(error => {
-            console.warn('[EditMarkerReview] edges not stored', String(error));
+            console.warn('[Manuscript] edges not stored', String(error));
             setStatus({kind: 'error', text: 'The moved edge could not be stored; it applies only now.'});
           });
         }, 500),
@@ -230,7 +209,7 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
       startSelectMark(id, 'review')
         .then(onDone)
         .catch(error => {
-          console.warn('[EditMarkerReview] select mark not stored', String(error));
+          console.warn('[Manuscript] select mark not stored', String(error));
           setStatus({kind: 'error', text: 'Could not remember the text for Select mark. Please try again.'});
         });
     },
@@ -275,7 +254,7 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
     saveEditMarkerDiagnostics()
       .then(path => setStatus({text: `Diagnostics saved to EXPORT: ${fileNameOf(path)}`}))
       .catch(error => {
-        console.warn('[EditMarkerReview] diagnostics failed', String(error));
+        console.warn('[Manuscript] diagnostics failed', String(error));
         setStatus({kind: 'error', text: userMessage(error, 'Could not save the diagnostics.')});
       });
   }, [busy, loading]);
@@ -295,7 +274,7 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
         await load(true);
       })
       .catch(error => {
-        console.warn('[EditMarkerReview] apply failed', String(error));
+        console.warn('[Manuscript] apply failed', String(error));
         setStatus({kind: 'error', text: userMessage(error, 'The changes could not be applied.')});
       })
       .finally(() => setBusy(false));
@@ -314,7 +293,7 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
           await load(true);
         })
         .catch(error => {
-          console.warn('[EditMarkerReview] drop failed', String(error));
+          console.warn('[Manuscript] drop failed', String(error));
           setStatus({kind: 'error', text: userMessage(error, 'Could not drop them from the page.')});
         })
         .finally(() => setBusy(false));
@@ -347,7 +326,6 @@ export function useEditMarkerReview(scope: EditMarkerPreviewScope): EditMarkerRe
     saveDiagnostics,
     apply,
     setSelectedPenEdit: setSelectedPenId,
-    setSkipped,
     recognizeAgain,
     correct,
     selectMark,

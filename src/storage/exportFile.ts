@@ -3,7 +3,7 @@ import {FileUtils} from 'sn-plugin-lib';
 
 /**
  * Writes a JSON file into EXPORT through a temporary file in the app's document folder (the host
- * only lets plugins copy into EXPORT). Used by "Save Diagnostics" in the edit-marker review.
+ * only lets plugins copy into EXPORT). Used by "Save Diagnostics" in the Manuscript card.
  */
 export async function writeJsonExportFile(fileName: string, payload: unknown): Promise<string> {
   const exportDir = await FileUtils.getExportPath();

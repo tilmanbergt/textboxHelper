@@ -17,7 +17,6 @@ import type {
 import {
   updatePenEdit,
   type PenEditEntry,
-  type PenEditReview,
   setAwaitingMark,
   type PenEditStrokeData,
 } from '../domain/penEditModel';
@@ -46,7 +45,7 @@ import {recognizeStrokes} from '../supernote/strokeRecognition';
 import type {MeasuredTextbox, TextboxMeasurer} from './markerMeasure';
 
 /**
- * The pen edits' side of the edit-marker review (technical-design-pen-edits.md §3.6–§3.9):
+ * The pen edits' side of the Manuscript review (technical-design-pen-edits.md §3.6–§3.9):
  * which tagged snippets are on the page, their stored text, recognizing one and storing the
  * result, skips and corrections, and what apply has to remove or keep.
  */
@@ -82,7 +81,6 @@ export function stateOf(entry: PenEditEntry): PenTextState {
     status: entry.recognition.status,
     text: entry.recognition.text,
     correctedText: entry.correctedText,
-    review: entry.review,
     edges: entry.edges,
   };
 }
@@ -237,14 +235,12 @@ async function syncPenEditsWithPage(
 }
 
 /**
- * The active pen edits whose badge is on the page. With a lasso, only those with a tagged part
- * (or their strike) in the lasso.
+ * The active pen edits whose badge is on the page.
  */
 export async function loadPenEditContext(
   notePath: string,
   page: number,
   pageElements: Element[],
-  lassoElements: Element[] | null,
 ): Promise<PenEditContext> {
   const idsOnPage = new Set<string>();
   for (const element of pageElements) {
@@ -275,8 +271,8 @@ export async function loadPenEditContext(
     entry => entry.state === 'active' && idsOnPage.has(entry.id),
   );
 
-  // Every tagged snippet's strokes stay out of the markers, also outside the lasso. Element uuids
-  // differ between the page read and the lasso read, so the fallback compares places.
+  // Every tagged snippet's strokes stay out of the markers. Without a tag, the fallback compares
+  // places (element uuids are not identities, host facts §3).
   const excludedRects: Rect[] = [];
   const snippetRects = new Map<string, Rect>();
   const strikeRects = new Map<string, Rect>();
@@ -349,29 +345,7 @@ export async function loadPenEditContext(
     return undefined;
   };
 
-  const lassoIds = new Set<string>();
-  const lassoRects: Rect[] = [];
-  for (const element of lassoElements ?? []) {
-    const tag = parsePenEditUserData(element.userData);
-    if (tag) {
-      lassoIds.add(tag.id);
-    }
-    const rect = elementRect(element);
-    if (rect) {
-      lassoRects.push(rect);
-    }
-  }
-  const inLasso = (entry: PenEditEntry): boolean => {
-    if (!lassoElements || lassoIds.has(entry.id)) {
-      return true;
-    }
-    const strikeRect = strikeRects.get(entry.id);
-    return (
-      !!strikeRect && lassoRects.some(rect => rectsMatch(rect, strikeRect))
-    );
-  };
-
-  const entries = onPage.filter(inLasso).sort((a, b) => a.number - b.number);
+  const entries = [...onPage].sort((a, b) => a.number - b.number);
   const states: Record<string, PenTextState> = {};
   const views: PenEditView[] = [];
   for (const entry of entries) {
@@ -591,15 +565,6 @@ export async function resetRecognition(id: string): Promise<void> {
       ...entry,
       recognition: {status: 'waiting', text: '', error: null, ms: 0},
     })),
-  );
-}
-
-export async function setPenEditReview(
-  id: string,
-  review: PenEditReview,
-): Promise<void> {
-  await changePenEditIndex(current =>
-    updatePenEdit(current, id, entry => ({...entry, review})),
   );
 }
 

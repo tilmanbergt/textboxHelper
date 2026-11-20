@@ -44,8 +44,6 @@ const replaceDraft = draft('r', 14, 21, {penEditId: 'pe1', penEditNumber: 1, con
 const base = (overrides: Partial<MarkerPreviewBase> = {}): MarkerPreviewBase => ({
   notePath: '/n.note',
   page: 17,
-  selectedMarkerCount: 3,
-  selectedTextboxCount: 0,
   drafts: [replaceDraft],
   ignored: [],
   textboxes: [textbox],
@@ -59,20 +57,18 @@ const state = (overrides: Partial<PenTextState> = {}): PenTextState => ({
   status: 'done',
   text: 'proud',
   correctedText: null,
-  review: 'open',
   edges: null,
   ...overrides,
 });
 
 describe('penOperationStatus', () => {
-  it('follows recognition, correction and skip', () => {
+  it('follows recognition and correction', () => {
     expect(penOperationStatus(undefined)).toBe('recognizing');
     expect(penOperationStatus(state({status: 'waiting', text: ''}))).toBe('recognizing');
     expect(penOperationStatus(state())).toBe('ready');
     expect(penOperationStatus(state({text: ' '}))).toBe('empty');
     expect(penOperationStatus(state({status: 'failed', text: ''}))).toBe('failed');
     expect(penOperationStatus(state({status: 'failed', correctedText: 'fixed'}))).toBe('ready');
-    expect(penOperationStatus(state({review: 'skipped'}))).toBe('skipped');
   });
 });
 
@@ -80,12 +76,15 @@ describe('assembleMarkerPreview', () => {
   it('shows a placeholder and applies nothing while a replacement is recognized', () => {
     const preview = assembleMarkerPreview(base(), {pe1: state({status: 'recognizing', text: ''})});
     expect(preview.operations[0].penStatus).toBe('recognizing');
-    expect(preview.textboxes[0].segments).toEqual([
-      {text: 'This can feel '},
-      {text: 'humble,', style: 'removed'},
-      {text: ' ‹replacement 1 being recognized…›', style: 'muted'},
-      {text: ' but not because'},
-    ]);
+    expect(preview.hunks[0]).toMatchObject({
+      label: 'Replace 1',
+      before: 'This can feel ',
+      segments: [
+        {text: 'humble,', style: 'removed'},
+        {text: ' ‹replacement 1 being recognized…›', style: 'muted'},
+      ],
+      after: ' but not because',
+    });
     expect(preview.applyPlan).toBeNull();
     expect(preview.pendingCount).toBe(1);
   });
@@ -95,7 +94,7 @@ describe('assembleMarkerPreview', () => {
     expect(preview.applyPlan?.textMutations[0].nextText).toBe('This can feel proud but not because');
     expect(preview.applyPlan?.recognizedMarkerNums).toEqual([4, 5, 6]);
     expect(preview.applyPlan?.penEditIds).toEqual(['pe1']);
-    expect(preview.textboxes[0].segments).toContainEqual({text: ' proud', style: 'inserted'});
+    expect(preview.hunks[0].segments).toContainEqual({text: ' proud', style: 'inserted'});
   });
 
   it('takes the correction over the recognized text', () => {
@@ -103,14 +102,14 @@ describe('assembleMarkerPreview', () => {
     expect(preview.applyPlan?.textMutations[0].nextText).toBe('This can feel modest, but not because');
   });
 
-  it('keeps a skipped replacement and its marks for later, but applies the rest', () => {
+  it('keeps a replacement without text and its marks for later, but applies the rest', () => {
     const preview = assembleMarkerPreview(base({drafts: [replaceDraft, draft('d', 26, 29, {consumedMarkerNums: [9]})]}), {
-      pe1: state({review: 'skipped'}),
+      pe1: state({status: 'failed', text: ''}),
     });
     expect(preview.applyPlan?.textMutations[0].nextText).toBe('This can feel humble, but because');
     expect(preview.applyPlan?.recognizedMarkerNums).toEqual([9]);
     expect(preview.applyPlan?.penEditIds).toEqual([]);
-    expect(preview.skippedCount).toBe(1);
+    expect(preview.pendingCount).toBe(1);
   });
 
   it('adds a ready gap insertion as a new paragraph', () => {
@@ -134,7 +133,7 @@ describe('assembleMarkerPreview', () => {
     });
     const waiting = assembleMarkerPreview(insertionBase, {});
     expect(waiting.operations[0]).toMatchObject({kind: 'insert', penStatus: 'recognizing'});
-    expect(waiting.textboxes[0].title).toBe('New paragraph after textbox 2');
+    expect(waiting.hunks[0]).toMatchObject({label: 'New paragraph 2', meta: 'After textbox 2'});
     expect(waiting.applyPlan).toBeNull();
 
     const ready = assembleMarkerPreview(insertionBase, {pe2: state({text: 'A new thought.'})});
@@ -170,7 +169,7 @@ describe('assembleMarkerPreview', () => {
 
     const waiting = assembleMarkerPreview(caretBase, {});
     expect(waiting.applyPlan).toBeNull();
-    expect(waiting.textboxes[0].segments.some(segment => segment.style === 'muted')).toBe(true);
+    expect(waiting.hunks[0].segments.some(segment => segment.style === 'muted')).toBe(true);
 
     const ready = assembleMarkerPreview(caretBase, {pe3: state({text: 'even proud'})});
     expect(ready.applyPlan?.textMutations[0].nextText).toBe('This can feel humble, even proud but not because');
@@ -195,7 +194,7 @@ describe('assembleMarkerPreview', () => {
     const preview = assembleMarkerPreview(base({drafts: [split]}), {});
     expect(preview.applyPlan?.textMutations[0].nextText).toBe(`This can feel humble, ${SPLIT_SIGN}but not because`);
     expect(preview.applyPlan?.recognizedMarkerNums).toEqual([41]);
-    expect(preview.textboxes[0].segments.map(segment => segment.text).join('')).toContain('¶\n');
+    expect(preview.hunks[0].segments.map(segment => segment.text).join('')).toContain('¶');
   });
 
   it('puts an insertion at a paragraph caret between two split signs', () => {
@@ -313,5 +312,80 @@ describe('swaps and spaces in the assembly', () => {
     expect(preview.operations[0].swap?.capsAvailable).toBe(true);
     const off = assembleMarkerPreview(base({drafts: [capital], penEdits: []}), {}, null, {}, {'swap:s': {fixCase: false}});
     expect(textOf(off)?.startsWith('can This feel')).toBe(true);
+  });
+
+  it('moves its three edges: start of A, where the parts meet, end of B', () => {
+    const swap = assembleMarkerPreview(base({drafts: [swapDraft], penEdits: []}), {});
+    expect(swap.operations[0].edgeView?.edges.map(edge => edge.label)).toEqual(['Start of A', 'A | B', 'End of B']);
+    // "can feel" ⇄ "humble," → one more word in A: "This can feel humble" stays, the meeting point
+    // moves left to "can" ⇄ "feel humble,".
+    const nudged = assembleMarkerPreview(base({drafts: [swapDraft], penEdits: []}), {}, null, {'swap:s': [0, -5, 0]});
+    expect(textOf(nudged)).toBe('This feel humble can, but not because');
+    expect(nudged.operations[0].swap?.zones).toEqual({a0: 5, a1: 8, b0: 9, b1: 21});
+  });
+
+  it('lists the swap with A struck, B as it is and A in bold at its new place', () => {
+    const plain: OperationDraft = {
+      ...swapDraft,
+      operation: {...swapDraft.operation, swap: {zones: {a0: 5, a1: 8, b0: 9, b1: 13}, fixCase: false, capsAvailable: false}},
+    };
+    const preview = assembleMarkerPreview(base({drafts: [plain], penEdits: []}), {});
+    expect(preview.hunks[0]).toMatchObject({
+      label: 'Swap',
+      before: 'This ',
+      segments: [
+        {text: 'can', style: 'removed'},
+        {text: ' feel'},
+        {text: ' can', style: 'inserted'},
+      ],
+      after: ' humble, but not because',
+    });
+  });
+});
+
+describe('hunks', () => {
+  it('lists changes in reading order, also when drafts come out of order', () => {
+    const preview = assembleMarkerPreview(
+      base({drafts: [draft('late', 26, 29, {consumedMarkerNums: [9]}), draft('early', 5, 8, {consumedMarkerNums: [8]})], penEdits: []}),
+      {},
+    );
+    expect(preview.hunks.map(hunk => hunk.operationId)).toEqual(['early', 'late']);
+    expect(preview.hunks[1]).toMatchObject({
+      label: 'Delete',
+      before: 'This can feel humble, but ',
+      segments: [{text: 'not', style: 'removed'}],
+      after: ' because',
+      meta: 'Textbox 2 · line 1',
+    });
+  });
+
+  it('puts a new paragraph right after the textbox above it', () => {
+    const second = {...textbox, uuid: 'tb2', numInPage: 5, textRect: {left: 144, top: 600, right: 1248, bottom: 700}};
+    const preview = assembleMarkerPreview(
+      base({
+        drafts: [
+          draft('below', 0, 4, {targetTextboxUuid: 'tb2', targetTextboxNumInPage: 5, consumedMarkerNums: [11]}),
+          draft('above', 5, 8, {consumedMarkerNums: [8]}),
+        ],
+        textboxes: [textbox, second],
+        insertions: [
+          {
+            penEditId: 'pe2',
+            number: 2,
+            left: 144,
+            width: 1104,
+            style: {...textbox, textContentFull: TEXT},
+            aboveNumInPage: 2,
+            belowNumInPage: 5,
+            aboveRect: textbox.textRect,
+            belowRect: second.textRect,
+          },
+        ],
+        penEdits: [{id: 'pe2', kind: 'insertion', number: 2, pictureUri: null}],
+      }),
+      {pe2: state({text: 'A new thought.'})},
+    );
+    expect(preview.hunks.map(hunk => hunk.label)).toEqual(['Delete', 'New paragraph 2', 'Delete']);
+    expect(preview.hunks[1].segments).toEqual([{text: 'A new thought.', style: 'inserted'}]);
   });
 });

@@ -3,7 +3,7 @@ import type {TextboxMeasurementCalibration} from './textboxLayout';
 import type {TextSegment} from './textPages';
 import type {CaretInsertMode} from './penEditCaret';
 import type {EdgeShift} from './edgeShift';
-import type {PenEditReview, RecognitionStatus} from './penEditModel';
+import type {RecognitionStatus} from './penEditModel';
 import type {PenEditKind} from './penEditTags';
 import type {SwapZones} from './swapMark';
 import type {PageElementData, Rect, TextElementData, TextboxData} from './textboxModel';
@@ -37,9 +37,9 @@ export type SwapInfo = {
 
 /**
  * Where a pen edit's text stands in the review (technical-design-pen-edits.md §3.6): recognizing
- * (or waiting for it), ready to apply, skipped for later, or recognized without usable text.
+ * (or waiting for it), ready to apply, or recognized without usable text.
  */
-export type PenOperationStatus = 'recognizing' | 'ready' | 'skipped' | 'failed' | 'empty';
+export type PenOperationStatus = 'recognizing' | 'ready' | 'failed' | 'empty';
 
 export type EditMarkerHighlightRange = {
   start: number;
@@ -93,23 +93,26 @@ export type IgnoredEditMarker = {
   removableNums?: number[];
 };
 
-export type EditMarkerTextboxPreview = {
-  uuid: string;
-  numInPage: number;
+/**
+ * One change as the review lists it (technical-design-manuscript.md §4.3): the changed text in
+ * full, with the text before and after it in its textbox as context.
+ */
+export type ChangeHunk = {
+  operationId: string;
+  /** "Delete", "Replace 2", "Insert 3", "Swap", "Paragraph break", "Space", "New paragraph 4". */
+  label: string;
+  /** The textbox's text before the change, from its start (the list shows its last words). */
+  before: string;
   segments: TextSegment[];
-  changeCount: number;
-  /** Header for a textbox that doesn't exist yet (an insertion). */
-  title?: string;
+  /** The textbox's text after the change, to its end. */
+  after: string;
+  /** Where it is: "Textbox 4 · line 3", "After textbox 6", with notes like "Check place". */
+  meta: string;
 };
 
 export type EditMarkerPreview = {
-  selectedMarkerCount: number;
-  selectedTextboxCount: number;
-  recognizedOperationCount: number;
-  selectionMessage: string;
-  summaryMessage: string;
-  /** The affected textboxes in reading order, as diff segments (domain/markerDiff.ts). */
-  textboxes: EditMarkerTextboxPreview[];
+  /** Every change in reading order (domain/markerHunks.ts). */
+  hunks: ChangeHunk[];
   /** Set when a textbox font couldn't be read and word positions were measured in a standard font. */
   fontWarning: string | null;
   operations: RecognizedEditOperation[];
@@ -120,9 +123,8 @@ export type EditMarkerPreview = {
   base: MarkerPreviewBase | null;
   /** The pen edits in this review, in list order. */
   penEdits: PenEditView[];
-  /** Pen edits still waiting for text, and those skipped for later. */
+  /** Pen edits still waiting for their text (being recognized, or not recognized). */
   pendingCount: number;
-  skippedCount: number;
 };
 
 /** A pen edit's text as the review knows it. */
@@ -130,22 +132,20 @@ export type PenTextState = {
   status: RecognitionStatus | 'recognizing';
   text: string;
   correctedText: string | null;
-  review: PenEditReview;
   /** Character nudges of the change's edges, stored with the pen edit. */
   edges: EdgeShift | null;
 };
 
+/** One edge of a change for the edge control: its name and the characters on each side. */
+export type EdgePoint = {label: string; before: string; after: string};
+
 /**
- * Where a change sits in its textbox's text after the edge nudges, with the characters around its
- * edges for the edge control. A zero-length change (insertion, paragraph break) has one place.
+ * A change's edges after the nudges (technical-design-manuscript.md §4.4): one (Place), two
+ * (Start, End) or three for a swap (Start of A, A | B, End of B), and the text around it as it
+ * will read.
  */
 export type EdgeView = {
-  start: number;
-  end: number;
-  zeroLength: boolean;
-  startContext: {before: string; after: string};
-  endContext: {before: string; after: string};
-  /** The text right around the change as it will read. */
+  edges: EdgePoint[];
   result: string;
 };
 
@@ -187,8 +187,6 @@ export type InsertionDraft = {
 export type MarkerPreviewBase = {
   notePath: string;
   page: number;
-  selectedMarkerCount: number;
-  selectedTextboxCount: number;
   drafts: OperationDraft[];
   ignored: IgnoredEditMarker[];
   textboxes: MarkerTextboxBase[];
@@ -208,8 +206,6 @@ export type InsertionPlan = {
   aboveRect: Rect | null;
   belowRect: Rect | null;
 };
-
-export type EditMarkerPreviewScope = 'lasso' | 'page';
 
 export type StrokeStats = {
   points: Array<{x: number; y: number}>;
@@ -246,7 +242,6 @@ export type TextMutationPlan = {
 export type EditMarkerApplyPlan = {
   notePath: string;
   page: number;
-  selectedMarkerCount: number;
   operations: RecognizedEditOperation[];
   recognizedMarkerNums: number[];
   textMutations: TextMutationPlan[];

@@ -11,7 +11,6 @@ import {fileNameOf} from '../domain/userMessage';
 import {writeBackupFile} from '../storage/backupFile';
 import {
   deletePageElements,
-  hideLassoBox,
   readPageElements,
   recycleElements,
   saveCurrentNoteForConsistency,
@@ -116,7 +115,6 @@ export async function dropItems(
         createdAt: new Date().toISOString(),
         notePath: base.notePath,
         page: base.page,
-        selectedMarkerCount: 0,
         recognizedOperationCount: 0,
         texts: [],
         penEdits: penBackup,
@@ -142,7 +140,6 @@ export async function dropItems(
         String(error),
       );
     }
-    await hideLassoBox('[EditMarkerActions]');
 
     const markCount = items.filter(item => !item.penEditId).length;
     const parts = [

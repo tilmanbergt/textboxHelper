@@ -47,3 +47,14 @@ export function tryApiResult<T>(result: any): T | null {
 
   return (result.result as T) ?? null;
 }
+
+/** An sn-plugin-lib answer as the plugin reads it; every field may be missing. */
+export type SdkResponse<T> =
+  | {success?: boolean; result?: T; error?: {code?: number; message?: string}}
+  | null
+  | undefined;
+
+/** A failed answer's error as one short text ("105: busy"), or `fallback` when it has none. */
+export function sdkErrorText(response: SdkResponse<unknown>, fallback: string): string {
+  return response?.error ? `${response.error.code ?? ''}: ${response.error.message ?? ''}` : fallback;
+}

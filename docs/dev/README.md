@@ -55,9 +55,9 @@ To change a picture: edit the spec (or `scripts/lib/markDrawing.mjs` for every p
 |---|---|
 | `index.js` | Registers the toolbar buttons (lasso toolbar and NOTE toolbar) and starts routing. If a button doesn't appear where expected, start here. |
 | `App.tsx` | The plugin window: asks for file permissions, routes each button press to a view, runs previews and actions, shows status and results. |
-| `src/actions/` | The flows behind the buttons: `textboxEdits.ts` (split, join, clean, remove line breaks, Log All Textboxes), `editMarkers.ts`, `editMarkerAnalysis.ts`, `shapeMarks.ts`, `markerMeasure.ts` and `editMarkerDrop.ts` (handwritten edit markers), `penEditTag.ts` and `penEditReview.ts` (tagged handwritten text), `textImport.ts` (text file into textboxes), `textboxScan.ts` (scan for the DOCX export). |
+| `src/actions/` | The flows behind the buttons: `textboxEdits.ts` (split, join, clean, remove line breaks, Log All Textboxes), `markerPageAnalysis.ts`, `markerApply.ts`, `markerCalibration.ts`, `editMarkerAnalysis.ts`, `shapeMarks.ts`, `markerMeasure.ts` and `editMarkerDrop.ts` (handwritten edit markers), `penEditTag.ts` and `penEditReview.ts` (tagged handwritten text), `textImport.ts` (text file into textboxes), `textboxScan.ts` (scan for the DOCX export). |
 | `src/domain/` | Pure logic, tested with Jest: text splitting, edit plans, marker strokes and text changes, geometry, hit testing, pagination, import parsing and planning, export classification, backup payloads, button ids and action labels, the domain types (`textboxModel.ts`). |
-| `src/supernote/` | Device access: SDK calls (`noteElements.ts`, `noteTextInsertion.ts`, `markerStrokeRead.ts`, `exportNoteContext.ts`, `sdkResult.ts`), native text measurement (`textboxMetrics.ts`), button routing, permissions. If a host call fails, start here. |
+| `src/supernote/` | Device access: SDK calls (`noteElements.ts`, `noteTextInsertion.ts`, `markerStrokeRead.ts`, `exportNoteContext.ts`, `sdkResult.ts` with `SdkResponse` and `sdkErrorText`, `sdkElements.ts`), native text measurement (`textboxMetrics.ts`), button routing, permissions. If a host call fails, start here. |
 | `src/storage/` | Files: backups, JSON into EXPORT, the import text file, DOCX. |
 | `src/utils/` | The edit-marker diagnostics trace. |
 | `src/screens/` | The views and dialogs of the plugin window. |

@@ -34,14 +34,16 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 - The mark drawn just before the text decides: a replace mark makes it a replacement, a caret an insertion; a small number at both shows which belong together
 - No mark found? Select mark: draw or lasso the mark and tap the button again; the text never needs to be written again
 - An insertion is written right after a caret (a V on the line or a ∧ under it): between words, inside a word, or between paragraphs; paragraphs below move down to make room
-- The review recognizes the tagged text while you read, shows a picture of the handwriting, and lets you fix the text in place with the Supernote keyboard's handwriting input, or skip it for later
-- Fine-tune any change by one character (a comma, a space, a letter), and drop a change or an unused mark, keeping or erasing your handwriting
+- Manuscript recognizes the tagged text while you read, shows a picture of the handwriting, and lets you fix the text in place with the Supernote keyboard's handwriting input
+- Fine-tune any change by one character (a comma, a space, a letter; a swap's three edges), and drop a change or an unused mark, keeping or erasing your handwriting
 - The handwriting and its picture are kept in the plugin folder (`pen-edits/`)
 
-### Apply All Edit Markers
+### Manuscript
 
-- Run marker recognition on the full current page from the NOTE toolbar
-- Apply recognized marker operations after preview
+- The NOTE toolbar button "Manuscript" reads every edit mark on the current page
+- Every change in reading order, the changed text in full with a few words around it; the selected change on the right with its text, its edges and Drop
+- "Needs attention" above the list: tagged text without a mark, marks that couldn't be used, with the reason
+- Apply every ready change after the preview; a backup of the page is written first
 
 ### Import Text File
 

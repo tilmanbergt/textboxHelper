@@ -6,7 +6,6 @@ import {
   TextBox,
 } from 'sn-plugin-lib';
 import type {Size} from '../domain/importPlan';
-import type {EditMarkerPreviewScope} from '../domain/markerTypes';
 import type {PreparedTextInsert} from '../domain/textboxEditPlan';
 import {assertApiSuccess} from './sdkResult';
 
@@ -148,54 +147,24 @@ export async function getLassoElements(): Promise<Element[]> {
   );
 }
 
-export type PreviewContext = {
+/** The open note's current page as read for the edit-mark review. */
+export type PageContext = {
   notePath: string;
   page: number;
-  lassoElements: Element[];
   pageElements: Element[];
-  previewScope: EditMarkerPreviewScope;
-  effectiveSelection: Element[];
 };
 
-export async function getPreviewContext(
-  previewScope: EditMarkerPreviewScope,
-): Promise<PreviewContext> {
-  const fileResponse = await PluginCommAPI.getCurrentFilePath();
-  const pageResponse = await PluginCommAPI.getCurrentPageNum();
-
+export async function readCurrentPageContext(): Promise<PageContext> {
   const notePath = assertApiSuccess(
-    fileResponse as {success?: boolean; result?: string; error?: {message?: string}},
+    (await PluginCommAPI.getCurrentFilePath()) as {success?: boolean; result?: string; error?: {message?: string}},
     'Could not determine the current note path.',
   );
   const page = assertApiSuccess(
-    pageResponse as {success?: boolean; result?: number; error?: {message?: string}},
+    (await PluginCommAPI.getCurrentPageNum()) as {success?: boolean; result?: number; error?: {message?: string}},
     'Could not determine the current page.',
   );
-
-  const pageElementsResponse = await PluginFileAPI.getElements(page, notePath);
-  const pageElements = assertApiSuccess(
-    pageElementsResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
-    'Could not read the current page elements.',
-  );
-
-  let lassoElements: Element[] = [];
-
-  if (previewScope === 'lasso') {
-    const lassoResponse = await PluginCommAPI.getLassoElements();
-    lassoElements = assertApiSuccess(
-      lassoResponse as {success?: boolean; result?: Element[]; error?: {message?: string}},
-      'Could not read the current lasso selection.',
-    );
-  }
-
-  return {
-    notePath,
-    page,
-    lassoElements,
-    pageElements,
-    previewScope,
-    effectiveSelection: previewScope === 'page' ? pageElements : lassoElements,
-  };
+  const pageElements = await readPageElements(notePath, page, 'Could not read the current page elements.');
+  return {notePath, page, pageElements};
 }
 
 export async function saveCurrentNoteForConsistency(reason: string): Promise<void> {

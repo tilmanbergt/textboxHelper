@@ -1,4 +1,4 @@
-import type {EdgeShift} from './edgeShift';
+import {isNoShift, type EdgeShift} from './edgeShift';
 import type {PenEditKind} from './penEditTags';
 import type {Rect} from './textboxModel';
 
@@ -55,7 +55,6 @@ export type PenEditRecognition = {
   ms: number;
 };
 
-export type PenEditReview = 'open' | 'accepted' | 'skipped';
 export type PenEditState = 'active' | 'applied' | 'dropped';
 
 export type PenEditEntry = {
@@ -83,14 +82,13 @@ export type PenEditEntry = {
   hasPicture: boolean;
   recognition: PenEditRecognition;
   correctedText: string | null;
-  review: PenEditReview;
   state: PenEditState;
   /**
    * Set while the user is asked to draw or lasso this snippet's mark (Select mark,
    * technical-design-pen-edits-2.md §4): the next tap on a few strokes becomes its mark.
    */
   awaitingMark: AwaitingMark | null;
-  /** The user's character nudges of where the change starts and ends (review, §6). */
+  /** The user's character nudges of the change's edges (review, §6): one entry per edge. */
   edges: EdgeShift | null;
 };
 
@@ -180,7 +178,6 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
   ) {
     return null;
   }
-  const reviews: PenEditReview[] = ['open', 'accepted', 'skipped'];
   const states: PenEditState[] = ['active', 'applied', 'dropped'];
   return {
     id: value.id,
@@ -197,18 +194,23 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     hasPicture: value.hasPicture === true,
     recognition: parseRecognition(value.recognition),
     correctedText: isString(value.correctedText) ? value.correctedText : null,
-    review: reviews.includes(value.review as PenEditReview) ? (value.review as PenEditReview) : 'open',
     state: states.includes(value.state as PenEditState) ? (value.state as PenEditState) : 'active',
     awaitingMark: parseAwaitingMark(value.awaitingMark),
     edges: parseEdges(value.edges),
   };
 }
 
+/** Edge nudges: a list of character counts; entries from before 1–3 edges were `{start, end}`. */
 function parseEdges(value: unknown): EdgeShift | null {
-  if (!isRecord(value) || !isFiniteNumber(value.start) || !isFiniteNumber(value.end)) {
+  const edges = Array.isArray(value)
+    ? value
+    : isRecord(value)
+    ? [value.start, value.end]
+    : null;
+  if (!edges || !edges.every(isFiniteNumber)) {
     return null;
   }
-  return value.start === 0 && value.end === 0 ? null : {start: value.start, end: value.end};
+  return isNoShift(edges as number[]) ? null : (edges as number[]);
 }
 
 function parseAwaitingMark(value: unknown): AwaitingMark | null {

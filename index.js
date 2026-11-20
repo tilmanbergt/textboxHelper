@@ -18,9 +18,8 @@ import {name as appName} from './app.json';
 import {
   BUTTON_ID_EXPORT_DOCX,
   BUTTON_ID_IMPORT_TEXT_FILE,
-  BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS,
+  BUTTON_ID_NOTE_MANUSCRIPT,
   BUTTON_ID_TEXTBOX_TOOLS,
-  BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS,
   BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES,
   BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES,
   BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
@@ -107,12 +106,12 @@ PluginManager.registerButton(1, ['NOTE'], {
 });
 
 PluginManager.registerButton(1, ['NOTE'], {
-  id: BUTTON_ID_NOTE_APPLY_ALL_EDIT_MARKERS,
+  id: BUTTON_ID_NOTE_MANUSCRIPT,
   name: JSON.stringify({
-    en: 'Apply All Edit Markers',
-    zh_CN: 'Apply All Edit Markers',
-    zh_TW: 'Apply All Edit Markers',
-    ja: 'Apply All Edit Markers',
+    en: 'Manuscript',
+    zh_CN: 'Manuscript',
+    zh_TW: 'Manuscript',
+    ja: 'Manuscript',
   }),
   icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
   showType: 1,
@@ -182,19 +181,6 @@ PluginManager.registerButton(2, ['NOTE'], {
   icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
   showType: 1,
   editDataTypes: [3],
-});
-
-PluginManager.registerButton(2, ['NOTE'], {
-  id: BUTTON_ID_TOOLBAR_APPLY_EDIT_MARKERS,
-  name: JSON.stringify({
-    en: 'Apply Edit Markers',
-    zh_CN: 'Apply Edit Markers',
-    zh_TW: 'Apply Edit Markers',
-    ja: 'Apply Edit Markers',
-  }),
-  icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
-  showType: 1,
-  editDataTypes: [0, 3, 5],
 });
 
 PluginManager.registerButton(2, ['NOTE'], {

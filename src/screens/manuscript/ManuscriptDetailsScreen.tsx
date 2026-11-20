@@ -1,19 +1,17 @@
 /**
- * Details of the edit-marker review (canvas "Edit markers · ⚙ Details"): where the markers were
- * read from, the calibration of the text measurement, and Save Diagnostics. Shares the review's
- * state, so a calibration change re-reads the preview the review shows when going back.
+ * Details of the Manuscript card: the calibration of the text measurement and Save Diagnostics.
+ * Shares the review's state, so a calibration change re-reads the page the review shows when
+ * going back.
  */
 import React from 'react';
 import {StyleSheet, Text, View} from 'react-native';
-import type {EditMarkerPreviewScope} from '../../domain/markerTypes';
 import PillButton from '../../ui/PillButton';
 import ScreenFrame from '../../ui/ScreenFrame';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
-import type {EditMarkerReview} from './useEditMarkerReview';
+import type {ManuscriptReview} from './useManuscriptReview';
 
 interface Props {
-  review: EditMarkerReview;
-  scope: EditMarkerPreviewScope;
+  review: ManuscriptReview;
   onBack: () => void;
   onClose: () => void;
 }
@@ -21,30 +19,21 @@ interface Props {
 const OFFSET_STEP = 5;
 const WIDTH_STEP = 1;
 
-export default function MarkerDetailsScreen({review, scope, onBack, onClose}: Props): React.JSX.Element {
+export default function ManuscriptDetailsScreen({review, onBack, onClose}: Props): React.JSX.Element {
   const {calibration, loading, busy} = review;
   const disabled = loading || busy;
   return (
     <ScreenFrame
       title="Details"
-      back={{label: 'Edit markers', onPress: onBack}}
+      back={{label: 'Manuscript', onPress: onBack}}
       onClose={onClose}
       status={review.status}
       primary={{label: 'Done', onPress: onBack}}
       screenKey="details">
       <View style={styles.body}>
-        <Section title="Markers read from">
-          <Text style={styles.line}>{scope === 'page' ? 'The whole page' : 'The lasso selection'}</Text>
-          <Text style={styles.hint}>
-            {scope === 'page'
-              ? 'Lasso markers and textboxes and tap "Apply Edit Markers" in the lasso toolbar to review only those.'
-              : 'Use the note button "Apply All Edit Markers" to review every marker on the page.'}
-          </Text>
-        </Section>
-
         <Section title="Calibration">
           <Text style={styles.hint}>
-            Moves the measured text lines against the drawn ones. Only needed when markers pick the wrong
+            Moves the measured text lines against the drawn ones. Only needed when marks pick the wrong
             words. The values are kept for next time.
           </Text>
           <Stepper
@@ -71,7 +60,7 @@ export default function MarkerDetailsScreen({review, scope, onBack, onClose}: Pr
 
         <Section title="Diagnostics">
           <Text style={styles.hint}>
-            Saves how each marker was read and why one was ignored as a file in the EXPORT folder, to attach to
+            Saves how each mark was read and why one was ignored as a file in the EXPORT folder, to attach to
             a bug report. It contains short previews of the textboxes' text.
           </Text>
           <View style={styles.buttons}>
@@ -135,10 +124,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     paddingBottom: SPACING.xs,
-  },
-  line: {
-    fontSize: FONT.medium,
-    color: COLORS.text,
   },
   hint: {
     fontSize: FONT.small,
