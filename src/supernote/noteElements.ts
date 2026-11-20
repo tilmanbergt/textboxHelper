@@ -147,24 +147,35 @@ export async function getLassoElements(): Promise<Element[]> {
   );
 }
 
-/** The open note's current page as read for the edit-mark review. */
+/** A page of the open note as read for the Manuscript card. */
 export type PageContext = {
   notePath: string;
   page: number;
   pageElements: Element[];
 };
 
-export async function readCurrentPageContext(): Promise<PageContext> {
+export async function readPageContext(notePath: string, page: number): Promise<PageContext> {
+  const pageElements = await readPageElements(notePath, page, `Could not read page ${page + 1}.`);
+  return {notePath, page, pageElements};
+}
+
+/** The open note: its path, the page shown, and how many pages it has. */
+export type NoteInfo = {notePath: string; currentPage: number; pageCount: number};
+
+export async function readNoteInfo(): Promise<NoteInfo> {
   const notePath = assertApiSuccess(
     (await PluginCommAPI.getCurrentFilePath()) as {success?: boolean; result?: string; error?: {message?: string}},
     'Could not determine the current note path.',
   );
-  const page = assertApiSuccess(
+  const currentPage = assertApiSuccess(
     (await PluginCommAPI.getCurrentPageNum()) as {success?: boolean; result?: number; error?: {message?: string}},
     'Could not determine the current page.',
   );
-  const pageElements = await readPageElements(notePath, page, 'Could not read the current page elements.');
-  return {notePath, page, pageElements};
+  const pageCount = assertApiSuccess(
+    (await PluginFileAPI.getNoteTotalPageNum(notePath)) as {success?: boolean; result?: number; error?: {message?: string}},
+    'Could not determine the note page count.',
+  );
+  return {notePath, currentPage, pageCount};
 }
 
 export async function saveCurrentNoteForConsistency(reason: string): Promise<void> {

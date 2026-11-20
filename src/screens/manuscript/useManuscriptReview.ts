@@ -1,20 +1,22 @@
 /**
- * State and flows of the Manuscript card's Review (technical-design-manuscript.md §4.6, from the
- * edit-marker review of technical-design-pen-edits.md §3.6): reads the current page's marks when
- * the card opens and again after a calibration change, recognizes the pen edits while it is open,
- * keeps corrections and edge nudges, applies the ready changes, drops changes, and keeps the
- * status line. After an apply the card stays open and the page is read again.
+ * State and flows of the Manuscript card's Review (technical-design-manuscript.md §4.2, §4.6, from
+ * the edit-marker review of technical-design-pen-edits.md §3.6): reads the current page when the
+ * card opens and further pages on request, recognizes the pen edits of the pages read while it is
+ * open, keeps corrections and edge nudges, applies the ready changes of every read page at once,
+ * drops changes, and keeps the status line. After an apply the card stays open and the pages are
+ * read again.
  */
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {dropItems, type DropItem} from '../../actions/editMarkerDrop';
-import {applyEditMarkerPreview} from '../../actions/markerApply';
+import {applyMarkerPlans} from '../../actions/markerApply';
 import {
+  clearMarkerDiagnostics,
   getEditMarkerCalibration,
   resetEditMarkerCalibration,
   saveEditMarkerDiagnostics,
   setEditMarkerCalibration,
 } from '../../actions/markerCalibration';
-import {getEditMarkerPreview} from '../../actions/markerPageAnalysis';
+import {analyzeMarkerPage} from '../../actions/markerPageAnalysis';
 import {
   resetRecognition,
   setPenEditCorrection,
@@ -22,25 +24,32 @@ import {
   startSelectMark,
 } from '../../actions/penEditReview';
 import {nudgeShift, type EdgeShift} from '../../domain/edgeShift';
+import {
+  combinePages,
+  readPages as readPageList,
+  type ManuscriptView,
+  type PageReview,
+} from '../../domain/manuscriptPages';
 import {assembleMarkerPreview, type SwapOptions} from '../../domain/markerAssembly';
-import type {
-  EditMarkerCalibration,
-  EditMarkerPreview,
-  PenTextState,
-  RecognizedEditOperation,
-} from '../../domain/markerTypes';
+import type {EditMarkerCalibration, PenTextState, RecognizedEditOperation} from '../../domain/markerTypes';
 import {fileNameOf, userMessage} from '../../domain/userMessage';
 import {updateSettings} from '../../storage/settingsFile';
+import {readNoteInfo, type NoteInfo} from '../../supernote/noteElements';
 import type {FrameStatus} from '../../ui/ScreenFrame';
 import {usePenRecognitionQueue} from './usePenRecognitionQueue';
 
 export interface ManuscriptReview {
-  preview: EditMarkerPreview | null;
+  note: NoteInfo | null;
+  /** Every page's state, assembled with the pen edits' current text. */
+  pages: Record<number, PageReview>;
+  view: ManuscriptView;
+  /** Reads these pages (one after the other); a page read before is read again. */
+  readPages: (pages: number[]) => void;
   /**
-   * Drops changes from the page without applying them (pen edits keep or lose their handwriting),
-   * then reads the page again.
+   * Drops changes from a page without applying them (pen edits keep or lose their handwriting),
+   * then reads that page again.
    */
-  drop: (items: DropItem[], eraseHandwriting: boolean) => void;
+  drop: (page: number, items: DropItem[], eraseHandwriting: boolean) => void;
   /** Moves one of a change's edges (its index in `edgeView.edges`) by one character. */
   nudge: (operation: RecognizedEditOperation, edge: number, delta: number) => void;
   /** A swap's "Fix capitals" on or off (kept while the review is open). */
@@ -68,66 +77,109 @@ export interface ManuscriptReview {
 }
 
 export function useManuscriptReview(): ManuscriptReview {
-  const [analysis, setAnalysis] = useState<EditMarkerPreview | null>(null);
+  const [note, setNote] = useState<NoteInfo | null>(null);
+  // Pages as read (previews as the analysis left them; assembled below).
+  const [analyses, setAnalyses] = useState<Record<number, PageReview>>({});
   const [penStates, setPenStates] = useState<Record<string, PenTextState>>({});
   const [selectedPenId, setSelectedPenId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [applied, setApplied] = useState(false);
-  const [status, setStatus] = useState<FrameStatus | null>({text: 'Reading markers…'});
+  const [status, setStatus] = useState<FrameStatus | null>({text: 'Reading the page…'});
   const [calibration, setCalibration] = useState<EditMarkerCalibration>(getEditMarkerCalibration);
   // Edge nudges of plain marks: kept while the review is open (a pen edit's go with it).
   const [plainShifts, setPlainShifts] = useState<Record<string, EdgeShift>>({});
   const [swapOptions, setSwapOptions] = useState<SwapOptions>({});
+  const noteRef = useRef<NoteInfo | null>(null);
 
-  const load = useCallback(
-    async (keepStatus = false) => {
-      setLoading(true);
+  /** Reads pages one after the other; each shows in the list as soon as it is read. */
+  const read = useCallback(async (pages: number[], keepStatus = false) => {
+    const info = noteRef.current;
+    if (!info || pages.length === 0) {
+      return;
+    }
+    setLoading(true);
+    let failed = 0;
+    for (const page of pages) {
+      setAnalyses(current => ({...current, [page]: {state: 'reading'}}));
       if (!keepStatus) {
-        setStatus({text: 'Reading markers…'});
+        setStatus({text: pages.length > 1 ? `Reading page ${page + 1}…` : 'Reading the page…'});
       }
       try {
-        const next = await getEditMarkerPreview();
-        setAnalysis(next);
-        setPenStates(next.base?.penStates ?? {});
-        setPlainShifts({});
-        setSwapOptions({});
-        if (!keepStatus) {
-          setStatus(next.fontWarning ? {text: next.fontWarning} : null);
-        }
+        const preview = await analyzeMarkerPage(info.notePath, page);
+        setAnalyses(current => ({...current, [page]: {state: 'read', preview}}));
+        setPenStates(current => ({...current, ...(preview.base?.penStates ?? {})}));
       } catch (error) {
-        console.warn('[Manuscript] preview failed', String(error));
-        setAnalysis(null);
-        setStatus({
-          kind: 'error',
-          text: userMessage(error, 'Could not read the marks on this page.'),
-        });
-      } finally {
-        setLoading(false);
+        failed += 1;
+        console.warn('[Manuscript] page not read', page, String(error));
+        const message = userMessage(error, `Could not read page ${page + 1}.`);
+        setAnalyses(current => ({...current, [page]: {state: 'failed', message}}));
+        setStatus({kind: 'error', text: message});
       }
-    },
-    [],
-  );
+    }
+    if (!keepStatus && failed === 0) {
+      setStatus(null);
+    }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    clearMarkerDiagnostics();
+    readNoteInfo()
+      .then(info => {
+        noteRef.current = info;
+        setNote(info);
+        return read([info.currentPage]);
+      })
+      .catch(error => {
+        console.warn('[Manuscript] note not read', String(error));
+        setLoading(false);
+        setStatus({kind: 'error', text: userMessage(error, 'Could not read this note.')});
+      });
+  }, [read]);
 
   // Re-assembled whenever a pen edit's text arrives or changes; no new measuring.
-  const preview = useMemo(
-    () =>
-      analysis?.base
-        ? assembleMarkerPreview(analysis.base, penStates, analysis.fontWarning, plainShifts, swapOptions)
-        : analysis,
-    [analysis, penStates, plainShifts, swapOptions],
-  );
+  const pages = useMemo(() => {
+    const assembled: Record<number, PageReview> = {};
+    for (const [key, review] of Object.entries(analyses)) {
+      assembled[Number(key)] =
+        review.state === 'read' && review.preview.base
+          ? {
+              state: 'read',
+              preview: assembleMarkerPreview(
+                review.preview.base,
+                penStates,
+                review.preview.fontWarning,
+                plainShifts,
+                swapOptions,
+              ),
+            }
+          : review;
+    }
+    return assembled;
+  }, [analyses, penStates, plainShifts, swapOptions]);
+  const view = useMemo(() => combinePages(pages), [pages]);
+
+  // Status: the font warning of a page read, unless something else is said.
+  const shownStatus = status ?? (view.fontWarning ? {text: view.fontWarning} : null);
 
   const updatePenState = useCallback((id: string, state: PenTextState) => {
     setPenStates(current => ({...current, [id]: state}));
   }, []);
 
-  const penOrder = useMemo(() => (analysis?.penEdits ?? []).map(view => view.id), [analysis]);
-  usePenRecognitionQueue(penOrder, selectedPenId, penStates, analysis?.base?.page ?? null, busy || loading, updatePenState);
+  // The pen edits of every read page, page by page, and the page each is on.
+  const penPages = useMemo(() => {
+    const result = new Map<string, number>();
+    for (const page of readPageList(analyses)) {
+      const review = analyses[page];
+      if (review.state === 'read') {
+        review.preview.penEdits.forEach(penEdit => result.set(penEdit.id, page));
+      }
+    }
+    return result;
+  }, [analyses]);
+  const penOrder = useMemo(() => [...penPages.keys()], [penPages]);
+  usePenRecognitionQueue(penOrder, selectedPenId, penStates, penPages, busy || loading, updatePenState);
 
   const store = useCallback((id: string, write: () => Promise<void>, state: PenTextState) => {
     updatePenState(id, state);
@@ -216,6 +268,26 @@ export function useManuscriptReview(): ManuscriptReview {
     [busy, loading],
   );
 
+  /** Reads every page read so far again (after a calibration change, an apply or a drop). */
+  const rereadAll = useCallback(
+    (keepStatus = false) => {
+      clearMarkerDiagnostics();
+      setPlainShifts({});
+      setSwapOptions({});
+      return read(readPageList(analyses), keepStatus);
+    },
+    [analyses, read],
+  );
+
+  const readPages = useCallback(
+    (list: number[]) => {
+      if (!loading && !busy) {
+        void read(list);
+      }
+    },
+    [busy, loading, read],
+  );
+
   // Calibration is kept between sessions so it can be tuned over time (settings file).
   const remember = (next: EditMarkerCalibration) => {
     setCalibration(next);
@@ -228,9 +300,9 @@ export function useManuscriptReview(): ManuscriptReview {
         return;
       }
       remember(setEditMarkerCalibration(next));
-      void load();
+      void rereadAll();
     },
-    [busy, load, loading],
+    [busy, loading, rereadAll],
   );
 
   const resetCalibration = useCallback(() => {
@@ -238,14 +310,14 @@ export function useManuscriptReview(): ManuscriptReview {
       return;
     }
     remember(resetEditMarkerCalibration());
-    void load();
-  }, [busy, load, loading]);
+    void rereadAll();
+  }, [busy, loading, rereadAll]);
 
   const refresh = useCallback(() => {
     if (!loading && !busy) {
-      void load();
+      void rereadAll();
     }
-  }, [busy, load, loading]);
+  }, [busy, loading, rereadAll]);
 
   const saveDiagnostics = useCallback(() => {
     if (loading || busy) {
@@ -260,37 +332,38 @@ export function useManuscriptReview(): ManuscriptReview {
   }, [busy, loading]);
 
   const apply = useCallback(() => {
-    if (!preview?.canApply || loading || busy) {
+    if (view.plans.length === 0 || loading || busy) {
       return;
     }
     setBusy(true);
-    setStatus({text: 'Writing the backup…'});
-    applyEditMarkerPreview(preview, {
+    applyMarkerPlans(view.plans, {
       onProgress: update => setStatus({text: update.message}),
+      leftForLater: view.pendingCount,
     })
       .then(async result => {
         setApplied(true);
         setStatus({text: `${result.message} Backup: ${fileNameOf(result.backupPath)}`});
-        await load(true);
+        await rereadAll(true);
       })
       .catch(error => {
         console.warn('[Manuscript] apply failed', String(error));
         setStatus({kind: 'error', text: userMessage(error, 'The changes could not be applied.')});
       })
       .finally(() => setBusy(false));
-  }, [busy, load, loading, preview]);
+  }, [busy, loading, rereadAll, view]);
 
   const drop = useCallback(
-    (items: DropItem[], eraseHandwriting: boolean) => {
-      if (!preview || loading || busy || items.length === 0) {
+    (page: number, items: DropItem[], eraseHandwriting: boolean) => {
+      const review = pages[page];
+      if (review?.state !== 'read' || loading || busy || items.length === 0) {
         return;
       }
       setBusy(true);
       setStatus({text: eraseHandwriting ? 'Writing the backup…' : 'Dropping…'});
-      dropItems(preview, items, eraseHandwriting)
+      dropItems(review.preview, items, eraseHandwriting)
         .then(async result => {
           setStatus({text: result.message});
-          await load(true);
+          await read([page], true);
         })
         .catch(error => {
           console.warn('[Manuscript] drop failed', String(error));
@@ -298,7 +371,7 @@ export function useManuscriptReview(): ManuscriptReview {
         })
         .finally(() => setBusy(false));
     },
-    [busy, load, loading, preview],
+    [busy, loading, pages, read],
   );
 
   const setFixCase = useCallback(
@@ -311,14 +384,17 @@ export function useManuscriptReview(): ManuscriptReview {
   );
 
   return {
-    preview,
+    note,
+    pages,
+    view,
+    readPages,
     drop,
     nudge,
     setFixCase,
     loading,
     busy,
     applied,
-    status,
+    status: shownStatus,
     calibration,
     changeCalibration,
     resetCalibration,

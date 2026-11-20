@@ -57,7 +57,7 @@ check fail if the SDK types drift away from them.
 `App.tsx` owns permissions and button routing; it opens one screen per button, keyed by the press,
 so a screen opened again starts fresh. The button listener subscribes once and calls the latest
 router through a ref. Screens are built on `ui/ScreenFrame.tsx` and own their state in a hook next
-to them: `screens/manuscript/` (the Manuscript card: Review with its side bar `ChangeSide`, and Details), `screens/tools/` (the lasso screen,
+to them: `screens/manuscript/` (the Manuscript card: `ReviewTab` with its page strip and side bar `ChangeSide`, `OutlineTab`, and Details; the page states are `domain/manuscriptPages.ts`, the outline `domain/outlineModel.ts` with statuses in `storage/blockStatusStore.ts` and block tags `domain/blockTag.ts`), `screens/tools/` (the lasso screen,
 its Details with "Log All Textboxes"), `screens/direct/` (the toolbar actions' progress card),
 `screens/import/` (Import with its Layout sub-screen and the page drawing), `screens/export/`
 (Export with its Rules sub-screen). Every sub-screen (Details, Layout, Rules) is local state of its

@@ -33,7 +33,7 @@ import {isNormalTextElement, sortTextElements} from '../domain/textboxEditPlan';
 import {DEFAULT_FONT_SIZE} from '../domain/textboxModel';
 import {loadMarkerStrokeStats} from '../supernote/markerStrokeRead';
 import {
-  readCurrentPageContext,
+  readPageContext,
   readPageSizeForDiagnostics,
   recycleElements,
   type PageContext,
@@ -41,15 +41,15 @@ import {
 import {resetFontWarnings} from '../supernote/textboxMetrics';
 import {logEditMarker} from '../utils/editMarkerLog';
 import {analyzeDeleteMarker, type MarkerCandidate} from './editMarkerAnalysis';
-import {getEditMarkerCalibration, startMarkerDiagnostics} from './markerCalibration';
+import {getEditMarkerCalibration, noteDiagnosticsPage} from './markerCalibration';
 import {createTextboxMeasurer} from './markerMeasure';
 import {loadPenEditContext, placeCaretInsertions, type PenEditContext} from './penEditReview';
 import {findShapeMarks} from './shapeMarks';
 
 /**
  * Reading a page's edit marks into a review preview: the strokes and their shapes, the words they
- * cover, replace marks paired with their tagged text, insertions placed at their carets - for the
- * current page of the open note. Recognition
+ * cover, replace marks paired with their tagged text, insertions placed at their carets - for one
+ * page of the open note. Recognition
  * of one mark lives in `editMarkerAnalysis.ts` and `shapeMarks.ts`; the pure parts in
  * `src/domain/marker*.ts`. Applying the preview is `markerApply.ts`.
  */
@@ -66,18 +66,18 @@ const REPLACE_WITHOUT_TEXT =
   'Replace mark without new text: write the new words right after it, lasso them and tap Insertion or Replacement.';
 
 /**
- * Builds the edit-marker preview of the current page. Marks on a textbox whose font can't be read
- * are ignored, and the preview's status line says so (technical-design-swap-space-marks.md §2).
+ * Reads one page's edit marks into a preview. Marks on a textbox whose font can't be read are
+ * ignored, and the preview's font warning says so (technical-design-swap-space-marks.md §2).
  */
-export async function getEditMarkerPreview(): Promise<EditMarkerPreview> {
+export async function analyzeMarkerPage(notePath: string, page: number): Promise<EditMarkerPreview> {
   resetFontWarnings();
   let pageElements: Element[] = [];
   const calibration = getEditMarkerCalibration();
   try {
-    const context = await readCurrentPageContext();
+    const context = await readPageContext(notePath, page);
     pageElements = context.pageElements;
-    startMarkerDiagnostics(context.page);
-    logEditMarker('previewStart', {page: context.page, calibration});
+    noteDiagnosticsPage(page);
+    logEditMarker('previewStart', {page, calibration});
     const preview = await analyzePage(context, calibration);
     if (preview.fontWarning) {
       logEditMarker('fontWarning', {fontWarning: preview.fontWarning});

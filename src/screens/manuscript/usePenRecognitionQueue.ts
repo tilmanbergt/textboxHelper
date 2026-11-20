@@ -1,6 +1,6 @@
 /**
  * Recognizes the review's pen edits while the screen is open (technical-design-pen-edits.md §3.6):
- * one at a time, the selected one first, then the others in list order. Nothing runs while the
+ * one at a time, the selected one first, then the others in list order (page by page). Nothing runs while the
  * changes are being applied, and a running recognition is cancelled when the screen closes, so
  * recognition never competes with writing in the note.
  */
@@ -13,7 +13,8 @@ export function usePenRecognitionQueue(
   order: string[],
   selectedId: string | null,
   states: Record<string, PenTextState>,
-  page: number | null,
+  /** The page each pen edit is on. */
+  pageOf: Map<string, number>,
   paused: boolean,
   onState: (id: string, state: PenTextState) => void,
 ): void {
@@ -33,12 +34,13 @@ export function usePenRecognitionQueue(
   }, []);
 
   useEffect(() => {
-    if (paused || running.current || page === null) {
+    if (paused || running.current) {
       return;
     }
     const queue = selectedId && order.includes(selectedId) ? [selectedId, ...order.filter(id => id !== selectedId)] : order;
     const next = queue.find(id => states[id]?.status === 'waiting');
-    if (!next) {
+    const page = next ? pageOf.get(next) : undefined;
+    if (!next || page === undefined) {
       return;
     }
     const before = states[next];
@@ -58,5 +60,5 @@ export function usePenRecognitionQueue(
           onStateRef.current(next, {...before, status: 'failed', text: ''});
         }
       });
-  }, [order, page, paused, selectedId, states]);
+  }, [order, pageOf, paused, selectedId, states]);
 }

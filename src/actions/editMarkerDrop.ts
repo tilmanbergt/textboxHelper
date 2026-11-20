@@ -114,7 +114,7 @@ export async function dropItems(
         action: 'edit-markers',
         createdAt: new Date().toISOString(),
         notePath: base.notePath,
-        page: base.page,
+        pages: [base.page],
         recognizedOperationCount: 0,
         texts: [],
         penEdits: penBackup,

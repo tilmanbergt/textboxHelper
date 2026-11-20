@@ -46,3 +46,8 @@ export function buildPenEditEntryDir(pluginDir: string, id: string): string {
 export function buildBrokenPenEditIndexPath(pluginDir: string, createdAtIso: string): string {
   return `${buildPenEditDir(pluginDir)}/index.broken-${createdAtIso.replace(/[:.]/g, '-')}.json`;
 }
+
+/** The Outline's block statuses, kept in the plugin only (technical-design-manuscript.md §5.2). */
+export function buildBlockStatusPath(pluginDir: string): string {
+  return `${pluginDir}/block-status.json`;
+}

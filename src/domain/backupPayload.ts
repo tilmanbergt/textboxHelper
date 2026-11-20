@@ -10,6 +10,8 @@ import {DEFAULT_FONT_SIZE, type Rect, type TextElementData} from './textboxModel
 
 /** One original textbox in a backup. */
 export type BackupText = {
+  /** Set in an edit-mark backup, which can hold several pages. */
+  page?: number;
   uuid: string;
   numInPage: number;
   layerNum: number;
@@ -40,7 +42,7 @@ export type EditMarkerBackupPayload = {
   action: 'edit-markers';
   createdAt: string;
   notePath: string;
-  page: number;
+  pages: number[];
   recognizedOperationCount: number;
   texts: BackupText[];
   /** The applied pen edits and their handwriting, so deleted snippets can be restored. */
@@ -56,7 +58,7 @@ export function buildClipboardSummary(payload: BackupPayload): string {
     `textboxHelper ${payload.action} backup`,
     `Created: ${payload.createdAt}`,
     `Note: ${payload.notePath}`,
-    `Page: ${payload.page}`,
+    payload.action === 'edit-markers' ? `Pages: ${payload.pages.join(', ')}` : `Page: ${payload.page}`,
   ];
   if (payload.action === 'edit-markers') {
     lines.push(
@@ -104,27 +106,31 @@ export function createBackupPayload(
   };
 }
 
-export function createEditMarkerBackupPayload(plan: EditMarkerApplyPlan): EditMarkerBackupPayload {
+/** One backup for applying edit marks on one or more pages (technical-design-manuscript.md §4.5). */
+export function createEditMarkerBackupPayload(plans: EditMarkerApplyPlan[]): EditMarkerBackupPayload {
   return {
     action: 'edit-markers',
     createdAt: new Date().toISOString(),
-    notePath: plan.notePath,
-    page: plan.page,
-    recognizedOperationCount: plan.operations.length,
-    texts: plan.textMutations.map(text => ({
-      uuid: text.uuid,
-      numInPage: text.numInPage,
-      layerNum: text.layerNum,
-      textContentFull: text.originalText,
-      textRect: cloneRect(text.textRect),
-      fontSize: text.fontSize,
-      fontPath: text.fontPath,
-      textAlign: text.textAlign,
-      textBold: text.textBold,
-      textItalics: text.textItalics,
-      textFrameWidthType: text.textFrameWidthType,
-      textFrameStyle: text.textFrameStyle,
-      textEditable: text.textEditable,
-    })),
+    notePath: plans[0]?.notePath ?? '',
+    pages: plans.map(plan => plan.page),
+    recognizedOperationCount: plans.reduce((sum, plan) => sum + plan.operations.length, 0),
+    texts: plans.flatMap(plan =>
+      plan.textMutations.map(text => ({
+        page: plan.page,
+        uuid: text.uuid,
+        numInPage: text.numInPage,
+        layerNum: text.layerNum,
+        textContentFull: text.originalText,
+        textRect: cloneRect(text.textRect),
+        fontSize: text.fontSize,
+        fontPath: text.fontPath,
+        textAlign: text.textAlign,
+        textBold: text.textBold,
+        textItalics: text.textItalics,
+        textFrameWidthType: text.textFrameWidthType,
+        textFrameStyle: text.textFrameStyle,
+        textEditable: text.textEditable,
+      })),
+    ),
   };
 }

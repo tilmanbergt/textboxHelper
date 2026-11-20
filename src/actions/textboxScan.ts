@@ -15,13 +15,14 @@ import type {PageElementData, Rect} from '../domain/textboxModel';
 import {assertApiSuccess, tryApiResult} from '../supernote/sdkResult';
 
 /**
- * The textbox scan behind "Export DOCX": which pages to read, and every textbox on them with its
- * role and style. Reads the note only; the classification is in
+ * The textbox scan behind "Export DOCX" and the Manuscript Outline: which pages to read, and every
+ * textbox on them with its role and style. Reads the note only; the classification is in
  * `src/domain/exportClassification.ts`.
  */
 
 type RawElement = {
   type?: number;
+  numInPage?: number;
   userData?: string | null;
   textBox?: {
     textContentFull?: string | null;
@@ -183,6 +184,8 @@ export async function scanTextBoxes(params: ScanParams): Promise<ScanSummary> {
 
       items.push({
         page,
+        numInPage: Number(element.numInPage ?? -1),
+        userData: typeof element.userData === 'string' ? element.userData : null,
         text,
         role: classifyTextRole({
           fontSize,

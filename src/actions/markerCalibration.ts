@@ -14,7 +14,7 @@ const DEFAULT_EDIT_MARKER_CALIBRATION: EditMarkerCalibration = {
 };
 
 let calibration: EditMarkerCalibration = {...DEFAULT_EDIT_MARKER_CALIBRATION};
-let lastDiagnosticsPage: number | null = null;
+let diagnosticsPages: number[] = [];
 
 export function getEditMarkerCalibration(): EditMarkerCalibration {
   return {...calibration};
@@ -34,10 +34,17 @@ export function resetEditMarkerCalibration(): EditMarkerCalibration {
   return getEditMarkerCalibration();
 }
 
-/** Starts a new diagnostics trace for a preview of `page`. */
-export function startMarkerDiagnostics(page: number): void {
+/** Starts a new diagnostics trace: when the Manuscript card opens or reads its pages again. */
+export function clearMarkerDiagnostics(): void {
   markerDiagnostics.clear();
-  lastDiagnosticsPage = page;
+  diagnosticsPages = [];
+}
+
+/** Notes a page whose reading goes into the trace. */
+export function noteDiagnosticsPage(page: number): void {
+  if (!diagnosticsPages.includes(page)) {
+    diagnosticsPages.push(page);
+  }
 }
 
 /**
@@ -48,14 +55,14 @@ export function startMarkerDiagnostics(page: number): void {
 export async function saveEditMarkerDiagnostics(): Promise<string> {
   const snapshot = markerDiagnostics.snapshot();
   if (snapshot.entries.length === 0) {
-    throw new Error('There is no marker preview to save diagnostics for yet.');
+    throw new Error('No page has been read yet.');
   }
   const createdAt = new Date().toISOString();
   const fileName = `textboxhelper-marker-diagnostics-${createdAt.replace(/[:.]/g, '-')}.json`;
   return writeJsonExportFile(fileName, {
     kind: 'edit-marker-diagnostics',
     createdAt,
-    page: lastDiagnosticsPage,
+    pages: diagnosticsPages.map(page => page + 1),
     entryCount: snapshot.entries.length,
     droppedCount: snapshot.droppedCount,
     entries: snapshot.entries,

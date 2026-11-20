@@ -43,7 +43,9 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 - The NOTE toolbar button "Manuscript" reads every edit mark on the current page
 - Every change in reading order, the changed text in full with a few words around it; the selected change on the right with its text, its edges and Drop
 - "Needs attention" above the list: tagged text without a mark, marks that couldn't be used, with the reason
-- Apply every ready change after the preview; a backup of the page is written first
+- The whole note: a page strip with each page's count of changes; tap a page, or read them all
+- Apply every ready change of the pages read after the preview; one backup of those pages is written first
+- Outline: every textbox of the note as a block in reading order, with its pending edits and a status (open, review, final) you set; filter by status or pending edits
 
 ### Import Text File
 
@@ -74,7 +76,7 @@ be wrong.
 
 The plugin remembers the import settings, the export pages and rules, and the edit-marker
 calibration in `settings.json` in its own plugin folder. Tagged replacements and insertions are
-kept in `pen-edits/` in the same folder.
+kept in `pen-edits/` in the same folder, the Outline's block statuses in `block-status.json`.
 
 ## Installation
 
