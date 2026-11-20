@@ -35,15 +35,7 @@ import {
 } from '../domain/penEditTags';
 import {isNoShift, type EdgeShift} from '../domain/edgeShift';
 import {normalizeRecognizedText} from '../domain/penEditText';
-import {
-  textLeftX,
-  type TextboxMeasurementCalibration,
-} from '../domain/textboxLayout';
-import {
-  DEFAULT_FONT_SIZE,
-  type Rect,
-  type TextElementData,
-} from '../domain/textboxModel';
+import type {Rect, TextElementData} from '../domain/textboxModel';
 import {
   changePenEditIndex,
   penEditPictureUri,
@@ -51,7 +43,7 @@ import {
   readPenEditStrokes,
 } from '../storage/penEditStore';
 import {recognizeStrokes} from '../supernote/strokeRecognition';
-import {measureDetailedTextLayout} from '../supernote/textboxMetrics';
+import type {MeasuredTextbox, TextboxMeasurer} from './markerMeasure';
 
 /**
  * The pen edits' side of the edit-marker review (technical-design-pen-edits.md §3.6–§3.9):
@@ -422,7 +414,7 @@ export async function placeCaretInsertions<T extends TextElementData>(
   entries: PenEditEntry[],
   carets: PenEditContext['carets'],
   pageTextboxes: T[],
-  calibration: TextboxMeasurementCalibration,
+  measurer: TextboxMeasurer,
 ): Promise<{
   inline: Array<CaretInline & {textbox: T}>;
   gaps: InsertionDraft[];
@@ -431,7 +423,6 @@ export async function placeCaretInsertions<T extends TextElementData>(
   const inline: Array<CaretInline & {textbox: T}> = [];
   const gaps: InsertionDraft[] = [];
   const ignored: Array<{entry: PenEditEntry; reason: string}> = [];
-  const measured = new Map<string, CaretTextbox>();
   for (const entry of entries) {
     if (entry.kind !== 'insertion') {
       continue;
@@ -451,8 +442,7 @@ export async function placeCaretInsertions<T extends TextElementData>(
       caret.tip,
       caret.direction,
       pageTextboxes,
-      calibration,
-      measured,
+      measurer,
     );
     if (!target) {
       ignored.push({
@@ -505,14 +495,15 @@ export async function placeCaretInsertions<T extends TextElementData>(
 
 /**
  * Where a mark points on the page: the textboxes in its column near its tip are measured (once per
- * review, in `measured`) and the mark located among them (`locateCaret`).
+ * review, by `measurer`) and the mark located among them (`locateCaret`). A place inside a
+ * textbox whose font can't be read is unclear: its words were measured in the wrong font
+ * (technical-design-swap-space-marks.md §2).
  */
 export async function locateMarkOnPage<T extends TextElementData>(
   tip: {x: number; y: number},
   direction: CaretDirection,
   pageTextboxes: T[],
-  calibration: TextboxMeasurementCalibration,
-  measured: Map<string, CaretTextbox>,
+  measurer: TextboxMeasurer,
 ): Promise<{near: T[]; target: CaretTarget | null}> {
   const near = pageTextboxes.filter(textbox => {
     const rect = textbox.textBox.textRect;
@@ -524,56 +515,25 @@ export async function locateMarkOnPage<T extends TextElementData>(
     );
   });
   const boxes: CaretTextbox[] = [];
+  const measuredBy = new Map<string, {textbox: T; measured: MeasuredTextbox}>();
   for (const textbox of near) {
-    const known =
-      measured.get(textbox.uuid) ??
-      (await measureCaretTextbox(textbox, calibration));
-    if (known) {
-      measured.set(textbox.uuid, known);
-      boxes.push(known);
+    const measured = await measurer.measure(textbox);
+    if (measured) {
+      measuredBy.set(textbox.uuid, {textbox, measured});
+      boxes.push(measured.box);
     }
   }
-  return {near, target: locateCaret(tip, direction, boxes)};
-}
-
-async function measureCaretTextbox(
-  textbox: TextElementData,
-  calibration: TextboxMeasurementCalibration,
-): Promise<CaretTextbox | null> {
-  const rect = textbox.textBox.textRect;
-  const text = textbox.textBox.textContentFull || '';
-  const measurement = await measureDetailedTextLayout(
-    text,
-    rect.right - rect.left,
-    textbox.textBox.fontSize || DEFAULT_FONT_SIZE,
-    textbox.textBox.fontPath || undefined,
-    calibration,
-  );
-  if (!measurement) {
-    return null;
+  const target = locateCaret(tip, direction, boxes);
+  if (target && (target.kind === 'text' || target.kind === 'split')) {
+    const hit = measuredBy.get(target.uuid);
+    if (hit && !hit.measured.fontReadable) {
+      return {
+        near,
+        target: {kind: 'unclear', reason: measurer.locked(hit.textbox, hit.measured)},
+      };
+    }
   }
-  const x = textLeftX(rect.left, calibration);
-  const y = rect.top + calibration.offsetY;
-  return {
-    uuid: textbox.uuid,
-    numInPage: textbox.numInPage,
-    rect: {...rect},
-    text,
-    lines: measurement.lines.map(line => ({
-      index: line.index,
-      start: line.start,
-      end: line.end,
-      top: y + line.top,
-      bottom: y + line.bottom,
-    })),
-    words: measurement.words.map(word => ({
-      start: word.start,
-      end: word.end,
-      lineIndex: word.lineIndex,
-      left: x + word.left,
-      right: x + word.right,
-    })),
-  };
+  return {near, target};
 }
 
 /** Recognizes one pen edit from its stored strokes and stores the result. Never throws. */

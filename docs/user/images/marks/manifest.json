@@ -1,0 +1,90 @@
+{
+  "delete": {
+    "hash": "bcadb0d8dc6650e8",
+    "width": 960,
+    "height": 336,
+    "bytes": 6247,
+    "icon": {
+      "width": 256,
+      "height": 64,
+      "bytes": 1674
+    }
+  },
+  "replace": {
+    "hash": "04e0947e2ff05caa",
+    "width": 960,
+    "height": 425,
+    "bytes": 10172,
+    "icon": {
+      "width": 212,
+      "height": 80,
+      "bytes": 1734
+    }
+  },
+  "insert": {
+    "hash": "885c488229bc187b",
+    "width": 960,
+    "height": 425,
+    "bytes": 9782,
+    "icon": {
+      "width": 167,
+      "height": 80,
+      "bytes": 1368
+    }
+  },
+  "space": {
+    "hash": "6fda44dbc2d04a04",
+    "width": 960,
+    "height": 374,
+    "bytes": 7267,
+    "icon": {
+      "width": 236,
+      "height": 91,
+      "bytes": 2049
+    }
+  },
+  "swap": {
+    "hash": "f138941af9fcd58f",
+    "width": 960,
+    "height": 336,
+    "bytes": 6339,
+    "icon": {
+      "width": 212,
+      "height": 64,
+      "bytes": 1712
+    }
+  },
+  "paragraph-step": {
+    "hash": "c538d1cc4e9925d5",
+    "width": 960,
+    "height": 441,
+    "bytes": 9991,
+    "icon": {
+      "width": 459,
+      "height": 64,
+      "bytes": 2638
+    }
+  },
+  "paragraph-sideways": {
+    "hash": "8abf93e8c5e2d9a9",
+    "width": 960,
+    "height": 705,
+    "bytes": 18574,
+    "icon": {
+      "width": 371,
+      "height": 182,
+      "bytes": 5687
+    }
+  },
+  "insert-paragraph": {
+    "hash": "1c2ef31914508f3f",
+    "width": 960,
+    "height": 742,
+    "bytes": 17534,
+    "icon": {
+      "width": 321,
+      "height": 143,
+      "bytes": 3571
+    }
+  }
+}

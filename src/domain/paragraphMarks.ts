@@ -65,11 +65,36 @@ function boundsOf(points: Point[]): Rect {
 }
 
 /**
- * The step mark (_|‾), drawn in one stroke: a run to the right under a line, straight up, a run
- * to the right above it. Its tip is the upright's x at the mark's middle height: the place to
- * split. Null for any other shape.
+ * The step mark, drawn in one stroke: a run to the right under a line, straight up, a run to the
+ * right above it (_|‾), or the same falling (‾|_). Its tip is the upright's x at the mark's middle
+ * height: the place to split. Null for any other shape. On its own in the review a step needs a
+ * second upright next to its own to be a paragraph break (`isSecondUpright`); a bare step is a
+ * swap's middle piece (technical-design-swap-space-marks.md §5.5).
  */
 export function analyzeStepMark(points: Point[]): CaretShape | null {
+  return risingStep(points) ?? fallingStep(points);
+}
+
+function fallingStep(points: Point[]): CaretShape | null {
+  const flip = (point: Point): Point => ({x: point.x, y: -point.y});
+  const shape = risingStep(points.map(flip));
+  if (!shape) {
+    return null;
+  }
+  return {
+    tip: flip(shape.tip),
+    direction: 'step',
+    rect: {
+      left: shape.rect.left,
+      right: shape.rect.right,
+      top: -shape.rect.bottom,
+      bottom: -shape.rect.top,
+    },
+    ends: [flip(shape.ends[0]), flip(shape.ends[1])],
+  };
+}
+
+function risingStep(points: Point[]): CaretShape | null {
   if (points.length < 4) {
     return null;
   }
@@ -135,6 +160,40 @@ export function analyzeStepMark(points: Point[]): CaretShape | null {
     ends: [{...first}, {...last}],
   };
 }
+
+/** How far (pixels) a step's second upright may stand from its own, on either side. */
+export const SECOND_UPRIGHT_MIN_GAP = 3;
+export const SECOND_UPRIGHT_MAX_GAP = 32;
+
+/**
+ * Whether a stroke (by its bounds) is the second upright of a step mark that makes it a
+ * paragraph break (_||‾): short and nearly vertical, beside the step's upright on either side,
+ * crossing the step's middle height and covering at least half of the step's height.
+ */
+export function isSecondUpright(step: CaretShape, rect: Rect): boolean {
+  if (step.direction !== 'step') {
+    return false;
+  }
+  const height = rect.bottom - rect.top;
+  const width = rect.right - rect.left;
+  const stepHeight = step.rect.bottom - step.rect.top;
+  const gap = Math.abs((rect.left + rect.right) / 2 - step.tip.x);
+  const overlap =
+    Math.min(rect.bottom, step.rect.bottom) - Math.max(rect.top, step.rect.top);
+  return (
+    height >= stepHeight * 0.5 &&
+    width <= Math.max(14, height * 0.35) &&
+    gap >= SECOND_UPRIGHT_MIN_GAP &&
+    gap <= SECOND_UPRIGHT_MAX_GAP &&
+    rect.top <= step.tip.y &&
+    rect.bottom >= step.tip.y &&
+    overlap >= Math.min(height, stepHeight) * 0.5
+  );
+}
+
+/** Why a step on its own, with no second upright and no swap around it, is ignored. */
+export const BARE_STEP_REASON =
+  'A step alone is not used: a paragraph break needs a second short line next to its upright (_||‾); a swap needs a start and an end corner.';
 
 /** How near (in line heights) to a boundary between lines a sideways caret's tip must be. */
 export const BOUNDARY_ZONE = 0.3;

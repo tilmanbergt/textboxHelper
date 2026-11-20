@@ -5,7 +5,8 @@
  * - Header: "‹ Back" (sub-screens), title, short context, the screen's own buttons (Details,
  *   Rules), "?" when the screen has help, Close.
  * - Body: `flex: 1` and bounded, so paged children (PagedSection, PagedText) can measure the room
- *   they have. Help opens as a layer over the body.
+ *   they have. Help opens as a layer over the body: HelpOverlay for a text, MarkHelp for the
+ *   edit-marker help with its pictures.
  * - Footer: the status line left, the one primary button right. A busy primary keeps its place
  *   and shows its busy label, disabled.
  *
@@ -16,6 +17,7 @@
 import React, {useEffect, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import HelpOverlay from './HelpOverlay';
+import MarkHelp from './MarkHelp';
 import PillButton from './PillButton';
 import {COLORS, FONT, SPACING} from './theme';
 import {requestEinkRefresh} from '../utils/screenRefresh';
@@ -45,7 +47,8 @@ interface Props {
   context?: string;
   back?: {label: string; onPress: () => void};
   actions?: FrameButton[];
-  help?: {title: string; text: string};
+  /** Help behind "?": a text (domain/helpTexts.ts), or the edit-marker help with pictures. */
+  help?: {title: string; text: string} | {title: string; marks: true};
   onClose?: () => void;
   status?: FrameStatus | null;
   primary?: FramePrimary;
@@ -103,7 +106,8 @@ export default function ScreenFrame({
       </View>
       <View style={styles.body}>
         {children}
-        {help && helpOpen && (
+        {help && helpOpen && 'marks' in help && <MarkHelp title={help.title} onClose={() => setHelpOpen(false)} />}
+        {help && helpOpen && 'text' in help && (
           <HelpOverlay title={help.title} text={help.text} onClose={() => setHelpOpen(false)} />
         )}
       </View>

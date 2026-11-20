@@ -65,6 +65,11 @@ export type NativeDetailedWord = {
   height: number;
   centerX: number;
   centerY: number;
+  /**
+   * Where each character of the word starts, and where its last one ends (length = characters +
+   * 1), in the same coordinates as `left`. Missing from native builds before it was added.
+   */
+  charEdges?: number[];
 };
 
 export type NativeDetailedMeasurement = {
@@ -79,9 +84,17 @@ export type NativeDetailedMeasurement = {
   layoutHeight: number;
   lineCount: number;
   maxLineWidth: number;
+  /** Height of small letters ("x") above the baseline. Missing from older native builds. */
+  xHeight?: number;
+  /** Height of capital letters ("H") above the baseline. Missing from older native builds. */
+  capHeight?: number;
   lines: NativeDetailedLine[];
   words: NativeDetailedWord[];
 };
+
+/** Small and capital letter heights when the native measurement didn't give them. */
+export const X_HEIGHT_PER_FONT_SIZE = 0.53;
+export const CAP_HEIGHT_PER_FONT_SIZE = 0.73;
 
 const MIN_TEXTBOX_HEIGHT = 48;
 // const SUPERNOTE_ONE_LINE_FONT_SIZE_OFFSET = 5;

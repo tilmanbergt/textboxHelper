@@ -9,8 +9,8 @@
 Requirements: Node 18 or newer, Java 17 and the Android SDK (Android Studio), Windows PowerShell.
 
 ```powershell
-npm ci                 # install exactly what package-lock.json says
-npm run check          # type check, ESLint, Jest
+npm ci                 # install exactly what package-lock.json says (also bundles the help pictures)
+npm run check          # help pictures, type check, ESLint, Jest
 ./buildPlugin.ps1      # build the plugin
 ```
 
@@ -25,11 +25,29 @@ npm is the package manager; there is no `yarn.lock`.
 
 `npm run check` runs, in this order, and stops at the first failure:
 
-1. `tsc --noEmit` - zero errors;
-2. `eslint .` - zero errors and zero warnings;
-3. `jest --passWithNoTests` - every test in `__tests__/` passes.
+1. `node scripts/gen-mark-images.mjs` - bundles the help pictures into `src/ui/generated/`;
+2. `node scripts/marks.mjs --check` - every help picture is drawn from the current spec;
+3. `node scripts/test-marks.mjs` - tests of the picture scripts;
+4. `tsc --noEmit` - zero errors;
+5. `eslint .` - zero errors and zero warnings;
+6. `jest --passWithNoTests` - every test in `__tests__/` passes.
 
 The single steps are also available as `npm run typecheck`, `npm run lint` and `npm test`.
+
+## Help pictures
+
+The edit-marker help shows a picture of every mark: the marked textbox, then the text after
+Apply, and a small icon of the mark for the overview. They are drawn, not hand-made:
+
+- `docs/user/marks/marks.mjs` is the spec: sample text, the pen marks by word position, the text
+  after Apply. The words next to each picture are in `src/domain/markHelp.ts`, same id.
+- `npm run marks` draws the entries that changed into `docs/user/images/marks/` (PNG, greyscale,
+  committed) and `manifest.json`; `npm run marks -- --all` draws all.
+- `npm install` / `npm ci` (postinstall) and `npm run check` write
+  `src/ui/generated/markImages.ts` (data URIs, not committed), which `ui/MarkHelp.tsx` shows.
+
+To change a picture: edit the spec (or `scripts/lib/markDrawing.mjs` for every picture), run
+`npm run marks`, look at the PNGs, commit them with the spec.
 
 ## Code tour
 
@@ -37,14 +55,16 @@ The single steps are also available as `npm run typecheck`, `npm run lint` and `
 |---|---|
 | `index.js` | Registers the toolbar buttons (lasso toolbar and NOTE toolbar) and starts routing. If a button doesn't appear where expected, start here. |
 | `App.tsx` | The plugin window: asks for file permissions, routes each button press to a view, runs previews and actions, shows status and results. |
-| `src/actions/` | The flows behind the buttons: `textboxEdits.ts` (split, join, clean, remove line breaks, Log All Textboxes), `editMarkers.ts`, `editMarkerAnalysis.ts` and `editMarkerDrop.ts` (handwritten edit markers), `penEditTag.ts` and `penEditReview.ts` (tagged handwritten text), `textImport.ts` (text file into textboxes), `textboxScan.ts` (scan for the DOCX export). |
+| `src/actions/` | The flows behind the buttons: `textboxEdits.ts` (split, join, clean, remove line breaks, Log All Textboxes), `editMarkers.ts`, `editMarkerAnalysis.ts`, `shapeMarks.ts`, `markerMeasure.ts` and `editMarkerDrop.ts` (handwritten edit markers), `penEditTag.ts` and `penEditReview.ts` (tagged handwritten text), `textImport.ts` (text file into textboxes), `textboxScan.ts` (scan for the DOCX export). |
 | `src/domain/` | Pure logic, tested with Jest: text splitting, edit plans, marker strokes and text changes, geometry, hit testing, pagination, import parsing and planning, export classification, backup payloads, button ids and action labels, the domain types (`textboxModel.ts`). |
 | `src/supernote/` | Device access: SDK calls (`noteElements.ts`, `noteTextInsertion.ts`, `markerStrokeRead.ts`, `exportNoteContext.ts`, `sdkResult.ts`), native text measurement (`textboxMetrics.ts`), button routing, permissions. If a host call fails, start here. |
 | `src/storage/` | Files: backups, JSON into EXPORT, the import text file, DOCX. |
 | `src/utils/` | The edit-marker diagnostics trace. |
 | `src/screens/` | The views and dialogs of the plugin window. |
-| `src/ui/` | Shared building blocks of the screens: `ScreenFrame`, buttons, tabs, paging (`PagedSection`, `PagedText`), `theme.ts` |
-| `__tests__/domain/` | Jest tests, one file per domain module or group. |
+| `src/ui/` | Shared building blocks of the screens: `ScreenFrame`, buttons, tabs, paging (`PagedSection`, `PagedText`), the help (`HelpOverlay`, `MarkHelp`), `theme.ts`; `generated/` holds the bundled help pictures (not committed). |
+| `__tests__/domain/`, `__tests__/ui/` | Jest tests, one file per domain module or group; `ui/` for the help screen and its pictures. |
+| `scripts/` | `marks.mjs`, `gen-mark-images.mjs`, `test-marks.mjs` and `lib/`: drawing, bundling and checking the help pictures. |
+| `docs/user/marks/`, `docs/user/images/marks/` | The help pictures' spec and the drawn PNGs. |
 | `android/.../com/textboxhelper/TextboxMetricsModule.kt` | Native module: Android `StaticLayout` text measurement for textbox sizes and hit testing. |
 
 ## Documents

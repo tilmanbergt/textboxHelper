@@ -233,3 +233,85 @@ describe('assembleMarkerPreview', () => {
     expect(preview.ignoredMarkers.map(marker => marker.markerUuid)).toEqual(['x', 'pe9']);
   });
 });
+
+describe('swaps and spaces in the assembly', () => {
+  // TEXT = 'This can feel humble, but not because'
+  // "can feel" (5–13) ⇄ "humble," (14–21): A = "can feel", B = "humble,".
+  const swapDraft: OperationDraft = {
+    range: {kind: 'replace', start: 5, end: 21, replacementText: ''},
+    operation: {
+      id: 'swap:s',
+      kind: 'swap',
+      markerUuid: 's',
+      markerNumInPage: 9,
+      consumedMarkerNums: [9],
+      targetTextboxUuid: 'tb',
+      targetTextboxNumInPage: 2,
+      lineIndex: 0,
+      summary: 'Swap',
+      detail: '',
+      words: ['can feel', 'humble,'],
+      textStart: 5,
+      swap: {zones: {a0: 5, a1: 13, b0: 14, b1: 21}, fixCase: true, capsAvailable: false},
+    },
+  };
+  const textOf = (preview: ReturnType<typeof assembleMarkerPreview>) =>
+    preview.applyPlan?.textMutations[0]?.nextText;
+
+  it('swaps on its own, punctuation staying in its slot', () => {
+    const preview = assembleMarkerPreview(base({drafts: [swapDraft], penEdits: []}), {});
+    expect(textOf(preview)).toBe('This humble can feel, but not because');
+    expect(preview.operations[0].kind).toBe('swap');
+    expect(preview.applyPlan?.recognizedMarkerNums).toEqual([9]);
+  });
+
+  it('makes a delete inside a part first, and marks it as inside the swap', () => {
+    const deleteFeel = draft('d', 9, 13, {markerNumInPage: 7, consumedMarkerNums: [7]});
+    const preview = assembleMarkerPreview(base({drafts: [deleteFeel, swapDraft], penEdits: []}), {});
+    expect(textOf(preview)).toBe('This humble can, but not because');
+    expect(preview.operations.find(op => op.id === 'd')?.insideSwap).toBe('swap:s');
+    expect(preview.applyPlan?.recognizedMarkerNums.sort()).toEqual([7, 9]);
+  });
+
+  it('waits for a replacement inside it that is being recognized, then swaps with it', () => {
+    const replaceHumble = draft('r', 14, 20, {penEditId: 'pe1', penEditNumber: 1, consumedMarkerNums: [4]});
+    const waiting = assembleMarkerPreview(base({drafts: [replaceHumble, swapDraft]}), {});
+    expect(waiting.operations.find(op => op.kind === 'swap')?.swap?.waitingFor).toEqual(['r']);
+    expect(waiting.applyPlan).toBeNull();
+    const ready = assembleMarkerPreview(base({drafts: [replaceHumble, swapDraft]}), {pe1: state()});
+    expect(textOf(ready)).toBe('This proud can feel, but not because');
+  });
+
+  it('reports a conflict under Ignored and keeps the other change', () => {
+    const crossing = draft('x', 10, 18, {markerNumInPage: 7, consumedMarkerNums: [7]});
+    const preview = assembleMarkerPreview(base({drafts: [crossing, swapDraft], penEdits: []}), {});
+    expect(preview.operations.map(op => op.kind)).toEqual(['delete']);
+    expect(preview.ignoredMarkers[0].reason).toContain('reaches over an edge');
+    expect(preview.ignoredMarkers[0].removableNums).toEqual([9]);
+  });
+
+  it('puts a space in at its place', () => {
+    const space: OperationDraft = {
+      range: {kind: 'replace', start: 4, end: 4, replacementText: ' '},
+      operation: {...swapDraft.operation, id: 'space:c', kind: 'space', swap: undefined, consumedMarkerNums: [3]},
+    };
+    const preview = assembleMarkerPreview(
+      base({drafts: [space], penEdits: [], textboxes: [{...textbox, originalText: 'Thiscan go'}]}),
+      {},
+    );
+    expect(textOf(preview)).toBe('This can go');
+  });
+
+  it('moves the capital when asked, by the review choice', () => {
+    const capital: OperationDraft = {
+      ...swapDraft,
+      range: {kind: 'replace', start: 0, end: 8, replacementText: ''},
+      operation: {...swapDraft.operation, swap: {zones: {a0: 0, a1: 4, b0: 5, b1: 8}, fixCase: true, capsAvailable: false}},
+    };
+    const preview = assembleMarkerPreview(base({drafts: [capital], penEdits: []}), {});
+    expect(textOf(preview)?.startsWith('Can this feel')).toBe(true);
+    expect(preview.operations[0].swap?.capsAvailable).toBe(true);
+    const off = assembleMarkerPreview(base({drafts: [capital], penEdits: []}), {}, null, {}, {'swap:s': {fixCase: false}});
+    expect(textOf(off)?.startsWith('can This feel')).toBe(true);
+  });
+});

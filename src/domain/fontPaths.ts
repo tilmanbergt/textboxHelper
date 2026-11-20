@@ -58,6 +58,34 @@ export function buildFontWarning(fontPaths: string[]): string | null {
   );
 }
 
+/**
+ * Why a mark on a textbox is ignored when the textbox's font can't be read: its words were
+ * measured in a standard font, so the place a mark points to can't be trusted.
+ */
+export function fontLockedReason(fontName: string): string {
+  return (
+    `The font ${fontName || 'of this textbox'} can't be read by plugins, so marks on this ` +
+    `textbox can't be placed. Copy the font file to ${PLUGIN_FONT_DIR_LABEL} and open the review again.`
+  );
+}
+
+/**
+ * The review's one line about textboxes whose marks were ignored because their font can't be
+ * read, or null when there are none.
+ */
+export function buildLockedFontsMessage(fontNames: string[], textboxCount: number): string | null {
+  if (textboxCount === 0) {
+    return null;
+  }
+  const names = [...new Set(fontNames.filter(name => name.length > 0))].sort();
+  const boxes = textboxCount === 1 ? '1 textbox was' : `${textboxCount} textboxes were`;
+  const fonts = names.length > 0 ? ` (${names.join(', ')})` : '';
+  return (
+    `Marks on ${boxes} ignored: the font can't be read by plugins${fonts}. ` +
+    `Copy the font file to ${PLUGIN_FONT_DIR_LABEL} and open the review again. See Ignored.`
+  );
+}
+
 /** A message with the font warning appended as its own paragraph, if there is one. */
 export function appendFontWarning(message: string, warning: string | null): string {
   return warning ? `${message}\n\n${warning}` : message;
