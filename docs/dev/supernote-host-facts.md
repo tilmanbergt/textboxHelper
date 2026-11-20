@@ -27,8 +27,14 @@ Library: `sn-plugin-lib` 0.2.3.
 - **The file selector** `RattaFileSelector.selectFile` (sn-plugin-lib) opens the Supernote's own
   file selector: `suffixList` limits the file types, `needSelectFolder` + `limitPath` open it in
   a folder and keep the user there. It answers with an array of absolute paths, or null/empty
-  when cancelled. Import uses it for `INBOX` and `.txt` (`supernote/fileSelector.ts`); the
-  returned path is checked again (`importPathRelativeToInbox`). Not yet confirmed on the device.
+  when cancelled. `limitPath` is optional. Import uses it for `.txt` files from any folder,
+  opening in the last file's folder (`supernote/fileSelector.ts`); the returned path is checked
+  again (`chosenTextFilePath`). Opening in INBOX, `.txt` only, is confirmed on the device; which
+  folders it offers without `limitPath` is not.
+- **Linked files** keep their record in `<pluginDir>/sources/`. Whether a plugin may write next to
+  a linked file outside its own folder (INBOX, Document, a synced folder) is checked on the device
+  with Manuscript → Details → Check write access, which tries the host's `FileUtils.copyFile`
+  first and a direct write second.
 
 ## 2. Permissions
 

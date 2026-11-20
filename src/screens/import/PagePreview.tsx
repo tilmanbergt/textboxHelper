@@ -49,6 +49,7 @@ export default function PagePreview({page, pageSize}: Props): React.JSX.Element 
               key={index}
               style={[
                 styles.chunk,
+                chunk.placeholder && styles.placeholder,
                 {
                   left: chunk.rect.left * scale,
                   top: chunk.rect.top * scale,
@@ -60,6 +61,7 @@ export default function PagePreview({page, pageSize}: Props): React.JSX.Element 
                 style={[
                   styles.text,
                   chunk.bold && styles.bold,
+                  chunk.placeholder && styles.italic,
                   {
                     width:
                       getRequestedWidth(chunk.rect.right - chunk.rect.left, DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION) *
@@ -97,5 +99,13 @@ const styles = StyleSheet.create({
   },
   bold: {
     fontWeight: '700',
+  },
+  italic: {
+    fontStyle: 'italic',
+  },
+  // A protected block's placeholder in a linked import (technical-design-source-link.md §2.5).
+  placeholder: {
+    borderWidth: 1,
+    borderColor: COLORS.accent,
   },
 });

@@ -1,5 +1,7 @@
+import {paginateTextboxBlocksIntoPages} from '../../src/domain/blockPagination';
 import {formatBlockTag, parseBlockTag, type BlockTag} from '../../src/domain/blockTag';
 import {fingerprint} from '../../src/domain/fingerprint';
+import {sourceImportBlocks} from '../../src/domain/importParsing';
 import {
   blockName,
   parseSourceBlocks,
@@ -321,5 +323,44 @@ describe('source record and tag', () => {
     expect(fingerprint('abc')).toBe(fingerprint('abc'));
     expect(fingerprint('abc')).not.toBe(fingerprint('abd'));
     expect(fingerprint('')).toBe('0-811c9dc5');
+  });
+});
+
+describe('linked import', () => {
+  const structure = {
+    layoutMode: 'paragraphTextboxes' as const,
+    paragraphSeparator: 'line' as const,
+    detectMarkdownHeadings: false,
+    paragraph: {fontSize: 36, bold: false},
+    heading1: {fontSize: 60, bold: true},
+    heading2: {fontSize: 48, bold: true},
+    heading3: {fontSize: 40, bold: true},
+  };
+
+  it('places one block per textbox with its source index, headings always recognized', () => {
+    const {blocks} = parseSourceBlocks('# A\n\n#### Deep\n\ntext\n\n```\nx\n```\n');
+    expect(sourceImportBlocks(blocks, structure)).toEqual([
+      {role: 'heading1', text: 'A', fontSize: 60, bold: true, sourceIndex: 0},
+      {role: 'heading3', text: 'Deep', fontSize: 40, bold: true, sourceIndex: 1},
+      {role: 'paragraph', text: 'text', fontSize: 36, bold: false, sourceIndex: 2},
+      {role: 'paragraph', text: '⟦Code · 3 lines · kept as is⟧', fontSize: 36, bold: false, sourceIndex: 3, placeholder: true},
+    ]);
+  });
+
+  it('numbers the pieces of a block cut to fit the pages', async () => {
+    const pages = await paginateTextboxBlocksIntoPages({
+      blocks: [
+        {role: 'paragraph', text: 'short', fontSize: 36, bold: false, sourceIndex: 0},
+        {role: 'paragraph', text: `${'a'.repeat(60)} ${'b'.repeat(60)}`, fontSize: 36, bold: false, sourceIndex: 1},
+      ],
+      maxRect: {left: 0, top: 0, right: 100, bottom: 100},
+      measureHeight: async text => text.length,
+    });
+    const chunks = pages.flatMap(page => page.chunks);
+    expect(chunks.map(chunk => [chunk.sourceIndex, chunk.piece])).toEqual([
+      [0, 0],
+      [1, 0],
+      [1, 1],
+    ]);
   });
 });

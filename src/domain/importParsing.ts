@@ -2,6 +2,7 @@ import type {
   TextboxImportParagraphSeparator,
   TextboxImportStructureSettings,
 } from './importSettings';
+import type {SourceBlock} from './sourceBlocks';
 
 export type TextboxImportBlockRole =
   | 'paragraph'
@@ -14,6 +15,10 @@ export type TextboxImportBlock = {
   text: string;
   fontSize: number;
   bold: boolean;
+  /** Linked import: the block of the file this textbox shows (technical-design-source-link.md §3). */
+  sourceIndex?: number;
+  /** Linked import: a protected block's placeholder, italic and framed. */
+  placeholder?: boolean;
 };
 
 export type TextboxImportBlockSummary = {
@@ -155,4 +160,36 @@ export function summarizeTextboxImportBlocks(
   });
 
   return summary;
+}
+
+/**
+ * The blocks of a linked import (technical-design-source-link.md §3): one per block of the file,
+ * headings always recognized (levels 4–6 take the `###` style), lists and paragraphs in the
+ * paragraph style, protected blocks as their placeholder label in the paragraph size.
+ */
+export function sourceImportBlocks(
+  blocks: SourceBlock[],
+  structure: TextboxImportStructureSettings,
+): TextboxImportBlock[] {
+  return blocks.map(block => {
+    if (block.role === 'heading') {
+      const level = Math.min(3, Math.max(1, block.level)) as 1 | 2 | 3;
+      const style = getHeadingStyle(structure, level);
+      return {
+        role: `heading${level}` as TextboxImportBlockRole,
+        text: block.text,
+        fontSize: style.fontSize,
+        bold: style.bold,
+        sourceIndex: block.index,
+      };
+    }
+    return {
+      role: 'paragraph',
+      text: block.text,
+      fontSize: structure.paragraph.fontSize,
+      bold: block.role === 'protected' ? false : structure.paragraph.bold,
+      sourceIndex: block.index,
+      placeholder: block.role === 'protected' || undefined,
+    };
+  });
 }

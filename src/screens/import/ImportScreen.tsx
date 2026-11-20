@@ -1,19 +1,23 @@
 /**
  * Import Text File (technical-design-calmer-screens.md §3.7, canvas "Import text file").
- * Left: the file (Supernote file selector, INBOX, .txt) and how the text is structured. Right:
- * the planned pages drawn to scale, updated by itself after every change. Font size and margins
- * are on the Layout sub-screen.
+ * Left: the file (Supernote file selector, any folder, .txt) and how the text is structured.
+ * Right: the planned pages drawn to scale, updated by itself after every change. Font size and
+ * margins are on the Layout sub-screen. In the Paragraph boxes layout the import can be linked to
+ * its file (technical-design-source-link.md §3): then blank lines separate the blocks and headings
+ * are always recognized, and the header says what the file holds that is kept as is.
  */
 import React, {useEffect, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {IMPORT_HELP} from '../../domain/helpTexts';
 import {
   headingsAreBold,
+  isLinkedImport,
   withHeadingFontSize,
   withHeadingsBold,
   type TextboxImportSettings,
 } from '../../domain/importSettings';
 import {plural} from '../../domain/plural';
+import {protectedSummaryText} from '../../domain/sourceBlocks';
 import Checkbox from '../../ui/Checkbox';
 import NumberField from '../../ui/NumberField';
 import PageHeader from '../../ui/PageHeader';
@@ -58,8 +62,11 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
 
   const setStructure = (next: Partial<TextboxImportSettings['structure']>) =>
     flow.change({...settings, structure: {...settings.structure, ...next}});
-  const headings = settings.structure.detectMarkdownHeadings;
-  const fileName = settings.filename ? settings.filename.split('/').slice(-1)[0] : '';
+  const linked = isLinkedImport(settings);
+  const headings = linked || settings.structure.detectMarkdownHeadings;
+  const filePath = settings.filePath;
+  const fileName = filePath ? filePath.split('/').slice(-1)[0] : '';
+  const folder = filePath ? filePath.slice(0, filePath.lastIndexOf('/')).replace(/^\/storage\/emulated\/0\//, '') : '';
 
   const context = preview
     ? preview.effectiveInsertMode === 'currentPage'
@@ -100,7 +107,7 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
             <PillButton size="small" label="Choose ›" disabled={busy} onPress={flow.chooseFile} />
           </View>
           <Text style={styles.path} numberOfLines={1}>
-            {settings.filename ? `INBOX/${settings.filename}` : '.txt files in INBOX'}
+            {filePath ? `${folder || 'Storage'}/` : '.txt files from any folder'}
           </Text>
 
           <Text style={styles.label}>Layout</Text>
@@ -113,22 +120,38 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
             onChange={layoutMode => setStructure({layoutMode})}
           />
 
-          <Text style={styles.label}>Paragraphs are separated by</Text>
-          <Segmented
-            options={[
-              {key: 'blankLine', label: 'Blank lines'},
-              {key: 'line', label: 'Every line'},
-            ]}
-            value={settings.structure.paragraphSeparator}
-            onChange={paragraphSeparator => setStructure({paragraphSeparator})}
-          />
+          {settings.structure.layoutMode === 'paragraphTextboxes' && (
+            <Checkbox
+              label="Link to file (write changes back)"
+              checked={settings.linkToFile}
+              onChange={linkToFile => flow.change({...settings, linkToFile})}
+            />
+          )}
+
+          {!linked && (
+            <>
+              <Text style={styles.label}>Paragraphs are separated by</Text>
+              <Segmented
+                options={[
+                  {key: 'blankLine', label: 'Blank lines'},
+                  {key: 'line', label: 'Every line'},
+                ]}
+                value={settings.structure.paragraphSeparator}
+                onChange={paragraphSeparator => setStructure({paragraphSeparator})}
+              />
+            </>
+          )}
 
           <Text style={styles.label}>Headings</Text>
-          <Checkbox
-            label="Recognize #, ##, ###"
-            checked={headings}
-            onChange={detectMarkdownHeadings => setStructure({detectMarkdownHeadings})}
-          />
+          {linked ? (
+            <Text style={styles.path}>#, ##, ### and deeper are recognized.</Text>
+          ) : (
+            <Checkbox
+              label="Recognize #, ##, ###"
+              checked={headings}
+              onChange={detectMarkdownHeadings => setStructure({detectMarkdownHeadings})}
+            />
+          )}
           {headings && (
             <>
               <View style={styles.sizes}>
@@ -204,12 +227,23 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
                       preview.plannedPageCount > pages.length ? ` (first ${pages.length} shown)` : ''
                     }`}
               </Text>
+              {preview.source && (
+                <Text style={styles.caption} numberOfLines={2}>
+                  {[
+                    `Linked to ${fileName}: changes can be written back.`,
+                    protectedSummaryText(preview.source),
+                    'Links and formatting stay as text.',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                </Text>
+              )}
             </>
           ) : (
             <View style={styles.message}>
               <Text style={styles.messageText}>{flow.previewing ? 'Reading the file…' : flow.previewError ?? ''}</Text>
-              {!flow.previewing && !settings.filename ? (
-                <Text style={styles.muted}>Put a .txt file into the INBOX folder, then tap Choose ›.</Text>
+              {!flow.previewing && !filePath ? (
+                <Text style={styles.muted}>Tap Choose › and pick a .txt file, e.g. from INBOX.</Text>
               ) : null}
             </View>
           )}

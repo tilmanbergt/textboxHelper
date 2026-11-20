@@ -20,6 +20,13 @@ export type PlannedTextboxChunk = {
   fontSize: number;
   fontPath?: string;
   bold?: boolean;
+  /** Linked import (technical-design-source-link.md §3): the file's block and the piece of it. */
+  sourceIndex?: number;
+  piece?: number;
+  /** A protected block's placeholder: italic and framed. */
+  placeholder?: boolean;
+  /** The block tag the textbox carries. */
+  userData?: string;
 };
 
 export type PlannedTextboxPage = {
@@ -218,6 +225,9 @@ export function buildInsertPages(params: {
       fontSize: chunk.fontSize,
       fontPath: chunk.fontPath,
       bold: chunk.bold,
+      italic: chunk.placeholder,
+      framed: chunk.placeholder,
+      userData: chunk.userData,
       createPage: shouldCreatePlannedPage && chunkIndex === 0,
     }));
   });

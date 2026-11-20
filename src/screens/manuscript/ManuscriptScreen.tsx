@@ -17,6 +17,7 @@ import OutlineTab from './OutlineTab';
 import ReviewTab, {reviewContext} from './ReviewTab';
 import {useManuscriptReview} from './useManuscriptReview';
 import {useOutline, type Outline} from './useOutline';
+import {useSourceLink} from './useSourceLink';
 
 type Tab = 'review' | 'outline';
 
@@ -32,6 +33,7 @@ export default function ManuscriptScreen({
 }: Props): React.JSX.Element {
   const review = useManuscriptReview();
   const outline = useOutline(review.note, review.pages);
+  const source = useSourceLink(review.note, !review.loading);
   const [view, setView] = useState<'card' | 'details'>('card');
   const [tab, setTab] = useState<Tab>('review');
   const [reviewBlocked, setReviewBlocked] = useState(false);
@@ -76,6 +78,7 @@ export default function ManuscriptScreen({
     return (
       <ManuscriptDetailsScreen
         review={review}
+        source={source}
         onBack={() => setView('card')}
         onClose={onClose}
       />

@@ -4,6 +4,8 @@ import {
   buildBrokenPenEditIndexPath,
   buildPenEditEntryDir,
   buildPenEditIndexPath,
+  buildSourceOriginalPath,
+  buildSourceRecordPath,
 } from '../../src/domain/backupPaths';
 
 const PLUGIN_DIR = '/data/user/0/com.ratta.supernote.pluginhost/files/plugins/wkx45auazdre2crs';
@@ -34,5 +36,12 @@ describe('pen edit paths', () => {
     expect(buildBrokenPenEditIndexPath('/p', '2026-11-18T13:55:01.000Z')).toBe(
       '/p/pen-edits/index.broken-2026-11-18T13-55-01-000Z.json',
     );
+  });
+});
+
+describe('source paths', () => {
+  it('keeps linked-file records and originals in the plugin folder', () => {
+    expect(buildSourceRecordPath(`${PLUGIN_DIR}/`, 's-1')).toBe(`${PLUGIN_DIR}/sources/s-1.json`);
+    expect(buildSourceOriginalPath(PLUGIN_DIR, 's-1')).toBe(`${PLUGIN_DIR}/sources/s-1-original.txt`);
   });
 });

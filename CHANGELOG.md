@@ -6,6 +6,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Added
 
+- Import a text file linked to its file: in the Paragraph boxes layout, "Link to file (write changes back)" (on by default) places one textbox per heading, paragraph or list of the file and remembers where each came from, so the changes can be written back to the file later. Frontmatter stays out of the note and is kept. Code blocks, formulas, tables, quotes and callouts, HTML, comments, embeds and horizontal lines are kept exactly as they are: the note shows a framed placeholder for each ("⟦Table · 5 rows · kept as is⟧") that can be moved but isn't edited. The preview says what the file holds that is kept as is. Manuscript → Details shows the linked file, with "Check write access" and "Unlink".
 - Manuscript opens faster the second time: pages read before show at once, with their changes. The current page is checked first, the others quietly after it; a page that changed is read again and its list updated ("Page 5 changed since it was read"). Tapping a page checks it again. Apply, Drop and the Outline still read their pages fresh before they write. The Outline shows the last scan at once and checks it in the background.
 - Manuscript Details → Speed: the plugin records how long reading pages, recognizing and applying take. "Save timings" writes them as one file to the EXPORT folder (no text in it), to hand over when something feels slow; "Clear" starts over.
 - Manuscript: "Go to page N ›" closes the card and shows that page in NOTE — in the Review for the chosen page (or the selected change's page), in the Outline for the selected block.
@@ -30,6 +31,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Changed
 
+- Import: the text file can come from any folder on the device, not only INBOX; Choose › opens in the folder of the last file.
 - The lasso toolbar button "Apply Edit Markers" is gone: Manuscript reads the whole page. "Skip for later" is gone too: tagged text still being recognized stays on the page for a later pass, and Drop takes away what isn't wanted.
 - Swap mark: draw a line above one part and below the next, joined by a vertical between them (|‾‾|__| or the other way round), and the two parts change places. Over several lines, three pieces are enough: a start corner, the middle piece where the parts meet, and an end corner. Punctuation stays where it was; "Fix capitals" moves a sentence's capital to the new first word. A delete or replacement inside a part is made first; a change reaching over an edge of the parts leaves the swap under Ignored for a second pass.
 - Insert-space mark: a ∧ or V with a small cross (+, × or #) at its tip puts a space in there, e.g. inside "thisword".

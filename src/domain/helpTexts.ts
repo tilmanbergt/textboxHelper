@@ -47,7 +47,7 @@ An action that doesn't fit the lasso selection is greyed, with the reason next t
 A backup of the textboxes is written first; the status line names it.`;
 
 export const IMPORT_HELP = `## The file
-A plain UTF-8 .txt file in INBOX (or a folder inside it). Choose › opens the Supernote file selector. Windows and Unix line endings both work.
+A plain UTF-8 .txt file from any folder, for example INBOX. Choose › opens the Supernote file selector in the folder of the last file. Windows and Unix line endings both work.
 
 ## Layout
 Continuous text: the text flows through textboxes that fill each page from top to bottom.
@@ -62,6 +62,9 @@ With "Recognize #, ##, ###", a line starting with "# ", "## " or "### " becomes 
 # My Topic
 This is the first paragraph.
 ## A section
+
+## Link to file
+In the Paragraph boxes layout, "Link to file" places one textbox per heading, paragraph or list of the file and remembers where each came from, so changes can be written back to the file. Blank lines separate the blocks, and headings of every level are recognized. Frontmatter stays out of the note and is kept. Code, formulas, tables, quotes and callouts, HTML, comments, embeds and horizontal lines are kept exactly as they are: a framed placeholder stands for each, which can be moved but isn't edited. Links and formatting stay as text.
 
 ## Where it goes
 Into the current page when its writing area is empty, otherwise onto new pages after it. The preview shows the first pages to scale. Font size and margins are under Layout.`;

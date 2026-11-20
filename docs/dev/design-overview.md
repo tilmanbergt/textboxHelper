@@ -116,14 +116,24 @@ the points recognition used, as JSON to the EXPORT folder - only when the user t
 
 ### Text import (`actions/textImport.ts`)
 
-Import of a UTF-8 text file from `INBOX` (the folder's exact name on the device), chosen with the
-Supernote file selector (`supernote/fileSelector.ts`, limited to INBOX and `.txt`), into textboxes:
+Import of a UTF-8 text file from any folder, chosen with the Supernote file selector
+(`supernote/fileSelector.ts`, `.txt` only, opening in the last file's folder, else `INBOX`), into textboxes:
 paragraphs split by blank lines (by default), markdown headings detected and set in larger bold
 text, the text paginated over the current page and new pages as needed. Settings and paths are
 in `domain/importSettings.ts`, parsing in `domain/importParsing.ts`, the page plan in
 `domain/importPlan.ts`, the pagination in `domain/*Pagination.ts` (the height measurement is
 passed in, so it is tested without the device). The preview carries the first planned pages, which
 the Import screen draws to scale; it runs by itself 500 ms after a settings change.
+
+**Linked import** (`technical-design-source-link.md`): in the Paragraph boxes layout with "Link to
+file", `domain/sourceBlocks.ts` splits the file into frontmatter, headings, paragraphs, lists and
+protected blocks (code, math, tables, quotes, HTML, comments, embeds, rules), each with its span in
+the original text. Every block becomes one textbox (protected ones a framed placeholder) with a
+block tag (`domain/blockTag.ts`: source, block, piece, placeholder). The file's record - path,
+original text, blocks - is written first to `<plugin folder>/sources/<id>.json`
+(`storage/sourceStore.ts`). `domain/sourceExport.ts` regenerates the file from the note's
+textboxes and the original. Manuscript finds the linked file by the tags on the note
+(`actions/sourceLink.ts`, through the Outline's scan and cache) and shows it in Details.
 
 ### DOCX export (`actions/textboxScan.ts`, `storage/docxExport.ts`)
 

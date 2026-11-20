@@ -61,8 +61,10 @@ The architecture as built is described in `design-overview.md`. These rules are 
 - **Device paths** are joined with `/` only. The plugin writes only to its own folder
   (`PluginManager.getPluginDirPath()`: backups, `settings.json`, `pen-edits/`), the app's document folder
   (`RNFS.DocumentDirectoryPath`: temporary files) and the EXPORT folder
-  (`FileUtils.getExportPath()`: DOCX and JSON exports). It reads text files from `INBOX` (chosen
-  with the Supernote file selector), and font files from `/system/fonts`, `MyStyle/fonts` and
+  (`FileUtils.getExportPath()`: DOCX and JSON exports). It reads text files from any folder (chosen
+  with the Supernote file selector); next to a linked file it writes and deletes a probe file
+  `.textbox-tools-probe.txt` only on Check write access (`technical-design-source-link.md`). It
+  reads font files from `/system/fonts`, `MyStyle/fonts` and
   `MyStyle/TextboxHelper/fonts`. A new place needs a line in the README and in
   `supernote-host-facts.md` if the host restricts it.
 - **Host calls are checked.** Every `sn-plugin-lib` call's result is checked for success; a

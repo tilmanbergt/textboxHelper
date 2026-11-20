@@ -50,8 +50,9 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 
 ### Import Text File
 
-- Import plain text into NOTE textboxes, from a `.txt` file in the Supernote's `INBOX` folder (or a folder inside it), chosen with the Supernote file selector
+- Import plain text into NOTE textboxes, from a `.txt` file in any folder (for example `INBOX`), chosen with the Supernote file selector
 - Split imported text into paragraph-based textboxes
+- Link the import to its file: one textbox per heading, paragraph or list; frontmatter, code, tables, callouts and other blocks are kept exactly as they are and shown as framed placeholders
 - See the planned pages drawn to scale before importing; the preview updates by itself
 
 ### Export DOCX
@@ -77,7 +78,8 @@ be wrong.
 
 The plugin remembers the import settings, the export pages and rules, and the edit-marker
 calibration in `settings.json` in its own plugin folder. Tagged replacements and insertions are
-kept in `pen-edits/` in the same folder, the Outline's block statuses in `block-status.json`.
+kept in `pen-edits/` in the same folder, the Outline's block statuses in `block-status.json`, and
+what a linked import came from (the file's path and its original text) in `sources/`.
 
 ## Installation
 

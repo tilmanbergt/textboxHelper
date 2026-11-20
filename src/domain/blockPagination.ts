@@ -15,6 +15,10 @@ export type TextboxBlockPageChunk = {
   fontSize: number;
   fontPath?: string;
   bold?: boolean;
+  /** Linked import: the file's block and, for a block cut to fit the pages, the piece (0, 1, …). */
+  sourceIndex?: number;
+  piece?: number;
+  placeholder?: boolean;
 };
 
 export type TextboxBlockPage = {
@@ -170,6 +174,8 @@ export async function paginateTextboxBlocksIntoPages(
     text: string;
     fontSize: number;
     bold: boolean;
+    block: TextboxImportBlock;
+    piece: number;
   }) => {
     const height = Math.min(
       await heightForText({
@@ -197,6 +203,10 @@ export async function paginateTextboxBlocksIntoPages(
       fontSize: params.fontSize,
       fontPath: options.fontPath,
       bold: params.bold,
+      ...(params.block.sourceIndex !== undefined
+        ? {sourceIndex: params.block.sourceIndex, piece: params.piece}
+        : {}),
+      ...(params.block.placeholder ? {placeholder: true} : {}),
     });
 
     cursorTop = cursorTop + height + blockGap;
@@ -218,6 +228,8 @@ export async function paginateTextboxBlocksIntoPages(
         text: block.text,
         fontSize: block.fontSize,
         bold: block.bold,
+        block,
+        piece: 0,
       });
       continue;
     }
@@ -232,11 +244,13 @@ export async function paginateTextboxBlocksIntoPages(
       measureHeight: options.measureHeight,
     });
 
-    for (const piece of pieces) {
+    for (const [index, piece] of pieces.entries()) {
       await placeChunk({
         text: piece,
         fontSize: block.fontSize,
         bold: block.bold,
+        block,
+        piece: index,
       });
     }
   }
