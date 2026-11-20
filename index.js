@@ -20,11 +20,6 @@ import {
   BUTTON_ID_IMPORT_TEXT_FILE,
   BUTTON_ID_NOTE_MANUSCRIPT,
   BUTTON_ID_TEXTBOX_TOOLS,
-  BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES,
-  BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES,
-  BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
-  BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
-  BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
   BUTTON_ID_TOOLBAR_PEN_EDIT,
 } from './src/domain/buttonIds';
 import {presentEarlyNoMark, presentTagOutcome, tagPenEdit} from './src/actions/penEditTag';
@@ -117,71 +112,6 @@ PluginManager.registerButton(1, ['NOTE'], {
   showType: 1,
 });
 
-PluginManager.registerButton(2, ['NOTE'], {
-  id: BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
-  name: JSON.stringify({
-    en: 'Split Sentences',
-    zh_CN: 'Split Sentences',
-    zh_TW: 'Split Sentences',
-    ja: 'Split Sentences',
-  }),
-  icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
-  showType: 1,
-  editDataTypes: [3],
-});
-
-PluginManager.registerButton(2, ['NOTE'], {
-  id: BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES,
-  name: JSON.stringify({
-    en: 'Join Text Boxes',
-    zh_CN: 'Join Text Boxes',
-    zh_TW: 'Join Text Boxes',
-    ja: 'Join Text Boxes',
-  }),
-  icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
-  showType: 1,
-  editDataTypes: [3],
-});
-
-PluginManager.registerButton(2, ['NOTE'], {
-  id: BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
-  name: JSON.stringify({
-    en: 'Split Paragraphs',
-    zh_CN: 'Split Paragraphs',
-    zh_TW: 'Split Paragraphs',
-    ja: 'Split Paragraphs',
-  }),
-  icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
-  showType: 1,
-  editDataTypes: [3],
-});
-
-
-PluginManager.registerButton(2, ['NOTE'], {
-  id: BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES,
-  name: JSON.stringify({
-    en: 'Clean Spaces',
-    zh_CN: 'Clean Spaces',
-    zh_TW: 'Clean Spaces',
-    ja: 'Clean Spaces',
-  }),
-  icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
-  showType: 1,
-  editDataTypes: [3],
-});
-
-PluginManager.registerButton(2, ['NOTE'], {
-  id: BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
-  name: JSON.stringify({
-    en: 'Remove Line Breaks',
-    zh_CN: 'Remove Line Breaks',
-    zh_TW: 'Remove Line Breaks',
-    ja: 'Remove Line Breaks',
-  }),
-  icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
-  showType: 1,
-  editDataTypes: [3],
-});
 
 PluginManager.registerButton(2, ['NOTE'], {
   id: BUTTON_ID_TOOLBAR_PEN_EDIT,

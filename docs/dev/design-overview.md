@@ -11,13 +11,12 @@ confirmed change to the open note - rather than around a generic editor architec
 ## 1. From button press to changed note
 
 1. A toolbar button press enters through `index.js`, where every button is registered: the
-   lasso toolbar (split, join, clean, remove line breaks, the pen-text tag, the Textbox Tools
-   panel) and the NOTE toolbar (Manuscript, import a text file, export DOCX). The
+   lasso toolbar (the Textbox Tools panel and the pen-text tag) and the NOTE toolbar (Manuscript, import a text file, export DOCX). The
    button ids are in `src/domain/buttonIds.ts`.
 2. `src/supernote/pluginRouting.ts` receives the press and forwards it into React Native as an
    event; a press that arrives before the app listens is kept as pending and picked up at start.
 3. `App.tsx` makes sure the file permissions are granted, then routes the button to a screen: the
-   Textbox Tools panel, the direct-action dialog, the Manuscript card, the import view or the
+   Textbox Tools panel, the Manuscript card, the import view or the
    export screen.
 4. The action flow in `src/actions/` builds a **preview**: it reads the lassoed or page elements
    through `src/supernote/`, lets `src/domain/` compute what would change, and the screen shows it.
@@ -57,8 +56,8 @@ check fail if the SDK types drift away from them.
 `App.tsx` owns permissions and button routing; it opens one screen per button, keyed by the press,
 so a screen opened again starts fresh. The button listener subscribes once and calls the latest
 router through a ref. Screens are built on `ui/ScreenFrame.tsx` and own their state in a hook next
-to them: `screens/manuscript/` (the Manuscript card: `ReviewTab` with its page strip and side bar `ChangeSide`, `OutlineTab`, and Details; the page states are `domain/manuscriptPages.ts`, the outline `domain/outlineModel.ts` with statuses in `storage/blockStatusStore.ts` and block tags `domain/blockTag.ts`), `screens/tools/` (the lasso screen,
-its Details with "Log All Textboxes"), `screens/direct/` (the toolbar actions' progress card),
+to them: `screens/manuscript/` (the Manuscript card: `ReviewTab` with its page strip and side bar `ChangeSide`, `OutlineTab`, and Details; the page states are `domain/manuscriptPages.ts`, the outline `domain/outlineModel.ts` with statuses in `storage/blockStatusStore.ts` and block tags `domain/blockTag.ts`; planned moves, set-asides and deletes are `domain/outlinePlan.ts`, their new places `domain/outlineLayout.ts`, and `actions/outlineApply.ts` checks and writes them), `screens/tools/` (the lasso screen,
+its Details with "Log All Textboxes"),
 `screens/import/` (Import with its Layout sub-screen and the page drawing), `screens/export/`
 (Export with its Rules sub-screen). Every sub-screen (Details, Layout, Rules) is local state of its
 screen, whose hook stays mounted underneath, so going back keeps the preview.

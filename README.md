@@ -45,7 +45,8 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 - "Needs attention" above the list: tagged text without a mark, marks that couldn't be used, with the reason
 - The whole note: a page strip with each page's count of changes; tap a page, or read them all
 - Apply every ready change of the pages read after the preview; one backup of those pages is written first
-- Outline: every textbox of the note as a block in reading order, with its pending edits and a status (open, review, final) you set; filter by status or pending edits
+- Outline: every textbox of the note as a block in reading order, with its pending edits and a status (open, review, final) you set; filter by status, pending edits or planned changes
+- Move a block with ←, set it aside (to a new page at the end of the note) or delete it; the changes are planned first, each can be undone, and "Apply n changes" rebuilds the pages from the first change with one backup. A block with pending edits stays in place until its edits are applied
 
 ### Import Text File
 

@@ -29,14 +29,7 @@ import {
   BUTTON_ID_IMPORT_TEXT_FILE,
   BUTTON_ID_NOTE_MANUSCRIPT,
   BUTTON_ID_TEXTBOX_TOOLS,
-  BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES,
-  BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES,
-  BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS,
-  BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX,
-  BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX,
 } from './src/domain/buttonIds';
-import type {TextboxActionKind} from './src/domain/textboxActionKinds';
-import DirectActionScreen from './src/screens/direct/DirectActionScreen';
 import ExportScreen from './src/screens/export/ExportScreen';
 import ImportScreen from './src/screens/import/ImportScreen';
 import ManuscriptScreen from './src/screens/manuscript/ManuscriptScreen';
@@ -44,21 +37,12 @@ import PenEditOutcomeScreen from './src/screens/penEdit/PenEditOutcomeScreen';
 import TextboxToolsScreen from './src/screens/tools/TextboxToolsScreen';
 import ScreenFrame from './src/ui/ScreenFrame';
 
-type Screen = 'routing' | 'permission' | 'tools' | 'manuscript' | 'direct' | 'import' | 'export';
-
-const DIRECT_ACTIONS: Record<number, TextboxActionKind> = {
-  [BUTTON_ID_TOOLBAR_SPLIT_TEXTBOX]: 'split',
-  [BUTTON_ID_TOOLBAR_SPLIT_PARAGRAPHS_TEXTBOX]: 'splitParagraphs',
-  [BUTTON_ID_TOOLBAR_JOIN_TEXTBOXES]: 'join',
-  [BUTTON_ID_TOOLBAR_CLEAN_TEXTBOX_SPACES]: 'clean',
-  [BUTTON_ID_TOOLBAR_REMOVE_LINE_BREAKS]: 'unwrap',
-};
+type Screen = 'routing' | 'permission' | 'tools' | 'manuscript' | 'import' | 'export';
 
 function App(): React.JSX.Element | null {
   const [screen, setScreen] = useState<Screen>('routing');
   // Changes with every button press: the screen's key, so it starts fresh.
   const [launchKey, setLaunchKey] = useState(0);
-  const [directAction, setDirectAction] = useState<TextboxActionKind>('split');
 
   // Set by a pen-edit tag that needs a word (index.js); shown before any other screen.
   const [penEditOutcome, setPenEditOutcomeState] = useState(getPenEditOutcome());
@@ -102,11 +86,6 @@ function App(): React.JSX.Element | null {
     }
     if (buttonId === BUTTON_ID_NOTE_MANUSCRIPT) {
       setScreen('manuscript');
-      return;
-    }
-    if (DIRECT_ACTIONS[buttonId]) {
-      setDirectAction(DIRECT_ACTIONS[buttonId]);
-      setScreen('direct');
       return;
     }
     if (buttonId === BUTTON_ID_IMPORT_TEXT_FILE) {
@@ -177,8 +156,6 @@ function App(): React.JSX.Element | null {
       return <TextboxToolsScreen key={launchKey} onClose={closePluginView} />;
     case 'manuscript':
       return <ManuscriptScreen key={launchKey} focusPenEditId={focusPenEditId} onClose={closePluginView} />;
-    case 'direct':
-      return <DirectActionScreen key={launchKey} action={directAction} onClose={closePluginView} />;
     case 'import':
       return <ImportScreen key={launchKey} onClose={closePluginView} />;
     case 'export':

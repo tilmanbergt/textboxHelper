@@ -7,6 +7,7 @@ import {
   type Rect,
 } from 'sn-plugin-lib';
 import {assertApiSuccess, assertBooleanSuccess, withTimeout} from './sdkResult';
+import {DEFAULT_FONT_SIZE, MAIN_LAYER, TEXT_TYPE_NORMAL, type TextboxData} from '../domain/textboxModel';
 
 export type TextboxInsertInstruction = {
   pageNumber: number;
@@ -27,8 +28,6 @@ export type InsertTextboxPagesResult = {
   insertedTextboxCount: number;
 };
 
-const TEXT_TYPE_NORMAL = 500;
-const MAIN_LAYER = 0;
 const DEFAULT_TEMPLATE_NAME = 'style_white';
 const INSERT_PAGE_TIMEOUT_MS = 8000;
 
@@ -182,6 +181,8 @@ export async function insertTextboxPages(params: {
 export type StyledTextboxInsert = {
   text: string;
   rect: Rect;
+  /** Carried over when a tagged textbox moves to another page (block tag, status). */
+  userData?: string | null;
   style: {
     fontSize: number;
     fontPath: string | null;
@@ -221,6 +222,9 @@ export async function insertTextboxesIntoFile(notePath: string, page: number, in
       textBox.textEditable = insert.style.textEditable;
       textBox.textDigestData = null;
       element.textBox = textBox;
+      if (insert.userData) {
+        element.userData = insert.userData;
+      }
       const result = await PluginFileAPI.insertElements(notePath, page, elements);
       console.log('[NoteTextInsertion] new paragraph', JSON.stringify({page, chars: insert.text.length, result}));
       assertBooleanSuccess(result as any, 'Could not put the new paragraph into the note.');
@@ -228,4 +232,32 @@ export async function insertTextboxesIntoFile(notePath: string, page: number, in
       await recycleElements(elements);
     }
   }
+}
+
+/** Adds `count` empty pages at the end of the note (after `pageCount` pages), with the default template. */
+export async function appendNotePages(notePath: string, pageCount: number, count: number): Promise<void> {
+  for (let index = 0; index < count; index++) {
+    const page = pageCount + index;
+    const result = await withTimeout(
+      PluginFileAPI.insertNotePage({notePath, page, template: DEFAULT_TEMPLATE_NAME}),
+      INSERT_PAGE_TIMEOUT_MS,
+      `Timeout creating page ${page + 1}`,
+    );
+    console.log('[NoteTextInsertion] appendNotePage', JSON.stringify({page, result}));
+    assertBooleanSuccess(result as any, `Could not create page ${page + 1}.`);
+  }
+}
+
+/** The style a new textbox copies from another, with NOTE's defaults for what that one doesn't set. */
+export function textboxStyle(style: TextboxData): StyledTextboxInsert['style'] {
+  return {
+    fontSize: style.fontSize || DEFAULT_FONT_SIZE,
+    fontPath: style.fontPath,
+    textAlign: style.textAlign ?? 0,
+    textBold: style.textBold ?? 0,
+    textItalics: style.textItalics ?? 0,
+    textFrameWidthType: style.textFrameWidthType ?? 0,
+    textFrameStyle: style.textFrameStyle ?? 0,
+    textEditable: style.textEditable ?? 0,
+  };
 }

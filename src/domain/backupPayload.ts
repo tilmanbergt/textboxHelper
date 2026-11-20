@@ -49,7 +49,16 @@ export type EditMarkerBackupPayload = {
   penEdits?: {entries: unknown[]; strokes: unknown[]};
 };
 
-export type BackupPayload = TextboxBackupPayload | EditMarkerBackupPayload;
+/** Backup of applying the Outline's planned changes: every textbox of the pages rebuilt. */
+export type OutlineBackupPayload = {
+  action: 'outline';
+  createdAt: string;
+  notePath: string;
+  pages: number[];
+  texts: BackupText[];
+};
+
+export type BackupPayload = TextboxBackupPayload | EditMarkerBackupPayload | OutlineBackupPayload;
 
 export const CLIPBOARD_PREVIEW_LIMIT = 3000;
 
@@ -58,7 +67,7 @@ export function buildClipboardSummary(payload: BackupPayload): string {
     `textboxHelper ${payload.action} backup`,
     `Created: ${payload.createdAt}`,
     `Note: ${payload.notePath}`,
-    payload.action === 'edit-markers' ? `Pages: ${payload.pages.join(', ')}` : `Page: ${payload.page}`,
+    'pages' in payload ? `Pages: ${payload.pages.join(', ')}` : `Page: ${payload.page}`,
   ];
   if (payload.action === 'edit-markers') {
     lines.push(
@@ -76,6 +85,39 @@ export function buildClipboardSummary(payload: BackupPayload): string {
   return lines.join('\n').slice(0, CLIPBOARD_PREVIEW_LIMIT);
 }
 
+/** One original textbox as backed up. */
+function backupText(element: TextElementData, page?: number): BackupText {
+  return {
+    ...(page !== undefined ? {page} : {}),
+    uuid: element.uuid,
+    numInPage: element.numInPage,
+    layerNum: element.layerNum,
+    textContentFull: element.textBox.textContentFull || '',
+    textRect: cloneRect(element.textBox.textRect),
+    fontSize: element.textBox.fontSize || DEFAULT_FONT_SIZE,
+    fontPath: element.textBox.fontPath,
+    textAlign: element.textBox.textAlign ?? 0,
+    textBold: element.textBox.textBold ?? 0,
+    textItalics: element.textBox.textItalics ?? 0,
+    textFrameWidthType: element.textBox.textFrameWidthType ?? 0,
+    textFrameStyle: element.textBox.textFrameStyle ?? 0,
+    textEditable: element.textBox.textEditable ?? 0,
+  };
+}
+
+export function createOutlineBackupPayload(
+  notePath: string,
+  pages: Array<{page: number; textboxes: TextElementData[]}>,
+): OutlineBackupPayload {
+  return {
+    action: 'outline',
+    createdAt: new Date().toISOString(),
+    notePath,
+    pages: pages.map(item => item.page),
+    texts: pages.flatMap(item => item.textboxes.map(textbox => backupText(textbox, item.page))),
+  };
+}
+
 export function createBackupPayload(
   action: TextboxActionKind,
   notePath: string,
@@ -88,21 +130,7 @@ export function createBackupPayload(
     notePath,
     page,
     selectedCount: elements.length,
-    texts: elements.map(element => ({
-      uuid: element.uuid,
-      numInPage: element.numInPage,
-      layerNum: element.layerNum,
-      textContentFull: element.textBox.textContentFull || '',
-      textRect: cloneRect(element.textBox.textRect),
-      fontSize: element.textBox.fontSize || DEFAULT_FONT_SIZE,
-      fontPath: element.textBox.fontPath,
-      textAlign: element.textBox.textAlign ?? 0,
-      textBold: element.textBox.textBold ?? 0,
-      textItalics: element.textBox.textItalics ?? 0,
-      textFrameWidthType: element.textBox.textFrameWidthType ?? 0,
-      textFrameStyle: element.textBox.textFrameStyle ?? 0,
-      textEditable: element.textBox.textEditable ?? 0,
-    })),
+    texts: elements.map(element => backupText(element)),
   };
 }
 

@@ -1,4 +1,5 @@
 import {parseBlockTag} from './blockTag';
+import type {Rect} from './textboxModel';
 import type {ScannedTextBox} from './exportClassification';
 import type {PageReview} from './manuscriptPages';
 
@@ -22,6 +23,8 @@ export type OutlineBlock = {
   tagId: string | null;
   page: number;
   numInPage: number;
+  /** Where it is on its page (layout of a rebuild). */
+  rect: Rect;
   text: string;
   firstLine: string;
   /** Empty when the block is short enough to show whole in its first line. */
@@ -90,6 +93,7 @@ export function buildOutline(
       tagId,
       page: item.page,
       numInPage: item.numInPage,
+      rect: item.rect ?? {left: 0, top: 0, right: 0, bottom: 0},
       text: item.text,
       firstLine: firstLineOf(item.text),
       lastLine: lastLineOf(item.text),

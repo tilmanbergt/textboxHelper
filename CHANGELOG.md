@@ -6,6 +6,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Added
 
+- Manuscript Outline: move a block by tapping ← at the place it should go (between two blocks, or at the end), set it aside to a new page at the end of the note, or delete it. Changes are planned first and shown in place (moved underlined, set aside in italics, deleted struck through); Undo per block or Undo last. "Apply n changes" lays out the pages from the first change on, keeping the usual spacing, with one backup. Edits come first: a block with pending edits can't be moved, and pages with handwriting outside textboxes or not yet read are named instead of being rebuilt.
 - Manuscript covers the whole note: a strip with every page and its count of changes (✓ none, ? not read yet); tap a page to see only its changes, or "Read n pages" to read the rest. Apply applies the ready changes of every page read, with one backup and one save.
 - Manuscript Outline: a second tab lists every textbox of the note as a block in reading order (H for a heading, ¶ for a paragraph), with its first and last line, ✎ and the number of edits still pending on it, and its status on the right (○ open, ◐ review, ● final). Filter by pending edits or by status. Tap a block to read it whole in the panel below and set its status; "Review its edits" jumps to its page in the Review. The status is kept in the plugin (block-status.json); a textbox gets a small tag the first time its status is set.
 - Manuscript: the NOTE toolbar button "Apply All Edit Markers" is now "Manuscript", a new card for the page's edit marks. The list shows every change in reading order with its changed text in full (long insertions and swaps too) and a few words around it; the selected change (the first one when the card opens) shows on the right with more of its text, the recognized text of tagged handwriting to correct (high up, so the writing pad doesn't cover it), its edges and Drop. Drop asks on the right, so the list never moves. Marks and tagged text that couldn't be used are listed one at a time above the list, under "Needs attention", with Select mark and Drop.
@@ -37,7 +38,6 @@ All notable changes to Textbox Tools are listed here, newest first.
 - Import Text File has a new screen: "Choose ›" opens the Supernote file selector in INBOX (only `.txt` files, folders inside INBOX work too) instead of a typed file name. The preview updates by itself after every change and draws the planned pages to scale; font size and margins moved to "Layout". The help is behind "?".
 - Export DOCX scans by itself when it opens and after every change, and lists the textboxes that will be exported instead of the count tiles. The classification rules moved to "Rules", with Any / Yes / No for bold, italic and border.
 - The plugin remembers the import settings, the export pages and rules, and the edit-marker calibration between sessions (`settings.json` in the plugin folder).
-- The lasso toolbar actions show their progress in a small, calmer card; Cancel works until the first change.
 - Edit Markers has a new, calmer review screen that never scrolls. The changes are listed on the left (with an "Ignored" tab for markers that couldn't be used); the right side shows one changed textbox at a time with the removed words struck through and replacements in bold. Tap a change to see it in its textbox. After Apply the screen stays open with the result and the backup's file name. Calibration and Save Diagnostics moved to "Details"; the marker help is behind "?". A font warning shows in the status line when word positions were measured in a standard font.
 
 ### Fixed
@@ -48,6 +48,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Removed
 
+- The lasso toolbar buttons Split Sentences, Split Paragraphs, Join Text Boxes, Clean Spaces and Remove Line Breaks, with their progress card: the same actions are in the Textbox Tools panel, with a preview first. The lasso toolbar now has Textbox Tools and Insertion or Replacement.
 - Replacement text in a typed line starting with # is no longer read: tag the handwritten new words with Insertion or Replacement. A replace mark without tagged text shows under Ignored with how to give it some.
 - The second import folder `MyStyle/TextboxHelper/inbox`: text files are imported from INBOX only.
 

@@ -23,7 +23,7 @@ import {
   recycleElements,
   saveCurrentNoteForConsistency,
 } from '../supernote/noteElements';
-import {insertTextboxesIntoFile, type StyledTextboxInsert} from '../supernote/noteTextInsertion';
+import {insertTextboxesIntoFile, textboxStyle} from '../supernote/noteTextInsertion';
 import {buildResizedTextboxRect, estimateTextboxHeight} from '../supernote/textboxMetrics';
 import {logEditMarker} from '../utils/editMarkerLog';
 import {getEditMarkerCalibration} from './markerCalibration';
@@ -72,20 +72,6 @@ function reportProgress(
   canCancel: boolean,
 ): void {
   options?.onProgress?.({message, canCancel});
-}
-
-/** The style a new textbox copies, with NOTE's defaults for what the source doesn't set. */
-function insertStyle(style: TextboxData): StyledTextboxInsert['style'] {
-  return {
-    fontSize: style.fontSize || DEFAULT_FONT_SIZE,
-    fontPath: style.fontPath,
-    textAlign: style.textAlign ?? 0,
-    textBold: style.textBold ?? 0,
-    textItalics: style.textItalics ?? 0,
-    textFrameWidthType: style.textFrameWidthType ?? 0,
-    textFrameStyle: style.textFrameStyle ?? 0,
-    textEditable: style.textEditable ?? 0,
-  };
 }
 
 export async function applyMarkerPlans(
@@ -378,7 +364,7 @@ async function writePage(
         return {
           text: paragraph.text,
           rect: shiftRect(rect, 0, shifts.get(key) ?? 0),
-          style: insertStyle(style),
+          style: textboxStyle(style),
         };
       }),
     );

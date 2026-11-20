@@ -44,7 +44,7 @@ Remove Line Breaks: manual line breaks inside the textbox go.
 An action that doesn't fit the lasso selection is greyed, with the reason next to it. After shows the result, Before the textboxes as they are now.
 
 ## Apply
-A backup of the textboxes is written first; the status line names it. The same actions are in the lasso toolbar, where they apply right away.`;
+A backup of the textboxes is written first; the status line names it.`;
 
 export const IMPORT_HELP = `## The file
 A plain UTF-8 .txt file in INBOX (or a folder inside it). Choose › opens the Supernote file selector. Windows and Unix line endings both work.

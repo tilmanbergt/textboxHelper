@@ -65,6 +65,8 @@ export const TEXT_TYPE_NORMAL = 500;
 export const ELEMENT_TYPE_STROKE = 0;
 /** Element type of a geometry such as a straight line (sn-plugin-lib `Element.TYPE_GEO`). */
 export const ELEMENT_TYPE_GEO = 700;
+/** A NOTE heading (title) over a textbox (host facts §3). */
+export const ELEMENT_TYPE_TITLE = 100;
 /** The main layer; textbox tools only touch elements on it. */
 export const MAIN_LAYER = 0;
 /** Font size assumed when a textbox doesn't name one. */
