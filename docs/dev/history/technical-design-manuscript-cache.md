@@ -1,6 +1,6 @@
 # Technical design: Manuscript — keep what was read, check before acting, measure
 
-Status: **C1 + C2 built 2026-11-20** (As built below; not device-tested yet). C3, C4 open.
+Status: **C1 + C2 built and device-tested 2026-11-20** (As built and first timings below). C3, C4 not needed for now; next: what `page.penContext` spends its time on.
 
 **The problem (Tilman, 2026-11-20):** every time the Manuscript card opens, it reads the pages again, and the Outline scans the whole note again. Going back and forth between the card and the note feels like the plugin reads the same thing over and over.
 
@@ -97,3 +97,15 @@ Stroke points are not read (that's the expensive part). An eraser stroke that on
 - A failed background check keeps the cached view and is only logged.
 - `page.diagnosticsContext` includes a `getPageSize` call on every page read (diagnostics only); if the timings show it as costly, it can go behind a switch.
 - `useManuscriptReview.ts` grew to 535 lines (under the 1,000 limit); moving the opening-from-cache part out is a candidate for the next touch.
+
+## First timings (device, 2026-11-20, 4-page note)
+
+- **Q2 answered: yes.** The JS context survives closing and opening the card (`jsContextAgeMs` ≈ the whole recording; `card.open` saw 2, then 3 cached pages). The in-memory cache is enough for back and forth; C3 is only for after a plugin restart.
+- **Opening from the cache:** `card.firstList` 0.39–0.44 s, against 2.9–4.4 s with a fresh read of the current page.
+- **Q1 answered:** a check costs one `getElements`, 40–95 ms per page; the fingerprint is under 1 ms (one cold 25 ms). All 8 checks were hits. C4 isn't needed.
+- **The surprise is `page.penContext`:** 3.2 s and 1.5 s on pages with one textbox and no pen edits (27 ms and 130 ms on others). Likely the index sync writing the index (stale active entries dropped, `syncPenEditsWithPage`) or a wait in the store's serial queue. Next: sub-timings inside `loadPenEditContext` (index read, sync write, pictures).
+- **Analysis of a page with 2 marks:** shape marks 0.89 s, line marks 0.42 s, strokes 0.22 s, assemble 0.09 s. Shape marks are the largest analysis step; look at them with a mark-heavy page.
+- **Smaller costs:**
+  - `card.noteInfo` 120–160 ms on every opening.
+  - `page.diagnosticsContext` 30–70 ms per full read (diagnostics only).
+  - The Outline scan: 0.6 s fresh, 1.5 s in the background, with `getTitles` up to 0.43 s on one page.
