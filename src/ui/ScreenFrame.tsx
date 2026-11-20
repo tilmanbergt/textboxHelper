@@ -8,7 +8,8 @@
  *   they have. Help opens as a layer over the body: HelpOverlay for a text, MarkHelp for the
  *   edit-marker help with its pictures.
  * - Footer: the status line left, the one primary button right. A busy primary keeps its place
- *   and shows its busy label, disabled.
+ *   and shows its busy label, disabled. A small accessory (a checkbox that belongs to the
+ *   primary, e.g. Manuscript's "Also update <file>") can sit right before it.
  *
  * Header and footer have fixed minimum heights, so nothing in the body moves when the status or
  * the button label changes. A change of `screenKey`, the status text or the button label requests an
@@ -52,6 +53,8 @@ interface Props {
   onClose?: () => void;
   status?: FrameStatus | null;
   primary?: FramePrimary;
+  /** Shown right before the primary button. */
+  accessory?: React.ReactNode;
   screenKey?: string;
   children: React.ReactNode;
 }
@@ -65,6 +68,7 @@ export default function ScreenFrame({
   onClose,
   status,
   primary,
+  accessory,
   screenKey,
   children,
 }: Props): React.JSX.Element {
@@ -118,6 +122,7 @@ export default function ScreenFrame({
           accessibilityLiveRegion="polite">
           {status?.text ?? ''}
         </Text>
+        {accessory}
         {primary && (
           <PillButton
             primary

@@ -19,6 +19,8 @@ export type BlockTag = {
   p?: number;
   /** "x": the placeholder of a protected block (technical-design-source-link.md §2.5). */
   k?: 'x';
+  /** 1: set aside by the Outline; a linked file leaves it out (technical-design-source-link.md §2.4). */
+  a?: 1;
 };
 
 export function formatBlockTag(tag: BlockTag): string {
@@ -48,6 +50,9 @@ export function parseBlockTag(userData: unknown): BlockTag | null {
     if (value.k === 'x') {
       tag.k = 'x';
     }
+    if (value.a === 1) {
+      tag.a = 1;
+    }
     return tag;
   } catch {
     return null;
@@ -58,4 +63,23 @@ export function parseBlockTag(userData: unknown): BlockTag | null {
 export function newBlockId(now: Date, random: () => number = Math.random): string {
   const tail = Array.from({length: 4}, () => Math.floor(random() * 36).toString(36)).join('');
   return `b-${now.getTime().toString(36)}${tail}`;
+}
+
+/**
+ * A textbox's `userData` with the block tag marked as set aside (or not): the Outline sets it when
+ * it sets a block aside and clears it when it moves the block back. Anything that isn't a block
+ * tag comes back unchanged.
+ */
+export function withAside(userData: string | null, aside: boolean): string | null {
+  const tag = parseBlockTag(userData);
+  if (!tag || !!tag.a === aside) {
+    return userData;
+  }
+  const next: BlockTag = {...tag};
+  if (aside) {
+    next.a = 1;
+  } else {
+    delete next.a;
+  }
+  return formatBlockTag(next);
 }

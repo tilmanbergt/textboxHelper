@@ -1,5 +1,5 @@
 import {paginateTextboxBlocksIntoPages} from '../../src/domain/blockPagination';
-import {formatBlockTag, parseBlockTag, type BlockTag} from '../../src/domain/blockTag';
+import {formatBlockTag, parseBlockTag, withAside, type BlockTag} from '../../src/domain/blockTag';
 import {fingerprint} from '../../src/domain/fingerprint';
 import {sourceImportBlocks} from '../../src/domain/importParsing';
 import {
@@ -275,6 +275,20 @@ describe('regenerating the file', () => {
     expect(result.missing).toEqual(['B.']);
   });
 
+  it('leaves out blocks the Outline set aside, without calling them missing', () => {
+    const r = record('A.\n\nB.\n\nC.\n');
+    const items: SourceItem[] = [
+      {page: 0, text: 'A.', tag: tag(0)},
+      {page: 0, text: 'C.', tag: tag(2)},
+      {page: 1, text: 'B.', tag: tag(1, {a: 1})},
+    ];
+    const result = regenerateSource(r, items);
+    expect(result.text).toBe('A.\n\nC.\n');
+    expect(result.missing).toEqual([]);
+    expect(result.counts.setAside).toBe(1);
+    expect(result.range).toEqual({first: 0, last: 0});
+  });
+
   it('writes CRLF for edited text in a CRLF file', () => {
     const r = record('A\r\n\r\nB\r\n');
     const items = imported(r);
@@ -317,6 +331,16 @@ describe('source record and tag', () => {
     const userData = formatBlockTag({v: 1, id: 'b-1', s: SOURCE, i: 3, k: 'x'});
     expect(parseBlockTag(userData)).toEqual({v: 1, id: 'b-1', s: SOURCE, i: 3, k: 'x'});
     expect(parseBlockTag('tbt:b:{"v":1,"id":"b","k":"y"}')).toEqual({v: 1, id: 'b'});
+  });
+
+  it('marks a tag as set aside and back, and leaves other userData alone', () => {
+    const userData = formatBlockTag({v: 1, id: 'b-1', s: SOURCE, i: 3});
+    const aside = withAside(userData, true);
+    expect(parseBlockTag(aside)).toEqual({v: 1, id: 'b-1', s: SOURCE, i: 3, a: 1});
+    expect(parseBlockTag(withAside(aside, false))).toEqual({v: 1, id: 'b-1', s: SOURCE, i: 3});
+    expect(withAside(userData, false)).toBe(userData);
+    expect(withAside('gtdpara:mark:1', true)).toBe('gtdpara:mark:1');
+    expect(withAside(null, true)).toBeNull();
   });
 
   it('fingerprints text', () => {

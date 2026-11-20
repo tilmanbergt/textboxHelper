@@ -13,6 +13,7 @@
  *   its removal (`removedProtected`); the write asks first (`pendingRemoval`).
  * - Between two blocks that were neighbours in the file and are both untouched, the original text
  *   between them is kept; elsewhere one blank line.
+ * - A block the Outline set aside (`a` in its tag) is left out, and doesn't count as missing.
  */
 import type {BlockTag} from './blockTag';
 import {blockName, type SourceBlock} from './sourceBlocks';
@@ -32,6 +33,7 @@ export type SourceCounts = {
   missing: number;
   protectedKept: number;
   protectedRemoved: number;
+  setAside: number;
 };
 
 export type SourceRegeneration = {
@@ -69,7 +71,7 @@ export function normalizeForCompare(text: string): string {
 
 function ownTag(item: SourceItem, sourceId: string): BlockTag | null {
   const tag = item.tag;
-  return tag && tag.s === sourceId && Number.isInteger(tag.i) ? tag : null;
+  return tag && tag.s === sourceId && Number.isInteger(tag.i) && !tag.a ? tag : null;
 }
 
 /** The pages from the first to the last one holding a tag of this source. */
@@ -111,7 +113,20 @@ function listWarning(block: SourceBlock, text: string): string | null {
 export function regenerateSource(record: RecordPart, items: SourceItem[]): SourceRegeneration {
   const {blocks, original, sourceId} = record;
   const range = linkedRange(items, sourceId);
-  const counts: SourceCounts = {unchanged: 0, edited: 0, added: 0, missing: 0, protectedKept: 0, protectedRemoved: 0};
+  const counts: SourceCounts = {
+    unchanged: 0,
+    edited: 0,
+    added: 0,
+    missing: 0,
+    protectedKept: 0,
+    protectedRemoved: 0,
+    setAside: 0,
+  };
+  // Blocks set aside count as neither written nor missing.
+  const aside = new Set(
+    items.filter(item => item.tag?.s === sourceId && item.tag.a && Number.isInteger(item.tag.i)).map(item => item.tag?.i as number),
+  );
+  counts.setAside = aside.size;
   const warnings: string[] = [];
   const entries: Entry[] = [];
   const seen = new Set<number>();
@@ -121,8 +136,8 @@ export function regenerateSource(record: RecordPart, items: SourceItem[]): Sourc
 
   for (let at = 0; at < inRange.length; at++) {
     const item = inRange[at];
-    // A textbox of another linked file in the same pages belongs to that file.
-    if (item.tag?.s && item.tag.s !== sourceId) {
+    // A textbox of another linked file in the same pages belongs to that file; one set aside is left out.
+    if ((item.tag?.s && item.tag.s !== sourceId) || (item.tag?.s && item.tag.a)) {
       continue;
     }
     const tag = ownTag(item, sourceId);
@@ -180,7 +195,7 @@ export function regenerateSource(record: RecordPart, items: SourceItem[]): Sourc
   const missing: string[] = [];
   const pendingRemoval: SourceBlock[] = [];
   for (const block of blocks) {
-    if (seen.has(block.index)) {
+    if (seen.has(block.index) || aside.has(block.index)) {
       continue;
     }
     if (block.role !== 'protected') {

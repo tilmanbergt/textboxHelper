@@ -133,7 +133,12 @@ block tag (`domain/blockTag.ts`: source, block, piece, placeholder). The file's 
 original text, blocks - is written first to `<plugin folder>/sources/<id>.json`
 (`storage/sourceStore.ts`). `domain/sourceExport.ts` regenerates the file from the note's
 textboxes and the original. Manuscript finds the linked file by the tags on the note
-(`actions/sourceLink.ts`, through the Outline's scan and cache) and shows it in Details.
+(`actions/sourceLink.ts`, through the Outline's scan and cache), compares the note with it in the
+background (`screens/manuscript/useSourceLink.ts`) and writes it after an Apply ("Also update")
+or from "Update <file>": a fresh scan, the question about deleted protected blocks, the check that
+the file didn't change outside (fingerprint in the record), then `storage/sourceFile.ts` writes
+through the host's copy or directly and reads it back. A block the Outline sets aside gets `a` in
+its tag and is left out of the file.
 
 ### DOCX export (`actions/textboxScan.ts`, `storage/docxExport.ts`)
 

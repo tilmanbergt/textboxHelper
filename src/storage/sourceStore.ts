@@ -1,12 +1,12 @@
 import RNFS from 'react-native-fs';
 import {PluginManager} from 'sn-plugin-lib';
-import {buildSourceOriginalPath, buildSourceRecordPath} from '../domain/backupPaths';
+import {buildSourceOriginalPath, buildSourcePreviousPath, buildSourceRecordPath} from '../domain/backupPaths';
 import {parseSourceRecord, serializeSourceRecord, type SourceRecord} from '../domain/sourceRecord';
 
 /**
  * The records of linked text files in `<plugin folder>/sources/` (technical-design-source-link.md
- * §2.3): one JSON file per linked file, written through a temporary file, and the copy of the
- * original text kept before the first write-back.
+ * §2.3): one JSON file per linked file, written through a temporary file, the copy of the
+ * original text kept before the first write-back, and the file's text before the latest write.
  */
 
 async function pluginDir(): Promise<string> {
@@ -68,4 +68,11 @@ export async function keepOriginalCopy(record: SourceRecord): Promise<void> {
   }
   await ensureFolder(path);
   await RNFS.writeFile(path, record.original, 'utf8');
+}
+
+/** Keeps the file's text as it was before this write (replacing the copy of the write before). */
+export async function keepPreviousCopy(record: SourceRecord, text: string): Promise<void> {
+  const path = buildSourcePreviousPath(await pluginDir(), record.sourceId);
+  await ensureFolder(path);
+  await RNFS.writeFile(path, text, 'utf8');
 }

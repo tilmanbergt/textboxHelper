@@ -5,6 +5,7 @@ import {
   buildPenEditEntryDir,
   buildPenEditIndexPath,
   buildSourceOriginalPath,
+  buildSourcePreviousPath,
   buildSourceRecordPath,
 } from '../../src/domain/backupPaths';
 
@@ -43,5 +44,6 @@ describe('source paths', () => {
   it('keeps linked-file records and originals in the plugin folder', () => {
     expect(buildSourceRecordPath(`${PLUGIN_DIR}/`, 's-1')).toBe(`${PLUGIN_DIR}/sources/s-1.json`);
     expect(buildSourceOriginalPath(PLUGIN_DIR, 's-1')).toBe(`${PLUGIN_DIR}/sources/s-1-original.txt`);
+    expect(buildSourcePreviousPath(PLUGIN_DIR, 's-1')).toBe(`${PLUGIN_DIR}/sources/s-1-previous.txt`);
   });
 });

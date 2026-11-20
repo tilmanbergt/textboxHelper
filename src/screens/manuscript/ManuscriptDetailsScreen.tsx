@@ -107,8 +107,23 @@ function SourceSection({source}: {source: SourceLink}): React.JSX.Element | null
   if (!linked) {
     return null;
   }
-  const {record} = linked;
+  const {record, diff, regeneration} = linked;
   const folder = sourceFolder(record.filePath).replace(/^\/storage\/emulated\/0\//, '');
+  const counts = regeneration.counts;
+  const state = diff.differs
+    ? `The note differs from the file: ${diff.changedBlocks} changed ${diff.changedBlocks === 1 ? 'block' : 'blocks'}.`
+    : 'The file matches the note.';
+  const blocks = [
+    `${counts.unchanged} unchanged`,
+    counts.edited ? `${counts.edited} edited` : null,
+    counts.added ? `${counts.added} new` : null,
+    counts.missing ? `${counts.missing} missing` : null,
+    counts.protectedKept ? `${counts.protectedKept} kept as is` : null,
+    counts.protectedRemoved ? `${counts.protectedRemoved} removed` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const warnings = source.warnings.slice(0, 3);
   return (
     <Section title="Source file">
       <Text style={styles.line}>
@@ -119,6 +134,17 @@ function SourceSection({source}: {source: SourceLink}): React.JSX.Element | null
         {record.lastWrittenAt ? ` · last written ${shortTime(record.lastWrittenAt)}` : ' · not written yet'}
         {linked.sourceCount > 1 ? ` · ${linked.sourceCount} linked files on this note, this one has the most textboxes` : ''}
       </Text>
+      <Text style={styles.hint}>
+        {state} {blocks}.
+      </Text>
+      {warnings.map(warning => (
+        <Text key={warning} style={styles.hint} numberOfLines={1}>
+          ⚠ {warning}
+        </Text>
+      ))}
+      {source.warnings.length > warnings.length && (
+        <Text style={styles.hint}>+{source.warnings.length - warnings.length} more warnings</Text>
+      )}
       {source.access && <Text style={styles.hint}>{source.access}</Text>}
       {confirmUnlink ? (
         <View style={styles.buttons}>
@@ -136,6 +162,8 @@ function SourceSection({source}: {source: SourceLink}): React.JSX.Element | null
         </View>
       ) : (
         <View style={styles.buttons}>
+          <PillButton size="small" label="Save as copy" disabled={source.busy} onPress={() => source.write('copy')} />
+          <PillButton size="small" label="Save to EXPORT" disabled={source.busy} onPress={() => source.write('export')} />
           <PillButton size="small" label="Check write access" disabled={source.busy} onPress={source.checkAccess} />
           <PillButton size="small" label="Unlink" disabled={source.busy} onPress={() => setConfirmUnlink(true)} />
         </View>

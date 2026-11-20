@@ -59,6 +59,11 @@ export function buildSourceRecordPath(pluginDir: string, sourceId: string): stri
   return `${pluginDir.replace(/\/+$/, '')}/${SOURCE_DIR_NAME}/${sourceId}.json`;
 }
 
+/** The file's text before the plugin's latest write to it (one copy, replaced at every write). */
+export function buildSourcePreviousPath(pluginDir: string, sourceId: string): string {
+  return `${pluginDir.replace(/\/+$/, '')}/${SOURCE_DIR_NAME}/${sourceId}-previous.txt`;
+}
+
 /** The copy of a linked file's original text, written once before the first write-back. */
 export function buildSourceOriginalPath(pluginDir: string, sourceId: string): string {
   return `${pluginDir.replace(/\/+$/, '')}/${SOURCE_DIR_NAME}/${sourceId}-original.txt`;

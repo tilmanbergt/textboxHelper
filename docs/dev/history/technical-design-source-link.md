@@ -186,3 +186,38 @@ pages left alone, CRLF for edited text; `fileDiff`; record round trip; tag `k`; 
 8. Warnings for possibly broken links, changed list indentation, missing blocks; a content
    overview at import.
 9. Direct textbox edits are written back with the card's "Update <file> · n changed blocks".
+
+## As built
+
+Three commits on `feature/source-link`: R1 (pure core), R2 (linked import, any folder, Details
+Source), R3 (write-back). 354 → 362 Jest tests.
+
+- **Finding the file** uses the Outline's scan of the whole note and fills its cache
+  (`actions/sourceLink.ts` `readNoteTextboxes`), so opening the Outline afterwards shows it at once.
+  The scan runs fresh in the background once the current page is shown (a cached scan may be
+  older than an import made since), and again before every write.
+- **Header and button:** the header context ends with the file name. The Review's primary is
+  "Apply n edits" with the checkbox "Also update <file>" in the footer (`ScreenFrame` gained an
+  `accessory` slot), "Update <file> · n changed blocks" when nothing waits but the note differs, and
+  the status says "<file> is up to date" otherwise. After an Apply the card writes the file and the
+  status line joins the apply's and the file's messages.
+- **Details → Source file:** file, folder, import and last write times, whether the note differs,
+  the block counts, up to three warnings, Save as copy, Save to EXPORT, Check write access, Unlink
+  (asks first). There is no "Write file now": the Update button is it.
+- **Set aside** (not in the design): the Outline marks a set-aside block's tag with `a`
+  (`withAside`, cleared when the block is moved back by the Outline); the file leaves such blocks
+  out and doesn't count them as missing. A block moved back by hand with the lasso keeps `a`.
+- **Backups of the file:** besides the original (once, `<id>-original.txt`), the file's text before
+  every write is kept in `<id>-previous.txt` (one copy, replaced at each write).
+- **No tag left** on the pages → nothing is written ("No textbox of … is left on the pages").
+- **Linked range:** untagged text on a page after the last page with a tag of the file is not part
+  of the file (it is outside the range).
+- **Pieces of a tall paragraph** are cut at sentence ends or words by the existing pagination and
+  joined with a space; a paragraph taller than a page with line breaks inside therefore counts as
+  edited and loses those line breaks when written. Rare; left as is.
+- **Placeholders** are italic with `textFrameStyle` 1 (assumed to be NOTE's thin frame; device
+  check). Marks on a placeholder are not filtered out of the Review: applying one changes only the
+  placeholder's text, which the file ignores.
+- **Writing a file** (`storage/sourceFile.ts`): temporary file → `FileUtils.copyFile`, read back;
+  if that fails, `RNFS.writeFile`, read back; else "Can't write to this folder" with the hint to
+  Save to EXPORT. Which way works where is the R2 device check.
