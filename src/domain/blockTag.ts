@@ -17,6 +17,8 @@ export type BlockTag = {
   i?: number;
   /** Piece of a block cut by the import. */
   p?: number;
+  /** "x": the placeholder of a protected block (technical-design-source-link.md §2.5). */
+  k?: 'x';
 };
 
 export function formatBlockTag(tag: BlockTag): string {
@@ -42,6 +44,9 @@ export function parseBlockTag(userData: unknown): BlockTag | null {
     }
     if (Number.isInteger(value.p)) {
       tag.p = value.p as number;
+    }
+    if (value.k === 'x') {
+      tag.k = 'x';
     }
     return tag;
   } catch {
