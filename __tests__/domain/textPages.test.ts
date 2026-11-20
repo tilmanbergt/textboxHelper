@@ -1,4 +1,5 @@
 import {
+  estimateLines,
   lineRanges,
   pageIndexForChar,
   pageRanges,
@@ -92,5 +93,26 @@ describe('helpTextToSegments', () => {
       {text: 'Title\n', style: 'heading'},
       {text: 'Body one\n\nBody two'},
     ]);
+  });
+});
+
+describe('estimateLines', () => {
+  // 10 px font, 0.5 share: 5 px a character, 50 px = 10 characters a line.
+  it('wraps at word boundaries', () => {
+    expect(estimateLines('aaaa bbbb', 50, 10, 0.5)).toBe(1);
+    expect(estimateLines('aaaa bbbb cccc', 50, 10, 0.5)).toBe(2);
+  });
+
+  it('starts a new line at a line break', () => {
+    expect(estimateLines('aa\nbb', 50, 10, 0.5)).toBe(2);
+  });
+
+  it('breaks a word longer than a line', () => {
+    expect(estimateLines('a'.repeat(25), 50, 10, 0.5)).toBe(3);
+  });
+
+  it('gives more lines with a wider character share', () => {
+    const text = 'one two three four five six seven eight nine ten';
+    expect(estimateLines(text, 200, 17, 0.6)).toBeGreaterThanOrEqual(estimateLines(text, 200, 17, 0.55));
   });
 });

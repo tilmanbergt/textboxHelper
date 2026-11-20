@@ -17,7 +17,7 @@ import {chipLabel, unreadPages, type AttentionItem, type ManuscriptEntry} from '
 import {firstWords, lastWords} from '../../domain/markerHunks';
 import type {ChangeHunk, PenTextState} from '../../domain/markerTypes';
 import {plural} from '../../domain/plural';
-import {segmentsText} from '../../domain/textPages';
+import {estimateLines, segmentsText} from '../../domain/textPages';
 import ChipRow from '../../ui/ChipRow';
 import PagedSection from '../../ui/PagedSection';
 import PillButton from '../../ui/PillButton';
@@ -28,12 +28,14 @@ import type {ManuscriptReview} from './useManuscriptReview';
 
 /** Words of context a list row shows on each side of a change. */
 const ROW_CONTEXT_WORDS = 6;
-/** Room a row needs besides its text: padding, the label line, the meta line. */
-const ROW_CHROME = 2 * SPACING.sm + 2 * LINE_HEIGHT.small + SPACING.xs;
-/** Width taken from a row's text by the number, the Drop button and the gaps. */
-const ROW_SIDES = 44 + 96 + 3 * SPACING.md;
-/** An average character of the body font, a little generous so rows are never cut. */
-const CHAR_WIDTH = FONT.medium * 0.56;
+/** The row's border width (the selected row's frame), top and bottom. */
+const ROW_BORDER = 2;
+/** Room a row needs besides its text: border, padding, the label line, the meta line, a spare. */
+const ROW_CHROME = 2 * ROW_BORDER + 2 * SPACING.sm + 2 * LINE_HEIGHT.small + SPACING.sm;
+/** Width taken from a row's text: the number (32), the Drop button (generous), the gaps, padding and border. */
+const ROW_SIDES = 32 + 96 + 2 * SPACING.md + 2 * (SPACING.sm + ROW_BORDER);
+/** Average character width of the row text as a share of its size; generous, as changes are bold. */
+const ROW_CHAR_WIDTH_SHARE = 0.6;
 
 type PageFilter = 'all' | `${number}`;
 type PendingDrop = {title: string; page: number; items: DropItem[]; withHandwriting: boolean; forAttention: boolean};
@@ -132,9 +134,10 @@ export default function ReviewTab({
     }
   };
 
-  const charsPerLine = Math.max(20, Math.floor((listWidth - ROW_SIDES) / CHAR_WIDTH));
+  const textWidth = Math.max(160, listWidth - ROW_SIDES);
   const rowHeight = (entry: ManuscriptEntry) =>
-    ROW_CHROME + Math.ceil(rowText(entry.hunk).length / charsPerLine) * LINE_HEIGHT.medium;
+    ROW_CHROME +
+    estimateLines(rowText(entry.hunk), textWidth, FONT.medium, ROW_CHAR_WIDTH_SHARE) * LINE_HEIGHT.medium;
   const header =
     pageFilter === 'all'
       ? applied
@@ -447,7 +450,7 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
     paddingVertical: SPACING.sm,
     paddingHorizontal: SPACING.sm,
-    borderWidth: 2,
+    borderWidth: ROW_BORDER,
     borderColor: 'transparent',
     borderBottomColor: COLORS.border,
     borderRadius: RADII.md,
