@@ -105,6 +105,10 @@ export default function ManuscriptScreen({
         review={review}
         source={source}
         outline={outline}
+        onCleanUpPlanned={() => {
+          setTab('outline');
+          setView('card');
+        }}
         onBack={() => setView('card')}
         onClose={onClose}
       />
@@ -350,7 +354,7 @@ function outlinePrimary(
     };
   }
   return {
-    label: `Apply ${plural(count, 'change')}`,
+    label: count === 1 && outline.planned?.cleanup ? 'Apply clean up' : `Apply ${plural(count, 'change')}`,
     onPress: outline.apply,
     disabled: outline.checking || !outline.check || blockers.length > 0,
     busy: outline.busy,

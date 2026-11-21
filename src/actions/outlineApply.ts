@@ -61,7 +61,7 @@ export type ReviewPages = {
 export type RebuildBlocker = {
   page: number;
   reason: string;
-  kind: 'edits' | 'unread' | 'handwriting' | 'title';
+  kind: 'edits' | 'unread' | 'handwriting' | 'title' | 'plan';
 };
 
 export type RebuildCheck = {

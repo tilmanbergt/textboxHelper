@@ -1,3 +1,4 @@
+import type {CleanupScope} from './cleanupLayout';
 import {withHeadingLevel, type HeadingLevel} from './headingText';
 import {firstLineOf, lastLineOf, rank, type OutlineBlock} from './outlineModel';
 import {plural} from './plural';
@@ -15,6 +16,8 @@ import {plural} from './plural';
  *   shifts by the same steps (within 1–3). Level changes are planned first, so moves see the new
  *   structure.
  * - Setting aside or deleting a heading takes its whole section; a file's divider can't be removed.
+ * - Clean up layout (technical-design-settings-layout-files.md §2) lays the whole note or one file
+ *   out again, in the planned order; at most one is planned.
  *
  * Pure.
  */
@@ -26,7 +29,11 @@ export type PlannedChange =
   | {kind: 'move'; key: string; before: MoveTarget}
   | {kind: 'level'; key: string; level: 0 | HeadingLevel; withSubheadings: boolean}
   | {kind: 'aside'; key: string}
-  | {kind: 'delete'; key: string};
+  | {kind: 'delete'; key: string}
+  | {kind: 'cleanup'; key: typeof CLEANUP_KEY; scope: CleanupScope};
+
+/** The key of the planned clean up (one at most), so Undo finds it like any change. */
+export const CLEANUP_KEY = '#cleanup';
 
 export type ChangeMark = 'moved' | 'level' | 'aside' | 'delete';
 
@@ -40,6 +47,8 @@ export type PlannedOrder = {
   marks: Map<string, ChangeMark>;
   /** Headings whose level changes: from (0 = paragraph) → to. */
   levels: Map<string, {from: number; to: number}>;
+  /** The planned clean up, if any. */
+  cleanup: CleanupScope | null;
 };
 
 /** A file's divider or a heading and the blocks after it up to the next of the same or a higher rank. */
@@ -149,7 +158,12 @@ export function plannedOrder(
   const deleted: OutlineBlock[] = [];
   const marks = new Map<string, ChangeMark>();
   levelled.levels.forEach((_, key) => marks.set(key, 'level'));
+  let cleanup: CleanupScope | null = null;
   for (const change of plan) {
+    if (change.kind === 'cleanup') {
+      cleanup = change.scope;
+      continue;
+    }
     if (change.kind === 'level') {
       continue;
     }
@@ -191,7 +205,7 @@ export function plannedOrder(
       }
     });
   }
-  return {order, aside, deleted, marks, levels: levelled.levels};
+  return {order, aside, deleted, marks, levels: levelled.levels, cleanup};
 }
 
 /** Whether moving `key` before `target` would change anything (not onto itself or its own place). */
@@ -259,6 +273,13 @@ export function plannedSummary(
     if (changes.length - sections > 0) {
       parts.push(`${plural(changes.length - sections, 'paragraph')} ${verb}`);
     }
+  }
+  if (planned.cleanup) {
+    const file =
+      planned.cleanup.kind === 'file'
+        ? blocks.find(block => block.fileSource === (planned.cleanup as {sourceId: string}).sourceId)
+        : undefined;
+    parts.push(`Clean up layout: ${file ? file.firstLine : 'whole note'}`);
   }
   return parts.join(' · ');
 }

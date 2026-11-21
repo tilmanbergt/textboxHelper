@@ -9,11 +9,13 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {setBlockStatus} from '../../../actions/blockStatus';
 import {cachedOutline, forgetOutline, rememberOutline} from '../../../actions/manuscriptCache';
+import {applyCleanup, checkCleanup, type CleanupCheck} from '../../../actions/cleanupApply';
 import {
   applyOutlinePlan,
   checkRebuild,
   type RebuildCheck,
 } from '../../../actions/outlineApply';
+import type {CleanupScope} from '../../../domain/cleanupLayout';
 import {scanTextBoxes} from '../../../actions/textboxScan';
 import {formatBlockTag} from '../../../domain/blockTag';
 import type {ScannedTextBox} from '../../../domain/exportClassification';
@@ -24,6 +26,7 @@ import {
   type OutlineBlock,
 } from '../../../domain/outlineModel';
 import {
+  CLEANUP_KEY,
   plannedOrder,
   undoFor,
   undoLast,
@@ -54,13 +57,15 @@ export interface Outline {
   plan: PlannedChange[];
   planned: PlannedOrder | null;
   /** What the touched pages hold in the way of the plan; null while it is checked or there's no plan. */
-  check: RebuildCheck | null;
+  check: RebuildCheck | CleanupCheck | null;
   checking: boolean;
   move: (key: string, before: MoveTarget) => void;
   /** Plans a heading level (0: a paragraph); with its subheadings shifting along, or alone. */
   setLevel: (key: string, level: 0 | HeadingLevel, withSubheadings: boolean) => void;
   setAside: (key: string) => void;
   remove: (key: string) => void;
+  /** Plans Clean up layout of the whole note or one file (technical-design-settings-layout-files.md §2). */
+  cleanUp: (scope: CleanupScope) => void;
   undo: (key: string) => void;
   undoLastChange: () => void;
   apply: () => void;
@@ -82,7 +87,7 @@ export function useOutline(
   const [status, setFrameStatus] = useState<FrameStatus | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [plan, setPlan] = useState<PlannedChange[]>([]);
-  const [check, setCheck] = useState<RebuildCheck | null>(null);
+  const [check, setCheck] = useState<RebuildCheck | CleanupCheck | null>(null);
   const [checking, setChecking] = useState(false);
   const [applied, setApplied] = useState(false);
 
@@ -199,7 +204,11 @@ export function useOutline(
     }
     let alive = true;
     setChecking(true);
-    timed('outline.check', () => checkRebuild(notePath, pageCount, current, currentPlan, currentPages))
+    timed<RebuildCheck | CleanupCheck>('outline.check', () =>
+      currentPlan.cleanup
+        ? checkCleanup(notePath, pageCount, current, currentPlan, currentPages)
+        : checkRebuild(notePath, pageCount, current, currentPlan, currentPages),
+    )
       .then(result => alive && setCheck(result))
       .catch(error => {
         console.warn('[Outline] check failed', String(error));
@@ -240,10 +249,12 @@ export function useOutline(
     setBusy(true);
     timed(
       'outline.apply',
-      () =>
-        applyOutlinePlan(notePath, pageCount, blocks, planned, check, message =>
-          setFrameStatus({text: message}),
-        ),
+      () => {
+        const progress = (message: string) => setFrameStatus({text: message});
+        return 'kind' in check
+          ? applyCleanup(notePath, pageCount, blocks, planned, check, progress)
+          : applyOutlinePlan(notePath, pageCount, blocks, planned, check, progress);
+      },
       {changes: plan.length},
     )
       .then(result => {
@@ -332,6 +343,10 @@ export function useOutline(
     ),
     remove: useCallback(
       (key: string) => change({kind: 'delete', key}),
+      [change],
+    ),
+    cleanUp: useCallback(
+      (scope: CleanupScope) => change({kind: 'cleanup', key: CLEANUP_KEY, scope}),
       [change],
     ),
     undo: useCallback(

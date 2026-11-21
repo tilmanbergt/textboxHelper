@@ -246,15 +246,33 @@ export async function insertTextboxesIntoFile(notePath: string, page: number, in
 
 /** Adds `count` empty pages at the end of the note (after `pageCount` pages), with the default template. */
 export async function appendNotePages(notePath: string, pageCount: number, count: number): Promise<void> {
+  await insertNotePages(notePath, pageCount, count);
+}
+
+/** Inserts `count` empty pages before page `at` (at the note's end: after its last page). */
+export async function insertNotePages(notePath: string, at: number, count: number): Promise<void> {
   for (let index = 0; index < count; index++) {
-    const page = pageCount + index;
+    const page = at + index;
     const result = await withTimeout(
       PluginFileAPI.insertNotePage({notePath, page, template: DEFAULT_TEMPLATE_NAME}),
       INSERT_PAGE_TIMEOUT_MS,
       `Timeout creating page ${page + 1}`,
     );
-    console.log('[NoteTextInsertion] appendNotePage', JSON.stringify({page, result}));
+    console.log('[NoteTextInsertion] insertNotePage', JSON.stringify({page, result}));
     assertBooleanSuccess(result as any, `Could not create page ${page + 1}.`);
+  }
+}
+
+/** Removes these pages, the highest first, so the others keep their numbers until removed. */
+export async function removeNotePages(notePath: string, pages: number[]): Promise<void> {
+  for (const page of [...pages].sort((a, b) => b - a)) {
+    const result = await withTimeout(
+      PluginFileAPI.removeNotePage(notePath, page),
+      INSERT_PAGE_TIMEOUT_MS,
+      `Timeout removing page ${page + 1}`,
+    );
+    console.log('[NoteTextInsertion] removeNotePage', JSON.stringify({page, result}));
+    assertBooleanSuccess(result as any, `Could not remove page ${page + 1}.`);
   }
 }
 

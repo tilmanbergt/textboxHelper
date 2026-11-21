@@ -180,6 +180,11 @@ function checkNote(outline: Outline): string {
   if (check.blockers.length > 0) {
     return ` · blocked: ${check.blockers.map(blocker => `p.${blocker.page + 1} ${blocker.reason}`).join('; ')}`;
   }
+  if ('kind' in check) {
+    const {first} = check.range;
+    const last = first + check.pageCount - 1;
+    return ` · ${last > first ? `pages ${first + 1}–${last + 1}` : `page ${first + 1}`} laid out${check.note ? ` · ${check.note}` : ''}`;
+  }
   return check.pages.length > 0 ? ` · ${check.pages.length === 1 ? 'page' : 'pages'} ${check.pages.map(page => page + 1).join(', ')} changed` : '';
 }
 

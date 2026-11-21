@@ -79,7 +79,8 @@ function splitWords(text: string): string[] {
   return text.split(/\s+/).map(word => word.trim()).filter(Boolean);
 }
 
-async function splitIntoPageFittingPieces(params: {
+/** A text too tall for the area, cut into pieces that each fit it: at sentence ends, else between words. */
+export async function splitIntoPageFittingPieces(params: {
   text: string;
   maxRect: Rect;
   fontSize: number;

@@ -42,6 +42,12 @@ export type OutlineBlock = {
   fileSource: string | null;
   /** Set aside by the Outline earlier: on the pages at the end, left out of a linked file. */
   aside: boolean;
+  /** A linked block: its file and block (`source:index`), so pieces of one block go together. */
+  sourceBlock: string | null;
+  /** Which piece of its block (0 for the first or only one). */
+  piece: number;
+  /** A protected block's placeholder: keeps its own style. */
+  placeholder: boolean;
   status: BlockStatus;
   /** Edits waiting on this block; null while its page is not read by the Review. */
   pendingEdits: number | null;
@@ -132,6 +138,9 @@ export function buildOutline(
       level: fileSource ? 0 : level || null,
       fileSource,
       aside: tag?.a === 1,
+      sourceBlock: tag?.s && tag.i !== undefined ? `${tag.s}:${tag.i}` : null,
+      piece: tag?.p ?? 0,
+      placeholder: tag?.k === 'x',
       status: (tagId && statuses[tagId]) || 'open',
       pendingEdits: pages[item.page]?.state === 'read' ? pending.get(place) ?? 0 : null,
     };

@@ -51,6 +51,7 @@ function fakeOutline(lines: string[], plan: PlannedChange[] = []): Outline {
     setLevel: jest.fn(),
     setAside: jest.fn(),
     remove: jest.fn(),
+    cleanUp: jest.fn(),
     undo: jest.fn(),
     undoLastChange: jest.fn(),
     apply: jest.fn(),

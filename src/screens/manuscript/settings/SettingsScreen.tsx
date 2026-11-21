@@ -14,6 +14,7 @@ import type {LinkedFiles} from '../useLinkedFiles';
 import type {ManuscriptReview} from '../useManuscriptReview';
 import type {Outline} from '../outline/useOutline';
 import CalibrationSettings from './CalibrationSettings';
+import CleanupSection from './CleanupSection';
 import DiagnosticsSettings from './DiagnosticsSettings';
 import ExportSettings from './ExportSettings';
 import LayoutSettings from './LayoutSettings';
@@ -27,6 +28,8 @@ interface Props {
   outline: Outline;
   /** The tab shown first. */
   initialTab?: SettingsTab;
+  /** A clean up was planned: the card shows it in the Outline. */
+  onCleanUpPlanned: () => void;
   onBack: () => void;
   onClose: () => void;
 }
@@ -36,6 +39,7 @@ export default function SettingsScreen({
   source,
   outline,
   initialTab = 'outline',
+  onCleanUpPlanned,
   onBack,
   onClose,
 }: Props): React.JSX.Element {
@@ -66,7 +70,9 @@ export default function SettingsScreen({
       <View style={styles.body}>
         {tab === 'files' ? <FilesSection source={source} /> : null}
         {tab === 'outline' ? <OutlineSettings outline={outline} source={source} /> : null}
-        {tab === 'layout' ? <LayoutSettings /> : null}
+        {tab === 'layout' ? (
+          <LayoutSettings cleanup={<CleanupSection outline={outline} onPlanned={onCleanUpPlanned} />} />
+        ) : null}
         {tab === 'export' ? <ExportSettings /> : null}
         {tab === 'calibration' ? <CalibrationSettings review={review} /> : null}
         {tab === 'diagnostics' ? <DiagnosticsSettings review={review} /> : null}
