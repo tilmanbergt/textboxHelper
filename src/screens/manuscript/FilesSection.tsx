@@ -1,5 +1,5 @@
 /**
- * Details → Files (technical-design-linked-files.md §3.3): the note's linked files, a few rows at a
+ * Settings → Files (technical-design-linked-files.md §3.3): the note's linked files, a few rows at a
  * time (no scrolling), each with its state; the chosen file's own part below (where it is, when
  * it was imported and written, its block counts and warnings, Save as copy, Save to EXPORT, Check
  * write access, Unlink); and in folder mode the folder (ordered or

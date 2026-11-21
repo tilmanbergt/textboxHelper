@@ -1,7 +1,7 @@
 /**
  * A bounded in-memory record of how long the plugin's steps take (technical-design-manuscript-cache.md
  * §6): page reads and their analysis steps, recognition, applies, the Outline scan. Kept across card
- * openings until cleared, and written to a file only when the user asks ("Save timings" in Details).
+ * openings until cleared, and written to a file only when the user asks ("Save timings" in Settings → Diagnostics).
  * When the limit is reached, further entries are counted but not kept. Pure.
  */
 

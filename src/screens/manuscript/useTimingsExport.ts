@@ -1,5 +1,5 @@
 /**
- * Details → Speed (technical-design-manuscript-cache.md §6): how many timings are recorded, Save
+ * Settings → Diagnostics → Speed (technical-design-manuscript-cache.md §6): how many timings are recorded, Save
  * timings (one JSON file in EXPORT, to hand over) and Clear.
  */
 import {useCallback, useState} from 'react';
@@ -13,7 +13,7 @@ export interface TimingsExport {
   summary: string;
   save: () => void;
   clear: () => void;
-  /** Reads the summary line again (when Details opens). */
+  /** Reads the summary line again (when the Diagnostics tab opens). */
   update: () => void;
 }
 

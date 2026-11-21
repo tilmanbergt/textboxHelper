@@ -2,8 +2,8 @@
  * The Manuscript card (technical-design-manuscript.md §6; canvas row "Manuscript"): one card for
  * the whole note, with two tabs. Review: the pen marks, shaping the text. Outline: the order of
  * the textboxes, shaping the document. Edits first, then structure: a page with edits waiting can't
- * be rebuilt, and the Outline's button leads to the Review of that page. Details (the linked file,
- * calibration, diagnostics) is a sub-screen with the Review's state.
+ * be rebuilt, and the Outline's button leads to the Review of that page. Settings (linked files,
+ * Outline, layout, export rules, calibration, diagnostics) is a sub-screen with the card's state.
  *
  * A note with linked text files (technical-design-linked-files.md §3) names them in the header.
  * Apply also updates the files that changed ("Also update …", on every time the card opens); with
@@ -23,7 +23,7 @@ import PillButton from '../../ui/PillButton';
 import {jumpToNotePage} from '../../supernote/noteElements';
 import ScreenFrame, {type FramePrimary, type FrameStatus} from '../../ui/ScreenFrame';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
-import ManuscriptDetailsScreen from './ManuscriptDetailsScreen';
+import SettingsScreen from './settings/SettingsScreen';
 import OutlineTab from './outline/OutlineTab';
 import ReviewTab, {reviewContext} from './ReviewTab';
 import {useManuscriptReview} from './useManuscriptReview';
@@ -49,7 +49,7 @@ export default function ManuscriptScreen({
     [source.note],
   );
   const outline = useOutline(review.note, review.pages, records);
-  const [view, setView] = useState<'card' | 'details'>('card');
+  const [view, setView] = useState<'card' | 'settings'>('card');
   const [tab, setTab] = useState<Tab>('review');
   const [reviewBlocked, setReviewBlocked] = useState(false);
   const [showPage, setShowPage] = useState<number | null>(null);
@@ -99,9 +99,9 @@ export default function ManuscriptScreen({
     }
   }, [outline.applied]);
 
-  if (view === 'details') {
+  if (view === 'settings') {
     return (
-      <ManuscriptDetailsScreen
+      <SettingsScreen
         review={review}
         source={source}
         outline={outline}
@@ -170,7 +170,7 @@ export default function ManuscriptScreen({
     <ScreenFrame
       title="Manuscript"
       context={[reviewContext(review), files].filter(Boolean).join(' · ')}
-      actions={[{label: 'Details', onPress: () => setView('details')}]}
+      actions={[{label: 'Settings', onPress: () => setView('settings')}]}
       help={{title: 'Edit marks', marks: true}}
       onClose={onClose}
       status={status}
@@ -268,14 +268,14 @@ function reviewStatus(
   }
   const folder = source.note.folder;
   if (folder && folder.newFiles.length > 0) {
-    return {text: `${plural(folder.newFiles.length, 'new file')} in ${folder.name}: Details → Add.`};
+    return {text: `${plural(folder.newFiles.length, 'new file')} in ${folder.name}: Settings → Files → Add.`};
   }
   if (folder?.index === 'changedOutside') {
-    return {text: 'index.txt was changed in Obsidian: Details → Rewrite index.txt.'};
+    return {text: 'index.txt was changed in Obsidian: Settings → Files → Rewrite index.txt.'};
   }
   const held = filesHeldBack(source.note);
   if (held.length > 0) {
-    return {text: `${plural(held.length, 'file')} changed here but can't be written (${FILE_STATE_LABEL[held[0].state].toLowerCase()}): see Details.`};
+    return {text: `${plural(held.length, 'file')} changed here but can't be written (${FILE_STATE_LABEL[held[0].state].toLowerCase()}): see Settings → Files.`};
   }
   return {text: source.note.files.length === 1 ? `${filesLabel(source)} is up to date.` : 'All files are up to date.'};
 }

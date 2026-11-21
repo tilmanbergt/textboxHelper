@@ -233,7 +233,7 @@ export async function unlinkFile(record: SourceRecord): Promise<void> {
   console.log('[SourceLink] unlinked', record.sourceId);
 }
 
-/** "Can write here (host copy), probe deleted." — for Details. */
+/** "Can write here (host copy), probe deleted." — for Settings → Files. */
 export function writeAccessText(access: WriteAccess): string {
   if (!access.written) {
     return `Can't write in ${access.folder.split('/').slice(-1)[0] || access.folder}: ${access.error ?? 'unknown reason'}`;
@@ -313,7 +313,7 @@ export async function writeLinkedFiles(params: {
   only?: string[];
   protectedAnswer?: 'remove' | 'keep';
   movesAnswer?: 'move' | 'keep';
-  /** Also overwrite an `index.txt` changed in Obsidian (Details → Rewrite index.txt). */
+  /** Also overwrite an `index.txt` changed in Obsidian (Settings → Files → Rewrite index.txt). */
   rewriteIndex?: boolean;
 }): Promise<FilesWriteResult> {
   const read = await readLinkedNote(params.notePath, params.pageCount, true);
@@ -378,7 +378,7 @@ export async function writeLinkedFiles(params: {
       skipped.push({name: INDEX_FILE, reason: error instanceof Error ? error.message : String(error)});
     }
   } else if (state?.index === 'changedOutside') {
-    skipped.push({name: INDEX_FILE, reason: 'changed in Obsidian: Details → Rewrite index.txt'});
+    skipped.push({name: INDEX_FILE, reason: 'changed in Obsidian: Settings → Files → Rewrite index.txt'});
   }
   if (moves.length > 0 && params.movesAnswer === 'keep') {
     warnings.push(`${plural(moves.reduce((sum, move) => sum + move.count, 0), 'block')} under another file's title stayed in their own files.`);
@@ -500,12 +500,12 @@ export function writeResultText(result: FilesWriteResult): string {
     parts.push(
       result.skipped.length === 1
         ? `${first.name} not written (${first.reason})`
-        : `${result.skipped.length} not written (${first.name}: ${first.reason}, …) — see Details`,
+        : `${result.skipped.length} not written (${first.name}: ${first.reason}, …) — see Settings → Files`,
     );
   }
   if (parts.length === 0) {
     parts.push('Nothing to write');
   }
   const warnings = result.warnings.length;
-  return `${parts.join(' · ')}${warnings > 0 ? ` · ${plural(warnings, 'warning')}, see Details` : ''}.`;
+  return `${parts.join(' · ')}${warnings > 0 ? ` · ${plural(warnings, 'warning')}, see Settings → Files` : ''}.`;
 }

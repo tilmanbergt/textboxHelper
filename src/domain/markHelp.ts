@@ -146,10 +146,10 @@ export const REVIEW_HELP: HelpBlock[] = [
   },
   {
     title: 'Linked text files',
-    text: 'A note imported with "Link to file" names its file (or "3 files") in the header; each file starts with its name as a title. Apply also updates the files that changed ("Also update …", untick it for one Apply). With no marks waiting but the note changed - typed in a textbox, joined, moved - the button is "Update …". A file changed outside since the last write is not overwritten: Details → Linked files → Save as copy. Deleting a framed "kept as is" block asks before it leaves the file.',
+    text: 'A note imported with "Link to file" names its file (or "3 files") in the header; each file starts with its name as a title. Apply also updates the files that changed ("Also update …", untick it for one Apply). With no marks waiting but the note changed - typed in a textbox, joined, moved - the button is "Update …". A file changed outside since the last write is not overwritten: Settings → Files → Save as copy. Deleting a framed "kept as is" block asks before it leaves the file.',
   },
   {
     title: 'Wrong words picked?',
-    text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/TextboxHelper/fonts and open Manuscript again. Details has the calibration and Save Diagnostics for a bug report.',
+    text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/TextboxHelper/fonts and open Manuscript again. Settings has the calibration and, under Diagnostics, Save Diagnostics for a bug report.',
   },
 ];

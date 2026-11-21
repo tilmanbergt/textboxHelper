@@ -1,8 +1,8 @@
 /**
  * State and flows of the Export screen (technical-design-calmer-screens.md §3.8). Reads the note
- * context once, scans on open and 500 ms after the scope, the page range or the rules change (a
- * newer scan makes an older one's result stale), and exports the scan. Scope, "Include comments"
- * and the rules are remembered in the settings file; the page range is not (it belongs to one
+ * context once, scans on open and 500 ms after the scope or the page range change (a newer scan
+ * makes an older one's result stale), and exports the scan. The rules are the saved ones (set in
+ * Settings → Export). Scope and "Include comments" are remembered in the settings file; the page range is not (it belongs to one
  * note). "Include comments" only filters the scan, so it doesn't scan again.
  */
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
@@ -15,8 +15,6 @@ import {
   type ScanSummary,
   type ScannedTextBox,
 } from '../../domain/exportClassification';
-import type {ExportClassificationConfig} from '../../domain/exportConfig';
-import {exportRulesProblem} from '../../domain/exportRulesCheck';
 import {plural} from '../../domain/plural';
 import {fileNameOf, userMessage} from '../../domain/userMessage';
 import {exportScannedDocx, MAX_EXPORT_ITEM_COUNT} from '../../storage/docxExport';
@@ -32,8 +30,6 @@ export interface ExportScan {
   includeComments: boolean;
   rangeStart: number;
   rangeEnd: number;
-  rules: ExportClassificationConfig;
-  rulesProblem: string | null;
   scan: ScanSummary | null;
   scanning: boolean;
   scanError: string | null;
@@ -44,7 +40,6 @@ export interface ExportScan {
   setScope: (scope: ExportScope) => void;
   setIncludeComments: (value: boolean) => void;
   setRange: (start: number, end: number) => void;
-  setRules: (rules: ExportClassificationConfig) => void;
   runExport: () => void;
 }
 
@@ -54,9 +49,7 @@ export function useExportScan(): ExportScan {
   const [scope, setScopeState] = useState<ExportScope>(saved.scope);
   const [includeComments, setIncludeCommentsState] = useState(saved.includeComments);
   const [range, setRangeState] = useState<{start: number; end: number}>({start: 1, end: 1});
-  const [rules, setRulesState] = useState<ExportClassificationConfig>(saved.rules);
-  // The rules the scan uses: the edited ones as long as they are valid.
-  const [scanRules, setScanRules] = useState<ExportClassificationConfig>(saved.rules);
+  const [scanRules] = useState(saved.rules);
   const [scan, setScan] = useState<ScanSummary | null>(null);
   const [scanning, setScanning] = useState(true);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -134,17 +127,6 @@ export function useExportScan(): ExportScan {
 
   const setRange = useCallback((start: number, end: number) => setRangeState({start, end}), []);
 
-  const setRules = useCallback(
-    (next: ExportClassificationConfig) => {
-      setRulesState(next);
-      if (!exportRulesProblem(next)) {
-        setScanRules(next);
-        remember({rules: next});
-      }
-    },
-    [remember],
-  );
-
   const included = useMemo(() => (scan ? getIncludedScanItems(scan, includeComments) : []), [includeComments, scan]);
 
   const summary = useMemo(() => {
@@ -195,8 +177,6 @@ export function useExportScan(): ExportScan {
     includeComments,
     rangeStart: range.start,
     rangeEnd: range.end,
-    rules,
-    rulesProblem: exportRulesProblem(rules),
     scan,
     scanning,
     scanError,
@@ -207,7 +187,6 @@ export function useExportScan(): ExportScan {
     setScope,
     setIncludeComments,
     setRange,
-    setRules,
     runExport,
   };
 }

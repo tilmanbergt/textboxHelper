@@ -1,7 +1,8 @@
 /**
  * What the plugin remembers between sessions (technical-design-calmer-screens.md §3.9): the import
- * settings, the export scope and rules, the edit-marker calibration, and how the Outline treats
- * headings (technical-design-outline-sections.md §8). Stored as JSON in the
+ * settings, the page layout (technical-design-settings-layout-files.md §1), the export scope and
+ * rules, the edit-marker calibration, and how the Outline treats headings
+ * (technical-design-outline-sections.md §8). Stored as JSON in the
  * plugin folder by storage/settingsFile.ts.
  *
  * Reading is field by field: a missing or invalid value takes its default, the rest of the file
@@ -23,6 +24,7 @@ import {
   type TextboxImportSettings,
 } from './importSettings';
 import {HEADING_LEVELS, type HeadingLevel} from './headingText';
+import {DEFAULT_PAGE_LAYOUT, type PageLayout} from './pageLayout';
 import {DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION, type TextboxMeasurementCalibration} from './textboxLayout';
 
 export type ExportSettings = {
@@ -44,6 +46,7 @@ export type OutlineSettings = {
 export type PluginSettings = {
   version: 1;
   import: TextboxImportSettings;
+  layout: PageLayout;
   export: ExportSettings;
   markers: {calibration: TextboxMeasurementCalibration};
   outline: OutlineSettings;
@@ -58,6 +61,7 @@ export const DEFAULT_OUTLINE_SETTINGS: OutlineSettings = {
 export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   version: 1,
   import: DEFAULT_TEXTBOX_IMPORT_SETTINGS,
+  layout: DEFAULT_PAGE_LAYOUT,
   export: {
     scope: 'currentPage',
     includeComments: false,
@@ -131,11 +135,26 @@ function parseImport(value: unknown): TextboxImportSettings {
       heading2: roleStyle(structure.heading2, d.structure.heading2),
       heading3: roleStyle(structure.heading3, d.structure.heading3),
     },
-    marginLeft: num(raw.marginLeft, d.marginLeft, 0, MAX_MARGIN),
-    marginTop: num(raw.marginTop, d.marginTop, 0, MAX_MARGIN),
-    marginRight: num(raw.marginRight, d.marginRight, 0, MAX_MARGIN),
-    marginBottom: num(raw.marginBottom, d.marginBottom, 0, MAX_MARGIN),
     insertMode: oneOf(raw.insertMode, ['auto', 'currentPage', 'afterCurrentPage'] as const, d.insertMode),
+  };
+}
+
+/** The page layout; margins an older version kept with the import are not taken over. */
+function parseLayout(value: unknown): PageLayout {
+  const raw = asObject(value);
+  const margins = asObject(raw.margins);
+  const d = DEFAULT_PAGE_LAYOUT;
+  return {
+    margins: {
+      left: num(margins.left, d.margins.left, 0, MAX_MARGIN),
+      top: num(margins.top, d.margins.top, 0, MAX_MARGIN),
+      right: num(margins.right, d.margins.right, 0, MAX_MARGIN),
+      bottom: num(margins.bottom, d.margins.bottom, 0, MAX_MARGIN),
+    },
+    breakBefore: Array.isArray(raw.breakBefore)
+      ? HEADING_LEVELS.filter(item => (raw.breakBefore as unknown[]).includes(item))
+      : d.breakBefore,
+    blockGap: num(raw.blockGap, d.blockGap, 0, MAX_MARGIN),
   };
 }
 
@@ -215,6 +234,7 @@ export function parseSettings(json: string | null): PluginSettings {
   return {
     version: 1,
     import: parseImport(raw.import),
+    layout: parseLayout(raw.layout),
     export: parseExport(raw.export),
     markers: {calibration: parseCalibration(raw.markers)},
     outline: parseOutline(raw.outline),

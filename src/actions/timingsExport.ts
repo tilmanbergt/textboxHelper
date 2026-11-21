@@ -5,7 +5,7 @@ import {jsContextAgeMs, perfLog, recordingStartedAt} from '../utils/perf';
 import {cacheState} from './manuscriptCache';
 
 /**
- * "Save timings" in the Manuscript card's Details (technical-design-manuscript-cache.md §6): the
+ * "Save timings" in the Manuscript card's Settings → Diagnostics (technical-design-manuscript-cache.md §6): the
  * timings recorded since the last clear as one JSON file in EXPORT, with a summary per stage and
  * what the cache holds, so it can be handed over as a file.
  */

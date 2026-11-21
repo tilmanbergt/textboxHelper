@@ -19,9 +19,9 @@ describe('parseSettings', () => {
         ...DEFAULT_PLUGIN_SETTINGS.import,
         filePath: '/storage/emulated/0/Document/day.txt',
         linkToFile: false,
-        marginLeft: 80,
         structure: {...DEFAULT_PLUGIN_SETTINGS.import.structure, layoutMode: 'paragraphTextboxes' as const},
       },
+      layout: {margins: {left: 80, top: 90, right: 300, bottom: 600}, breakBefore: [1 as const], blockGap: 24},
       export: {
         ...DEFAULT_PLUGIN_SETTINGS.export,
         scope: 'wholeNote' as const,
@@ -54,7 +54,7 @@ describe('parseSettings', () => {
       }),
     );
     expect(parsed.import.filePath).toBe('/storage/emulated/0/INBOX/a.txt');
-    expect(parsed.import.marginTop).toBe(DEFAULT_PLUGIN_SETTINGS.import.marginTop);
+    expect(parsed.layout).toEqual(DEFAULT_PLUGIN_SETTINGS.layout);
     expect(parsed.import.insertMode).toBe('auto');
     expect(parsed.import.structure.layoutMode).toBe('paragraphTextboxes');
     expect(parsed.import.structure.heading1).toEqual(DEFAULT_PLUGIN_SETTINGS.import.structure.heading1);
@@ -63,6 +63,17 @@ describe('parseSettings', () => {
     expect(parsed.export.rules.meta.italic).toBe('any');
     expect(parsed.markers.calibration).toEqual({offsetX: 15, offsetY: 0, widthAdjustment: 30});
     expect(parsed).not.toHaveProperty('future');
+  });
+
+  it('reads the page layout field by field and ignores the import\'s old margins', () => {
+    const parsed = parseSettings(
+      JSON.stringify({
+        import: {marginLeft: 5, marginBottom: 7},
+        layout: {margins: {left: 60, bottom: 'deep'}, breakBefore: [2, 5]},
+      }),
+    );
+    expect(parsed.layout).toEqual({margins: {left: 60, top: 100, right: 280, bottom: 625}, breakBefore: [2], blockGap: 18});
+    expect(parsed.import).not.toHaveProperty('marginLeft');
   });
 
   it('forgets a file from the former MyStyle import folder', () => {

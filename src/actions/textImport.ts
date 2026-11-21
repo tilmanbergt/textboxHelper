@@ -8,7 +8,6 @@ import {
   type TextboxImportBlockSummary,
 } from '../domain/importParsing';
 import {
-  buildImportMaxRect,
   buildInsertPages,
   buildPreviewText,
   countCreatedPages,
@@ -45,6 +44,7 @@ import {
 } from '../supernote/noteElements';
 import {insertTextboxPages} from '../supernote/noteTextInsertion';
 import {getSettings} from '../storage/settingsFile';
+import {textArea} from '../domain/pageLayout';
 import {
   addTitles,
   checkNotLinkedYet,
@@ -136,7 +136,8 @@ async function buildImportPlan(params: {
   /** A linked import's blocks, used instead of parsing the text again. */
   linkedBlocks?: TextboxImportBlock[];
 }): Promise<TextboxImportPlan> {
-  const maxRect = buildImportMaxRect(params.context.pageSize, params.settings);
+  const layout = getSettings().layout;
+  const maxRect = textArea(params.context.pageSize, layout);
   const currentPageHasImportAreaContent = pageHasContentInImportArea(
     params.context.pageElements,
     maxRect,
@@ -170,6 +171,7 @@ async function buildImportPlan(params: {
       blocks,
       maxRect,
       fontPath: NOTE_SYSTEM_FONT_PATH,
+      blockGap: layout.blockGap,
       addExplicitEmptyLineHeight: false,
       measureHeight: measureTextboxHeight,
     });
@@ -269,7 +271,7 @@ async function importTarget(request: ImportRequest, notePath: string): Promise<I
   }
   if (links.mode === 'folder' && !request.addPaths) {
     throw new Error(
-      `This note is bound to the folder ${folderName(links.folder?.path ?? '')}: add its new files from Manuscript → Details.`,
+      `This note is bound to the folder ${folderName(links.folder?.path ?? '')}: add its new files from Manuscript → Settings → Files.`,
     );
   }
   const {pageCount} = await readNoteInfo();
@@ -401,7 +403,7 @@ export async function performTextboxImport(
 }
 
 /**
- * Adds files to a note with linked files, after its last page (Manuscript → Details: a folder's new
+ * Adds files to a note with linked files, after its last page (Manuscript → Settings → Files: a folder's new
  * files, or files left out before). Returns the result with the new files' source ids.
  */
 export async function addLinkedFiles(

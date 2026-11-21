@@ -1,5 +1,4 @@
 import {
-  buildImportMaxRect,
   buildInsertPages,
   buildPreviewText,
   countCreatedPages,
@@ -9,7 +8,6 @@ import {
   resolveEffectiveInsertMode,
   wrapContinuousChunks,
 } from '../../src/domain/importPlan';
-import {DEFAULT_TEXTBOX_IMPORT_SETTINGS} from '../../src/domain/importSettings';
 import type {PageElementData, Rect} from '../../src/domain/textboxModel';
 
 const rect = (left: number, top: number, right: number, bottom: number): Rect => ({left, top, right, bottom});
@@ -39,12 +37,6 @@ describe('import text', () => {
 });
 
 describe('import plan', () => {
-  it('takes the margins off the page and refuses margins that leave nothing', () => {
-    const settings = {...DEFAULT_TEXTBOX_IMPORT_SETTINGS, marginLeft: 100, marginTop: 120, marginRight: 100, marginBottom: 150};
-    expect(buildImportMaxRect({width: 1404, height: 1872}, settings)).toEqual(rect(100, 120, 1304, 1722));
-    expect(() => buildImportMaxRect({width: 150, height: 1872}, settings)).toThrow('Import margins leave no usable textbox area.');
-  });
-
   it('recommends a new page when the import area already has content on the main layer', () => {
     const area = rect(100, 100, 1300, 1700);
     expect(pageHasContentInImportArea([picture(rect(200, 200, 300, 300))], area)).toBe(true);

@@ -1,25 +1,19 @@
 /**
  * Import Text File (technical-design-calmer-screens.md §3.7, canvas "Import text file").
  * Left: the file (Supernote file selector, any folder, .txt) and how the text is structured.
- * Right: the planned pages drawn to scale, updated by itself after every change. Font size and
- * margins are on the Layout sub-screen. In the Paragraph boxes layout the import can be linked to
+ * Right: the planned pages drawn to scale, updated by itself after every change. Font sizes and
+ * margins are the page layout's, set in the Manuscript card's Settings → Layout. In the Paragraph boxes layout the import can be linked to
  * its file (technical-design-source-link.md §3): then blank lines separate the blocks and headings
  * are always recognized, and the header says what the file holds that is kept as is.
  */
 import React, {useEffect, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {IMPORT_HELP} from '../../domain/helpTexts';
-import {
-  headingsAreBold,
-  isLinkedImport,
-  withHeadingFontSize,
-  withHeadingsBold,
-  type TextboxImportSettings,
-} from '../../domain/importSettings';
+import {isLinkedImport, type TextboxImportSettings} from '../../domain/importSettings';
+import {marginsSummary} from '../../domain/pageLayout';
 import {plural} from '../../domain/plural';
 import {protectedSummaryText} from '../../domain/sourceBlocks';
 import Checkbox from '../../ui/Checkbox';
-import NumberField from '../../ui/NumberField';
 import PageHeader from '../../ui/PageHeader';
 import PillButton from '../../ui/PillButton';
 import ScreenFrame from '../../ui/ScreenFrame';
@@ -27,9 +21,9 @@ import Segmented from '../../ui/Segmented';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
 import {requestEinkRefresh} from '../../utils/screenRefresh';
 import FolderSetupScreen from './FolderSetupScreen';
-import ImportLayoutScreen from './ImportLayoutScreen';
 import PagePreview from './PagePreview';
 import {useTextImport} from './useTextImport';
+import {getSettings} from '../../storage/settingsFile';
 
 interface Props {
   onClose: () => void;
@@ -38,7 +32,7 @@ interface Props {
 export default function ImportScreen({onClose}: Props): React.JSX.Element {
   const flow = useTextImport();
   const {settings, preview, busy, imported} = flow;
-  const [view, setView] = useState<'import' | 'layout' | 'folder'>('import');
+  const [view, setView] = useState<'import' | 'folder'>('import');
   const [pageIndex, setPageIndex] = useState(0);
 
   useEffect(() => {
@@ -48,18 +42,6 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
   useEffect(() => {
     requestEinkRefresh();
   }, [pageIndex]);
-
-  if (view === 'layout') {
-    return (
-      <ImportLayoutScreen
-        settings={settings}
-        onChange={flow.change}
-        status={flow.status}
-        onBack={() => setView('import')}
-        onClose={onClose}
-      />
-    );
-  }
 
   if (view === 'folder' && flow.folder) {
     return (
@@ -209,49 +191,12 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
               onChange={detectMarkdownHeadings => setStructure({detectMarkdownHeadings})}
             />
           )}
-          {headings && (
-            <>
-              <View style={styles.sizes}>
-                <NumberField
-                  label="# size"
-                  value={settings.structure.heading1.fontSize}
-                  min={8}
-                  max={200}
-                  onChange={n => flow.change(withHeadingFontSize(settings, 'heading1', n))}
-                />
-                <NumberField
-                  label="## size"
-                  value={settings.structure.heading2.fontSize}
-                  min={8}
-                  max={200}
-                  onChange={n => flow.change(withHeadingFontSize(settings, 'heading2', n))}
-                />
-                <NumberField
-                  label="### size"
-                  value={settings.structure.heading3.fontSize}
-                  min={8}
-                  max={200}
-                  onChange={n => flow.change(withHeadingFontSize(settings, 'heading3', n))}
-                />
-              </View>
-              <Checkbox
-                label="Bold headings"
-                checked={headingsAreBold(settings)}
-                onChange={bold => flow.change(withHeadingsBold(settings, bold))}
-              />
-            </>
-          )}
-
-          <Pressable accessibilityRole="button" onPress={() => setView('layout')} style={styles.link}>
+          <View style={styles.link}>
             <View style={styles.linkText}>
               <Text style={styles.linkTitle}>Layout</Text>
-              <Text style={styles.path}>
-                font {settings.fontSize} · margins {settings.marginLeft} / {settings.marginTop} /{' '}
-                {settings.marginRight} / {settings.marginBottom}
-              </Text>
+              <Text style={styles.path}>{layoutSummary(settings)}</Text>
             </View>
-            <Text style={styles.linkTitle}>›</Text>
-          </Pressable>
+          </View>
         </View>
 
         <View style={styles.right}>
@@ -310,6 +255,13 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
   );
 }
 
+/** "Text 36 · # 52 · Margins 100 · 100 · 280 · 625 · in Manuscript → Settings → Layout". */
+function layoutSummary(settings: TextboxImportSettings): string {
+  return `Text ${settings.fontSize} · # ${settings.structure.heading1.fontSize} · ${marginsSummary(
+    getSettings().layout,
+  )} · set in Manuscript → Settings → Layout`;
+}
+
 const styles = StyleSheet.create({
   columns: {
     flex: 1,
@@ -359,11 +311,6 @@ const styles = StyleSheet.create({
   path: {
     fontSize: FONT.small,
     color: COLORS.muted,
-  },
-  sizes: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    paddingLeft: 36,
   },
   link: {
     marginTop: 'auto',

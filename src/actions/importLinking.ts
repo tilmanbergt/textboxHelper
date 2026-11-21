@@ -69,7 +69,7 @@ export async function writeFirstIndex(links: NoteLinks, filePaths: string[]): Pr
 /**
  * Puts our NOTE titles over the imported files' dividers and the headings of the titled levels
  * (technical-design-outline-sections.md §4), and saves the note. A title that can't be written
- * doesn't undo the import: the text (and the link) are there; Details → Restore titles tries again.
+ * doesn't undo the import: the text (and the link) are there; Settings → Outline → Restore titles tries again.
  */
 export async function addTitles(notePath: string, pages: {pageNumber: number}[]): Promise<string> {
   try {
@@ -78,7 +78,7 @@ export async function addTitles(notePath: string, pages: {pageNumber: number}[])
     return '';
   } catch (error) {
     console.warn('[TextImport] titles not added', String(error));
-    return ' The titles could not be added: Manuscript → Details → Restore titles.';
+    return ' The titles could not be added: Manuscript → Settings → Outline → Restore titles.';
   }
 }
 

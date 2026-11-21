@@ -7,7 +7,7 @@ import {
   isLinkedImport,
   pathFromInboxRelative,
   resolveTextboxImportPath,
-  withDefaultLayout,
+  withDefaultStyles,
   withHeadingFontSize,
   withHeadingsBold,
   withParagraphFontSize,
@@ -72,11 +72,11 @@ describe('import setting changes', () => {
     expect(headingsAreBold(withHeadingsBold(d, false))).toBe(false);
   });
 
-  it('resets font size and margins but keeps the file', () => {
-    const changed = {...withParagraphFontSize(d, 20), filePath: '/x/a.txt', marginLeft: 5};
-    const reset = withDefaultLayout(changed);
+  it('resets the styles but keeps the file', () => {
+    const changed = {...withHeadingsBold(withParagraphFontSize(d, 20), false), filePath: '/x/a.txt'};
+    const reset = withDefaultStyles(changed);
     expect(reset.fontSize).toBe(d.fontSize);
-    expect(reset.marginLeft).toBe(d.marginLeft);
+    expect(reset.structure).toEqual(d.structure);
     expect(reset.filePath).toBe('/x/a.txt');
   });
 });
