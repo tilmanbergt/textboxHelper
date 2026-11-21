@@ -26,7 +26,7 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 - Recognize replace markers as a delete line plus a small loop (or two crossing lines), with the new text tagged right after
 - Support both freehand strokes and Supernote straight-line geometry
 - Review all changes before applying them: removed words struck through, replacements in bold, one textbox at a time
-- Calibrate the text measurement and save diagnostics of a marker preview to the EXPORT folder (Details), for bug reports
+- Calibrate the text measurement and save diagnostics of a marker preview to the EXPORT folder (Manuscript → Settings), for bug reports
 
 ### Replacement and Insertion
 
@@ -48,16 +48,19 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 - Outline: the note's linked files and headings on the left, the open heading's paragraphs on the right, details below; change a heading's level (with or without its subheadings), move paragraphs within a heading or to another one, move files, set aside or delete a section; statuses (open, review, final) and a filter for edits waiting or not final; headings of chosen levels get a NOTE title for the table of contents
 - A note imported linked to its text file: Apply also updates the file, and "Update <file>" writes changes made directly in the textboxes; untouched text is written back exactly, a file changed outside is never overwritten (Save as copy instead)
 - Move a block with ←, set it aside (to a new page at the end of the note) or delete it; the changes are planned first, each can be undone, and "Apply n changes" rebuilds the pages from the first change with one backup. A block with pending edits stays in place until its edits are applied
+- Clean up layout: lay the whole note or one linked file out again with the current margins and sizes; long paragraphs are cut to fit, handwriting stays where it is
+- Settings: the Outline's headings, the page layout (margins that leave room for handwriting, which headings start a new page, text sizes), the export rules, calibration and diagnostics
 
-### Import Text File
+### Files: Import and Export
+
+The Manuscript card's Files tab lists the linked files and opens the import and the export; a note
+without textboxes opens there.
 
 - Import plain text into NOTE textboxes, from a `.txt` file in any folder (for example `INBOX`), chosen with the Supernote file selector
 - Split imported text into paragraph-based textboxes
 - Link the import to its file: one textbox per heading, paragraph or list; frontmatter, code, tables, callouts and other blocks are kept exactly as they are and shown as framed placeholders
+- Every linked file starts on a new page; headings can too (Settings → Layout)
 - See the planned pages drawn to scale before importing; the preview updates by itself
-
-### Export DOCX
-
 - See which textboxes of the page, the note or a page range will be exported, as a list that updates by itself
 - Export recognized textbox content into a DOCX file
 
@@ -77,8 +80,8 @@ be wrong.
 
 ## Settings
 
-The plugin remembers the import settings, the export pages and rules, the edit-marker
-calibration and the Outline's heading settings in `settings.json` in its own plugin folder. Tagged replacements and insertions are
+The plugin remembers the import settings, the page layout, the export pages and rules, the
+edit-marker calibration and the Outline's heading settings in `settings.json` in its own plugin folder. Tagged replacements and insertions are
 kept in `pen-edits/` in the same folder, the Outline's block statuses in `block-status.json`, and
 what a linked import came from (the file's path and its original text) and which files a note is
 linked to in `sources/`, together with each linked file's text before the plugin's latest write

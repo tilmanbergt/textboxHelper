@@ -53,17 +53,32 @@ check fail if the SDK types drift away from them.
 
 ### Screens and `App.tsx`
 
-`App.tsx` owns permissions and button routing; it opens one screen per button, keyed by the press,
+`App.tsx` owns permissions and button routing (Textbox Tools on the lasso, Manuscript in NOTE);
+it opens one screen per button, keyed by the press,
 so a screen opened again starts fresh. The button listener subscribes once and calls the latest
 router through a ref. Screens are built on `ui/ScreenFrame.tsx` and own their state in a hook next
-to them: `screens/manuscript/` (the Manuscript card: `ReviewTab` with its page strip and side bar `ChangeSide`, the Outline in `outline/`, and Details; the page states are `domain/manuscriptPages.ts`; the outline is `domain/outlineModel.ts` (what a block is: a file's divider, a heading by its `#`s — `domain/headingText.ts` — or a paragraph; statuses in `storage/blockStatusStore.ts`, block tags `domain/blockTag.ts`), what its panes show `domain/outlineContents.ts` (the Contents, each entry's own paragraphs, the filter, the moves offered), planned moves, levels, set-asides and deletes `domain/outlinePlan.ts`, their new places `domain/outlineLayout.ts`, and `actions/outlineApply.ts` checks and writes them; the tab (`outline/OutlineTab.tsx`) renders `outline/useOutline.ts` (data and plan) through `outline/useOutlineView.ts` (filter, open entry, panel subject, Move to) in `ContentsColumn`, `ParagraphList` and `DetailsPanel`, with the shared light controls `ui/TextChoices.tsx`, `ui/ActionBar.tsx`, `ui/TextLink.tsx` and the symbols in `ui/glyphs.ts`; what was read is kept in memory by `actions/manuscriptCache.ts` with a page fingerprint, `domain/pageFingerprint.ts`, and checked again in the background by `usePageChecks.ts`; timings are `utils/perf.ts`, saved by `actions/timingsExport.ts`), `screens/tools/` (the lasso screen,
+to them: `screens/manuscript/` (the Manuscript card: `ReviewTab` with its page strip and side bar `ChangeSide`, the Outline in `outline/`, the Files tab in `files/` and Settings in `settings/`; the page states are `domain/manuscriptPages.ts`; the outline is `domain/outlineModel.ts` (what a block is: a file's divider, a heading by its `#`s — `domain/headingText.ts` — or a paragraph; statuses in `storage/blockStatusStore.ts`, block tags `domain/blockTag.ts`), what its panes show `domain/outlineContents.ts` (the Contents, each entry's own paragraphs, the filter, the moves offered), planned moves, levels, set-asides and deletes `domain/outlinePlan.ts`, their new places `domain/outlineLayout.ts`, and `actions/outlineApply.ts` checks and writes them; the tab (`outline/OutlineTab.tsx`) renders `outline/useOutline.ts` (data and plan) through `outline/useOutlineView.ts` (filter, open entry, panel subject, Move to) in `ContentsColumn`, `ParagraphList` and `DetailsPanel`, with the shared light controls `ui/TextChoices.tsx`, `ui/ActionBar.tsx`, `ui/TextLink.tsx` and the symbols in `ui/glyphs.ts`; what was read is kept in memory by `actions/manuscriptCache.ts` with a page fingerprint, `domain/pageFingerprint.ts`, and checked again in the background by `usePageChecks.ts`; timings are `utils/perf.ts`, saved by `actions/timingsExport.ts`), `screens/tools/` (the lasso screen,
 its Details with "Log All Textboxes"),
-`screens/import/` (Import with its Layout sub-screen and the page drawing), `screens/export/`
-(Export with its Rules sub-screen). Every sub-screen (Details, Layout, Rules) is local state of its
-screen, whose hook stays mounted underneath, so going back keeps the preview.
+`screens/import/` (Import with the page drawing) and `screens/export/` (Export), both opened as
+sub-screens from the Manuscript card's Files tab. Every sub-screen (Settings, Import, Export) is
+local state of its screen, whose hooks stay mounted underneath, so going back keeps the preview;
+after an import the card starts over (a new key), so everything is read from the changed note. A
+note without textboxes opens on Files (`actions/noteContent.ts`).
 
-What the plugin remembers between sessions - the import settings, the export scope and rules,
-the edit-marker calibration - is `domain/settingsModel.ts`, stored by `storage/settingsFile.ts`
+**One page layout** (`domain/pageLayout.ts`): margins (by default room for handwriting on the
+right and at the bottom), heading levels that start a new page, the gap between blocks; kept in
+`settings.layout` and edited in Settings → Layout. The import plans into its `textArea` and breaks
+before every linked file's divider and the chosen headings (`blockPagination.ts` `breakBefore`);
+the Outline's Apply stacks within the same area and breaks the same way (`outlineLayout.ts`
+`LayoutBlock.startsPage`). **Clean up layout** (`domain/cleanupLayout.ts`, `actions/cleanupApply.ts`)
+is a planned Outline change that lays the whole note or one linked file out again: full width, the
+style of each block's kind and level (the import's role styles), blocks too tall for the area cut
+into pieces (tags keep `s`/`i` with `p`), pieces cut before joined first; for one file pages are
+inserted or removed before the next file (`supernote/noteTextInsertion.ts` `insertNotePages`,
+`removeNotePages`); handwriting stays where it is.
+
+What the plugin remembers between sessions - the import settings, the page layout, the export
+scope and rules, the edit-marker calibration, the Outline's heading settings - is `domain/settingsModel.ts`, stored by `storage/settingsFile.ts`
 as `settings.json` in the plugin folder: read once at start (before the first screen), written
 1 s after the last change, read field by field so a bad value never resets the rest.
 `src/domain/textboxActionKinds.ts` holds one label and one progress text per action kind
@@ -111,7 +126,7 @@ on the page show which text belongs to which mark. A snippet without a mark can 
 the review recognizes them while it is open and the user can edit the text in place.
 
 Every stage of a marker preview is also recorded in memory (`utils/editMarkerLog.ts`); "Save
-Diagnostics" (review → Details) writes that trace, with the stroke's raw sample points next to
+Diagnostics" (Manuscript → Settings → Diagnostics) writes that trace, with the stroke's raw sample points next to
 the points recognition used, as JSON to the EXPORT folder - only when the user taps it.
 
 ### Text import (`actions/textImport.ts`)
@@ -142,7 +157,7 @@ its old reading by pages); `sourceExport.ts` regenerates each file from its segm
 files and mode are kept in `sources/note-<key>.json` (`domain/noteLinks.ts`); a note that has
 linked files gets more only linked and after its last page ("Add a file to this note").
 `actions/titleSync.ts` `syncTitles` puts our NOTE titles right on given pages — over every
-divider and every heading of the levels set in Details → Outline (`domain/noteTitlesPlan.ts` plans
+divider and every heading of the levels set in Settings → Outline (`domain/noteTitlesPlan.ts` plans
 it, tag `k:'t'` with the file or the level; `supernote/noteTitles.ts` writes them) — after an
 import, an Outline apply and on Restore titles; titles the user made are never touched. Manuscript reads the note's files with their states
 (`actions/linkedFiles.ts`, `domain/fileState.ts`: in sync, changed here, changed in Obsidian, …,
@@ -159,7 +174,7 @@ the folder (`LinkedFolder`: path, ordered, files left out, the index as last wri
 `actions/folderLink.ts` reads the folder for the setup, its state on the card (new files, files
 left out, `index.txt` in sync / to be written / changed in Obsidian) and writes `index.txt`, a
 plain `[[name]]` list in the note's order, after the files on Update. New files are added from
-Details after the last page (`textImport.ts` `addLinkedFiles`, linking in
+the Files tab on a new page after the last one (`textImport.ts` `addLinkedFiles`, linking in
 `actions/importLinking.ts`). In the Outline a file's divider is a block of its own kind: it moves
 with its whole file (`outlinePlan.ts` `sectionOf` ranks a divider above `#`, `##`, `###`) and is
 never set aside or deleted alone.

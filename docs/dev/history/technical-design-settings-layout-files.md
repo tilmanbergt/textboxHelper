@@ -1,6 +1,6 @@
 # Technical design: Settings tabs, one page layout, Clean up, Files tab
 
-Status: **decided, 2026-11-21; building on `feature/linked-files`.** Requirements: `claude/requirements-settings-layout-files.md` (claude.ai project). **Base: `feature/linked-files` at `f11efd9`** (Outline sections built). Same rules as before: reuse what is there, one source of truth, delete what goes, every file well under 1,000 lines, each step with tests, docs and deletions in the same commit.
+Status: **built** on `feature/linked-files` (S1–S5). Requirements: `claude/requirements-settings-layout-files.md` (claude.ai project). **Base: `feature/linked-files` at `f11efd9`** (Outline sections built). Same rules as before: reuse what is there, one source of truth, delete what goes, every file well under 1,000 lines, each step with tests, docs and deletions in the same commit.
 
 ## 0. What is there
 
@@ -76,3 +76,31 @@ Every block: left = area.left, width = area width, its measured height, `blockGa
 - Retired toolbar buttons go with the update (Tilman).
 - Blocks taller than the text area: split now (§2.1).
 - Handwriting staying in place during Clean up: assumed, confirm on the device.
+
+## As built
+
+- **S1** `domain/pageLayout.ts` (`DEFAULT_PAGE_LAYOUT`, `textArea`, `startsPage`, `marginsSummary`),
+  `settings.layout`; the import's margins are gone (`withDefaultLayout` became `withDefaultStyles`,
+  which resets the styles only). Settings is `screens/manuscript/settings/` with
+  `SettingsScreen`, `OutlineSettings`, `LayoutSettings`, `ExportSettings`, `CalibrationSettings`,
+  `DiagnosticsSettings` and `SettingsParts`. The heading sizes and Bold headings moved from the
+  Import screen to Settings → Layout. `useExportScan` scans with the saved rules only.
+- **S2** `blockPagination` `breakBefore`; `textImport.ts` `blockStartsPage`; `LayoutBlock.startsPage`
+  in `layoutRebuild`, decided by `checkRebuild` from the planned level; `pageFrame` uses
+  `textArea` (and only without a page size the textboxes' extent).
+- **S3** `domain/cleanupLayout.ts` (`blocksInScope`, `pieceGroups`, `groupText`, `fitText`,
+  `layoutCleanup`, `cleanupRange`, `fileStartsPage`); `OutlineBlock` gained `sourceBlock`, `piece`,
+  `placeholder`; `PlannedChange` `{kind: 'cleanup', key: '#cleanup', scope}`, `PlannedOrder.cleanup`.
+  `actions/cleanupApply.ts` (`checkCleanup`, `applyCleanup`); `useOutline` dispatches check and
+  apply by the plan; blocker kind `plan` for changes planned outside a file's clean up. A textbox
+  that stays one textbox on its page is modified in place; joined or cut blocks and blocks that
+  change page are rewritten (the first piece keeps the tag without `p`, the others get a new id
+  with `p`). Pages are inserted at the range's end, set-aside blocks go to new pages at the note's
+  end, pages left with no text and no handwriting are removed last, titles are synced from the
+  first page on. Settings → Layout → `CleanupSection` (Whole note / One file with ‹ ›) plans it and
+  opens the Outline; the button reads "Apply clean up".
+- **S4** `screens/manuscript/files/` (`FilesTab`, `FilesSection` moved); Import and Export screens
+  take `onBack` and open Settings → Layout / Export; the card is a wrapper that starts over with a
+  new key after an import; `actions/noteContent.ts` `noteHasTextboxes`; buttons 6290 / 6300 retired.
+- **Still to confirm on the device:** handwriting staying in place reads well; pages inserted and
+  removed in the middle show at once in NOTE.

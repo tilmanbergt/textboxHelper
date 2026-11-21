@@ -33,7 +33,7 @@ Library: `sn-plugin-lib` 0.2.3.
   folders it offers without `limitPath` is not.
 - **Linked files** keep their record in `<pluginDir>/sources/`. Whether a plugin may write next to
   a linked file outside its own folder (INBOX, Document, a synced folder) is checked on the device
-  with Manuscript → Details → Check write access, which tries the host's `FileUtils.copyFile`
+  with Manuscript → Files → Check write access, which tries the host's `FileUtils.copyFile`
   first and a direct write second.
 
 ## 2. Permissions
