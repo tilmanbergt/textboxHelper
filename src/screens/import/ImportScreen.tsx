@@ -1,5 +1,6 @@
 /**
- * Import Text File (technical-design-calmer-screens.md §3.7, canvas "Import text file").
+ * Import a text file (technical-design-calmer-screens.md §3.7, canvas "Import text file"), opened
+ * from the Manuscript card's Files tab (technical-design-settings-layout-files.md §4).
  * Left: the file (Supernote file selector, any folder, .txt) and how the text is structured.
  * Right: the planned pages drawn to scale, updated by itself after every change. Font sizes and
  * margins are the page layout's, set in the Manuscript card's Settings → Layout. In the Paragraph boxes layout the import can be linked to
@@ -8,6 +9,7 @@
  */
 import React, {useEffect, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
+import {GLYPH} from '../../ui/glyphs';
 import {IMPORT_HELP} from '../../domain/helpTexts';
 import {isLinkedImport, type TextboxImportSettings} from '../../domain/importSettings';
 import {marginsSummary} from '../../domain/pageLayout';
@@ -27,10 +29,16 @@ import {getSettings} from '../../storage/settingsFile';
 
 interface Props {
   onClose: () => void;
+  /** Back to the Manuscript card; `imported` says whether the note changed. */
+  onBack: (imported: boolean, message: string | null) => void;
+  /** Opens with "Whole folder" chosen. */
+  wholeFolder?: boolean;
+  /** Opens Settings → Layout. */
+  onOpenLayout: () => void;
 }
 
-export default function ImportScreen({onClose}: Props): React.JSX.Element {
-  const flow = useTextImport();
+export default function ImportScreen({onClose, onBack, wholeFolder = false, onOpenLayout}: Props): React.JSX.Element {
+  const flow = useTextImport(wholeFolder);
   const {settings, preview, busy, imported} = flow;
   const [view, setView] = useState<'import' | 'folder'>('import');
   const [pageIndex, setPageIndex] = useState(0);
@@ -55,6 +63,7 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
       />
     );
   }
+  const back = () => onBack(imported, imported ? flow.status?.text ?? null : null);
 
   const setStructure = (next: Partial<TextboxImportSettings['structure']>) =>
     flow.change({...settings, structure: {...settings.structure, ...next}});
@@ -75,7 +84,7 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
     : undefined;
 
   const primary = imported
-    ? {label: 'Close', onPress: onClose}
+    ? {label: 'Back to Manuscript', onPress: back}
     : {
         label: adding ? 'Add' : whole ? `Import ${plural(flow.folderImport?.names.length ?? 0, 'file')}` : 'Import',
         onPress: flow.runImport,
@@ -91,6 +100,7 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
   return (
     <ScreenFrame
       title={adding ? 'Add a file to this note' : 'Import text file'}
+      back={{label: 'Manuscript', onPress: back}}
       context={context}
       help={{title: 'Import text file', text: IMPORT_HELP}}
       onClose={onClose}
@@ -191,12 +201,13 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
               onChange={detectMarkdownHeadings => setStructure({detectMarkdownHeadings})}
             />
           )}
-          <View style={styles.link}>
+          <Pressable accessibilityRole="button" disabled={busy} onPress={onOpenLayout} style={styles.link}>
             <View style={styles.linkText}>
               <Text style={styles.linkTitle}>Layout</Text>
               <Text style={styles.path}>{layoutSummary(settings)}</Text>
             </View>
-          </View>
+            <Text style={styles.linkTitle}>{GLYPH.next}</Text>
+          </Pressable>
         </View>
 
         <View style={styles.right}>
@@ -255,11 +266,9 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
   );
 }
 
-/** "Text 36 · # 52 · Margins 100 · 100 · 280 · 625 · in Manuscript → Settings → Layout". */
+/** "Text 36 · # 52 · Margins 100 · 100 · 280 · 625" */
 function layoutSummary(settings: TextboxImportSettings): string {
-  return `Text ${settings.fontSize} · # ${settings.structure.heading1.fontSize} · ${marginsSummary(
-    getSettings().layout,
-  )} · set in Manuscript → Settings → Layout`;
+  return `Text ${settings.fontSize} · # ${settings.structure.heading1.fontSize} · ${marginsSummary(getSettings().layout)}`;
 }
 
 const styles = StyleSheet.create({

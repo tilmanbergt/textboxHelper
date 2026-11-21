@@ -9,7 +9,6 @@ import {StyleSheet, View} from 'react-native';
 import CountTabs from '../../../ui/CountTabs';
 import ScreenFrame, {type FrameStatus} from '../../../ui/ScreenFrame';
 import {SPACING} from '../../../ui/theme';
-import FilesSection from '../FilesSection';
 import type {LinkedFiles} from '../useLinkedFiles';
 import type {ManuscriptReview} from '../useManuscriptReview';
 import type {Outline} from '../outline/useOutline';
@@ -20,7 +19,7 @@ import ExportSettings from './ExportSettings';
 import LayoutSettings from './LayoutSettings';
 import OutlineSettings from './OutlineSettings';
 
-export type SettingsTab = 'files' | 'outline' | 'layout' | 'export' | 'calibration' | 'diagnostics';
+export type SettingsTab = 'outline' | 'layout' | 'export' | 'calibration' | 'diagnostics';
 
 interface Props {
   review: ManuscriptReview;
@@ -56,7 +55,6 @@ export default function SettingsScreen({
       <View style={styles.tabs}>
         <CountTabs<SettingsTab>
           tabs={[
-            {key: 'files', label: 'Files'},
             {key: 'outline', label: 'Outline'},
             {key: 'layout', label: 'Layout'},
             {key: 'export', label: 'Export'},
@@ -68,7 +66,6 @@ export default function SettingsScreen({
         />
       </View>
       <View style={styles.body}>
-        {tab === 'files' ? <FilesSection source={source} /> : null}
         {tab === 'outline' ? <OutlineSettings outline={outline} source={source} /> : null}
         {tab === 'layout' ? (
           <LayoutSettings cleanup={<CleanupSection outline={outline} onPlanned={onCleanUpPlanned} />} />

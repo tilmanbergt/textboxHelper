@@ -1,9 +1,12 @@
 /**
  * The Manuscript card (technical-design-manuscript.md §6; canvas row "Manuscript"): one card for
- * the whole note, with two tabs. Review: the pen marks, shaping the text. Outline: the order of
- * the textboxes, shaping the document. Edits first, then structure: a page with edits waiting can't
- * be rebuilt, and the Outline's button leads to the Review of that page. Settings (linked files,
- * Outline, layout, export rules, calibration, diagnostics) is a sub-screen with the card's state.
+ * the whole note, with three tabs. Review: the pen marks, shaping the text. Outline: the order of
+ * the textboxes, shaping the document. Files (technical-design-settings-layout-files.md §4): the
+ * linked files, Import and Export DOCX as sub-screens; an empty note opens here. Edits first, then
+ * structure: a page with edits waiting can't be rebuilt, and the Outline's button leads to the
+ * Review of that page. Settings (Outline, layout, export rules, calibration, diagnostics) is a
+ * sub-screen with the card's state. After an import the card starts over, so everything is read
+ * from the changed note.
  *
  * A note with linked text files (technical-design-linked-files.md §3) names them in the header.
  * Apply also updates the files that changed ("Also update …", on every time the card opens); with
@@ -23,14 +26,18 @@ import PillButton from '../../ui/PillButton';
 import {jumpToNotePage} from '../../supernote/noteElements';
 import ScreenFrame, {type FramePrimary, type FrameStatus} from '../../ui/ScreenFrame';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
-import SettingsScreen from './settings/SettingsScreen';
+import {noteHasTextboxes} from '../../actions/noteContent';
+import ExportScreen from '../export/ExportScreen';
+import ImportScreen from '../import/ImportScreen';
+import FilesTab from './files/FilesTab';
+import SettingsScreen, {type SettingsTab} from './settings/SettingsScreen';
 import OutlineTab from './outline/OutlineTab';
 import ReviewTab, {reviewContext} from './ReviewTab';
 import {useManuscriptReview} from './useManuscriptReview';
 import {useOutline, type Outline} from './outline/useOutline';
 import {useLinkedFiles, type LinkedFiles} from './useLinkedFiles';
 
-type Tab = 'review' | 'outline';
+type Tab = 'review' | 'outline' | 'files';
 
 interface Props {
   onClose: () => void;
@@ -38,10 +45,39 @@ interface Props {
   focusPenEditId?: string | null;
 }
 
-export default function ManuscriptScreen({
+/** The card; after an import it starts over on the Files tab with the import's message. */
+export default function ManuscriptScreen(props: Props): React.JSX.Element {
+  const [round, setRound] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
+  return (
+    <ManuscriptCard
+      key={round}
+      {...props}
+      focusPenEditId={round === 0 ? props.focusPenEditId : null}
+      initialTab={round === 0 ? undefined : 'files'}
+      notice={notice}
+      onImported={message => {
+        setNotice(message);
+        setRound(current => current + 1);
+      }}
+    />
+  );
+}
+
+interface CardProps extends Props {
+  initialTab?: Tab;
+  /** Shown in the status line until something else is (an import's result). */
+  notice: string | null;
+  onImported: (message: string | null) => void;
+}
+
+function ManuscriptCard({
   onClose,
   focusPenEditId = null,
-}: Props): React.JSX.Element {
+  initialTab,
+  notice,
+  onImported,
+}: CardProps): React.JSX.Element {
   const review = useManuscriptReview();
   const source = useLinkedFiles(review.note, !review.loading);
   const records = useMemo(
@@ -49,8 +85,34 @@ export default function ManuscriptScreen({
     [source.note],
   );
   const outline = useOutline(review.note, review.pages, records);
-  const [view, setView] = useState<'card' | 'settings'>('card');
-  const [tab, setTab] = useState<Tab>('review');
+  const [view, setView] = useState<'card' | 'settings' | 'import' | 'export'>('card');
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('outline');
+  const [importFolder, setImportFolder] = useState(false);
+  const [tab, setTabState] = useState<Tab>(initialTab ?? 'review');
+  // An empty note opens on Files, unless a tab was chosen meanwhile.
+  const tabChosen = useRef(!!initialTab || !!focusPenEditId);
+  const setTab = useCallback((next: Tab) => {
+    tabChosen.current = true;
+    setTabState(next);
+  }, []);
+  const notePath = review.note?.notePath ?? null;
+  const pageCount = review.note?.pageCount ?? 0;
+  useEffect(() => {
+    if (!notePath || tabChosen.current) {
+      return;
+    }
+    noteHasTextboxes(notePath, pageCount)
+      .then(has => {
+        if (!has && !tabChosen.current) {
+          setTabState('files');
+        }
+      })
+      .catch(error => console.warn('[Manuscript] note content not read', String(error)));
+  }, [notePath, pageCount]);
+  const openSettings = useCallback((at: SettingsTab) => {
+    setSettingsTab(at);
+    setView('settings');
+  }, []);
   const [reviewBlocked, setReviewBlocked] = useState(false);
   const [showPage, setShowPage] = useState<number | null>(null);
   const [jumpError, setJumpError] = useState<string | null>(null);
@@ -99,9 +161,25 @@ export default function ManuscriptScreen({
     }
   }, [outline.applied]);
 
+  if (view === 'import') {
+    return (
+      <ImportScreen
+        wholeFolder={importFolder}
+        onClose={onClose}
+        onOpenLayout={() => openSettings('layout')}
+        onBack={(imported, message) => (imported ? onImported(message) : setView('card'))}
+      />
+    );
+  }
+
+  if (view === 'export') {
+    return <ExportScreen onClose={onClose} onBack={() => setView('card')} onOpenRules={() => openSettings('export')} />;
+  }
+
   if (view === 'settings') {
     return (
       <SettingsScreen
+        initialTab={settingsTab}
         review={review}
         source={source}
         outline={outline}
@@ -123,7 +201,9 @@ export default function ManuscriptScreen({
   const files = filesLabel(source);
   const toWrite = source.toWrite;
   const primary: FramePrimary =
-    tab === 'outline'
+    tab === 'files'
+      ? filesPrimary(source, onClose)
+      : tab === 'outline'
       ? outlinePrimary(outline, onClose, reviewPage)
       : applied || source.added
       ? {label: 'Close', onPress: onClose, busy: source.busy, busyLabel: 'Writing the files…'}
@@ -168,13 +248,15 @@ export default function ManuscriptScreen({
     ? {kind: 'error' as const, text: jumpError}
     : tab === 'outline'
     ? outline.status ?? review.status
+    : tab === 'files'
+    ? source.status ?? (notice ? {text: notice} : null)
     : reviewStatus(review.status, source, focusNote, changes.readyCount, loading);
 
   return (
     <ScreenFrame
       title="Manuscript"
       context={[reviewContext(review), files].filter(Boolean).join(' · ')}
-      actions={[{label: 'Settings', onPress: () => setView('settings')}]}
+      actions={[{label: 'Settings', onPress: () => openSettings('outline')}]}
       help={{title: 'Edit marks', marks: true}}
       onClose={onClose}
       status={status}
@@ -187,12 +269,23 @@ export default function ManuscriptScreen({
           tabs={[
             {key: 'review', label: 'Review', count: changes.entries.length},
             {key: 'outline', label: 'Outline', count: outline.blocks?.length},
+            {key: 'files', label: 'Files', count: source.note?.files.length || undefined},
           ]}
           activeKey={tab}
           onChange={setTab}
         />
       </View>
-      {tab === 'review' ? (
+      {tab === 'files' ? (
+        <FilesTab
+          source={source}
+          disabled={busy || source.busy}
+          onImport={folder => {
+            setImportFolder(folder);
+            setView('import');
+          }}
+          onExport={() => setView('export')}
+        />
+      ) : tab === 'review' ? (
         <ReviewTab
           review={review}
           onClose={onClose}
@@ -272,14 +365,14 @@ function reviewStatus(
   }
   const folder = source.note.folder;
   if (folder && folder.newFiles.length > 0) {
-    return {text: `${plural(folder.newFiles.length, 'new file')} in ${folder.name}: Settings → Files → Add.`};
+    return {text: `${plural(folder.newFiles.length, 'new file')} in ${folder.name}: Files → Add.`};
   }
   if (folder?.index === 'changedOutside') {
-    return {text: 'index.txt was changed in Obsidian: Settings → Files → Rewrite index.txt.'};
+    return {text: 'index.txt was changed in Obsidian: Files → Rewrite index.txt.'};
   }
   const held = filesHeldBack(source.note);
   if (held.length > 0) {
-    return {text: `${plural(held.length, 'file')} changed here but can't be written (${FILE_STATE_LABEL[held[0].state].toLowerCase()}): see Settings → Files.`};
+    return {text: `${plural(held.length, 'file')} changed here but can't be written (${FILE_STATE_LABEL[held[0].state].toLowerCase()}): see Files.`};
   }
   return {text: source.note.files.length === 1 ? `${filesLabel(source)} is up to date.` : 'All files are up to date.'};
 }
@@ -328,6 +421,20 @@ function WriteQuestion({source}: {source: LinkedFiles}): React.JSX.Element | nul
       <PillButton size="small" label={no} disabled={source.busy} onPress={() => source.answer(false)} />
     </View>
   );
+}
+
+/** The Files tab's button: write the files that changed here, else Close. */
+function filesPrimary(source: LinkedFiles, onClose: () => void): FramePrimary {
+  if (source.toWrite.length > 0 || source.indexStale) {
+    return {
+      label: updateLabel(source.toWrite),
+      onPress: source.write,
+      disabled: source.finding || !!source.confirm,
+      busy: source.busy,
+      busyLabel: 'Writing the files…',
+    };
+  }
+  return {label: 'Close', onPress: onClose, busy: source.busy, busyLabel: 'Writing the files…'};
 }
 
 /**

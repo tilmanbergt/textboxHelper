@@ -58,7 +58,7 @@ Blank lines: paragraphs are separated by an empty line.
 Every line: each non-empty line becomes its own paragraph.
 
 ## Headings
-With "Recognize #, ##, ###", a line starting with "# ", "## " or "### " becomes a heading in its own size (Manuscript → Settings → Layout). Example:
+With "Recognize #, ##, ###", a line starting with "# ", "## " or "### " becomes a heading in its own size (Layout ›, the Manuscript card's Settings → Layout). Example:
 # My Topic
 This is the first paragraph.
 ## A section
@@ -70,16 +70,16 @@ In the Paragraph boxes layout, "Link to file" places one textbox per heading, pa
 On a note with linked files, Import adds the file: always linked, on a new page after the last one, with its title. Everything below a file's title up to the next title belongs to that file.
 
 ## Whole folder
-"Whole folder" binds the chosen file's folder to the note: under "Files and order" choose its files and whether the folder is ordered. An ordered folder keeps the note's order of the files in its index.txt (index.md in Obsidian, a list of [[links]] the plugin writes); a folder with an index.txt is ordered by it. New files of the folder are added later from Manuscript → Settings → Files. A note is bound to one folder; it can't get files from elsewhere.
+"Whole folder" binds the chosen file's folder to the note: under "Files and order" choose its files and whether the folder is ordered. An ordered folder keeps the note's order of the files in its index.txt (index.md in Obsidian, a list of [[links]] the plugin writes); a folder with an index.txt is ordered by it. New files of the folder are added later from Manuscript → Files. A note is bound to one folder; it can't get files from elsewhere.
 
 ## Where it goes
-Into the current page when its writing area is empty, otherwise onto new pages after it. The preview shows the first pages to scale. Font sizes, margins and which headings start a new page are set in Manuscript → Settings → Layout; the default margins leave room for handwriting on the right and at the bottom.`;
+Into the current page when its writing area is empty, otherwise onto new pages after it. The preview shows the first pages to scale. Font sizes, margins and which headings start a new page are set under Layout › (Settings → Layout); the default margins leave room for handwriting on the right and at the bottom.`;
 
 export const EXPORT_HELP = `## What is exported
 The text of the note's textboxes, in reading order, as a Word file (DOCX) in the Supernote's EXPORT folder. The note doesn't change.
 
 ## Headings, paragraphs, comments
-Each textbox gets a class from its font size and style: heading, paragraph, comment or meta. Headings and paragraphs are always exported, comments only with "Include comments", meta never. Textboxes in a Supernote title area count as headings. The rules are set in Manuscript → Settings → Export.
+Each textbox gets a class from its font size and style: heading, paragraph, comment or meta. Headings and paragraphs are always exported, comments only with "Include comments", meta never. Textboxes in a Supernote title area count as headings. The rules are under Classification rules › (Settings → Export).
 
 ## Pages
 This page, the whole note, or a page range. The list on the right updates by itself after every change.`;

@@ -3,7 +3,7 @@
  * dividers and tags point to and how each stands, read in the background once the current page is
  * shown; "Also update changed files" (on every time the card opens, not remembered); the write
  * after an Apply or from "Update"; the question before protected blocks leave their files; and
- * what Settings → Files offers per file (Save as copy, Save to EXPORT, Check write access, Unlink) and for
+ * what the Files tab offers per file (Save as copy, Save to EXPORT, Check write access, Unlink) and for
  * the note (Restore titles).
  */
 import {useCallback, useEffect, useRef, useState} from 'react';
@@ -155,7 +155,7 @@ export function useLinkedFiles(info: NoteInfo | null, ready: boolean): LinkedFil
           const message = userMessage(error, failure);
           setStatus({
             kind: 'error',
-            text: message.startsWith("Can't write") ? `${message} Settings → Files → Save to EXPORT.` : message,
+            text: message.startsWith("Can't write") ? `${message} Files → Save to EXPORT.` : message,
           });
         })
         .finally(() => setBusy(false));

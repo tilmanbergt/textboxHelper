@@ -1,5 +1,5 @@
 /**
- * Settings → Files (technical-design-linked-files.md §3.3): the note's linked files, a few rows at a
+ * The Files tab's linked files (technical-design-linked-files.md §3.3): the note's linked files, a few rows at a
  * time (no scrolling), each with its state; the chosen file's own part below (where it is, when
  * it was imported and written, its block counts and warnings, Save as copy, Save to EXPORT, Check
  * write access, Unlink); and in folder mode the folder (ordered or
@@ -7,14 +7,14 @@
  */
 import React, {useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
-import type {LinkedFile} from '../../actions/linkedFiles';
-import {FILE_STATE_GLYPH, FILE_STATE_LABEL} from '../../domain/fileState';
-import {plural} from '../../domain/plural';
-import {sourceFileName, sourceFolder} from '../../domain/sourceRecord';
-import PillButton from '../../ui/PillButton';
-import Segmented from '../../ui/Segmented';
-import {COLORS, FONT, SPACING} from '../../ui/theme';
-import type {LinkedFiles} from './useLinkedFiles';
+import type {LinkedFile} from '../../../actions/linkedFiles';
+import {FILE_STATE_GLYPH, FILE_STATE_LABEL} from '../../../domain/fileState';
+import {plural} from '../../../domain/plural';
+import {sourceFileName, sourceFolder} from '../../../domain/sourceRecord';
+import PillButton from '../../../ui/PillButton';
+import Segmented from '../../../ui/Segmented';
+import {COLORS, FONT, SPACING} from '../../../ui/theme';
+import type {LinkedFiles} from '../useLinkedFiles';
 
 const ROWS = 4;
 

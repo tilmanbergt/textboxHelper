@@ -278,7 +278,7 @@ async function importTarget(request: ImportRequest, notePath: string): Promise<I
   }
   if (links.mode === 'folder' && !request.addPaths) {
     throw new Error(
-      `This note is bound to the folder ${folderName(links.folder?.path ?? '')}: add its new files from Manuscript → Settings → Files.`,
+      `This note is bound to the folder ${folderName(links.folder?.path ?? '')}: add its new files from Manuscript → Files.`,
     );
   }
   const {pageCount} = await readNoteInfo();
@@ -410,7 +410,7 @@ export async function performTextboxImport(
 }
 
 /**
- * Adds files to a note with linked files, after its last page (Manuscript → Settings → Files: a folder's new
+ * Adds files to a note with linked files, after its last page (Manuscript → Files: a folder's new
  * files, or files left out before). Returns the result with the new files' source ids.
  */
 export async function addLinkedFiles(

@@ -146,7 +146,7 @@ export const REVIEW_HELP: HelpBlock[] = [
   },
   {
     title: 'Linked text files',
-    text: 'A note imported with "Link to file" names its file (or "3 files") in the header; each file starts with its name as a title. Apply also updates the files that changed ("Also update …", untick it for one Apply). With no marks waiting but the note changed - typed in a textbox, joined, moved - the button is "Update …". A file changed outside since the last write is not overwritten: Settings → Files → Save as copy. Deleting a framed "kept as is" block asks before it leaves the file.',
+    text: 'A note imported with "Link to file" names its file (or "3 files") in the header; each file starts with its name as a title. Apply also updates the files that changed ("Also update …", untick it for one Apply). With no marks waiting but the note changed - typed in a textbox, joined, moved - the button is "Update …". A file changed outside since the last write is not overwritten: Files → Save as copy. Deleting a framed "kept as is" block asks before it leaves the file.',
   },
   {
     title: 'Wrong words picked?',

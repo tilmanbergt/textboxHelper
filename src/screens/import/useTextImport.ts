@@ -54,7 +54,7 @@ export type FolderSetup = {
 
 const NO_SETUP: FolderSetup = {skipped: [], ordered: false, orderBy: 'name'};
 
-export function useTextImport(): TextImport {
+export function useTextImport(initialWholeFolder = false): TextImport {
   const [settings, setSettings] = useState<TextboxImportSettings>(() => getSettings().import);
   const [preview, setPreview] = useState<TextboxImportPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -63,7 +63,7 @@ export function useTextImport(): TextImport {
   const [imported, setImported] = useState(false);
   const [status, setStatus] = useState<FrameStatus | null>(null);
   const runRef = useRef(0);
-  const [wholeFolder, setWholeFolder] = useState(false);
+  const [wholeFolder, setWholeFolder] = useState(initialWholeFolder);
   const [folder, setFolder] = useState<ImportFolder | null>(null);
   const [setup, setSetup] = useState<FolderSetup>(NO_SETUP);
 

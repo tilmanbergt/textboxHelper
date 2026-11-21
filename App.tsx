@@ -24,20 +24,13 @@ import {
 import {loadSettings} from './src/storage/settingsFile';
 import {ensurePermissions} from './src/supernote/permissions';
 import {PLUGIN_BUTTON_EVENT, checkPendingButton} from './src/supernote/pluginRouting';
-import {
-  BUTTON_ID_EXPORT_DOCX,
-  BUTTON_ID_IMPORT_TEXT_FILE,
-  BUTTON_ID_NOTE_MANUSCRIPT,
-  BUTTON_ID_TEXTBOX_TOOLS,
-} from './src/domain/buttonIds';
-import ExportScreen from './src/screens/export/ExportScreen';
-import ImportScreen from './src/screens/import/ImportScreen';
+import {BUTTON_ID_NOTE_MANUSCRIPT, BUTTON_ID_TEXTBOX_TOOLS} from './src/domain/buttonIds';
 import ManuscriptScreen from './src/screens/manuscript/ManuscriptScreen';
 import PenEditOutcomeScreen from './src/screens/penEdit/PenEditOutcomeScreen';
 import TextboxToolsScreen from './src/screens/tools/TextboxToolsScreen';
 import ScreenFrame from './src/ui/ScreenFrame';
 
-type Screen = 'routing' | 'permission' | 'tools' | 'manuscript' | 'import' | 'export';
+type Screen = 'routing' | 'permission' | 'tools' | 'manuscript';
 
 function App(): React.JSX.Element | null {
   const [screen, setScreen] = useState<Screen>('routing');
@@ -86,14 +79,6 @@ function App(): React.JSX.Element | null {
     }
     if (buttonId === BUTTON_ID_NOTE_MANUSCRIPT) {
       setScreen('manuscript');
-      return;
-    }
-    if (buttonId === BUTTON_ID_IMPORT_TEXT_FILE) {
-      setScreen('import');
-      return;
-    }
-    if (buttonId === BUTTON_ID_EXPORT_DOCX) {
-      setScreen('export');
     }
   };
 
@@ -156,10 +141,6 @@ function App(): React.JSX.Element | null {
       return <TextboxToolsScreen key={launchKey} onClose={closePluginView} />;
     case 'manuscript':
       return <ManuscriptScreen key={launchKey} focusPenEditId={focusPenEditId} onClose={closePluginView} />;
-    case 'import':
-      return <ImportScreen key={launchKey} onClose={closePluginView} />;
-    case 'export':
-      return <ExportScreen key={launchKey} onClose={closePluginView} />;
   }
 }
 

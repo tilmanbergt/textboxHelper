@@ -1,14 +1,16 @@
 /**
- * Export DOCX (technical-design-calmer-screens.md §3.8, canvas "Export DOCX"). Left: which pages
+ * Export DOCX (technical-design-calmer-screens.md §3.8, canvas "Export DOCX"), opened from the
+ * Manuscript card's Files tab (technical-design-settings-layout-files.md §4). Left: which pages
  * and options. Right: the textboxes that will be exported, paged, updated by itself after every
- * change. The classification rules are set in the Manuscript card's Settings → Export.
+ * change. The classification rules are set in the card's Settings → Export.
  */
 import React from 'react';
-import {StyleSheet, Text, View} from 'react-native';
+import {Pressable, StyleSheet, Text, View} from 'react-native';
 import type {ExportScope, ScannedTextBox} from '../../domain/exportClassification';
 import {noteNameOf} from '../../domain/exportRulesCheck';
 import {EXPORT_HELP} from '../../domain/helpTexts';
 import Checkbox from '../../ui/Checkbox';
+import {GLYPH} from '../../ui/glyphs';
 import NumberField from '../../ui/NumberField';
 import PagedSection from '../../ui/PagedSection';
 import ScreenFrame from '../../ui/ScreenFrame';
@@ -28,9 +30,12 @@ const ROLE_LABELS: Record<ScannedTextBox['role'], string> = {
 
 interface Props {
   onClose: () => void;
+  onBack: () => void;
+  /** Opens Settings → Export. */
+  onOpenRules: () => void;
 }
 
-export default function ExportScreen({onClose}: Props): React.JSX.Element {
+export default function ExportScreen({onClose, onBack, onOpenRules}: Props): React.JSX.Element {
   const flow = useExportScan();
   const {note, scan} = flow;
 
@@ -51,6 +56,7 @@ export default function ExportScreen({onClose}: Props): React.JSX.Element {
   return (
     <ScreenFrame
       title="Export DOCX"
+      back={{label: 'Manuscript', onPress: onBack}}
       context={context}
       help={{title: 'Export DOCX', text: EXPORT_HELP}}
       onClose={onClose}
@@ -97,12 +103,13 @@ export default function ExportScreen({onClose}: Props): React.JSX.Element {
           <Text style={styles.label}>Options</Text>
           <Checkbox label="Include comments" checked={flow.includeComments} onChange={flow.setIncludeComments} />
 
-          <View style={styles.link}>
+          <Pressable accessibilityRole="button" onPress={onOpenRules} style={styles.link}>
             <View style={styles.linkText}>
               <Text style={styles.linkTitle}>Classification rules</Text>
-              <Text style={styles.hint}>what counts as heading, paragraph, comment: Manuscript → Settings → Export</Text>
+              <Text style={styles.hint}>what counts as heading, paragraph, comment</Text>
             </View>
-          </View>
+            <Text style={styles.linkTitle}>{GLYPH.next}</Text>
+          </Pressable>
         </View>
 
         <View style={styles.right}>
