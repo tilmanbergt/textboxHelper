@@ -56,7 +56,7 @@ check fail if the SDK types drift away from them.
 `App.tsx` owns permissions and button routing; it opens one screen per button, keyed by the press,
 so a screen opened again starts fresh. The button listener subscribes once and calls the latest
 router through a ref. Screens are built on `ui/ScreenFrame.tsx` and own their state in a hook next
-to them: `screens/manuscript/` (the Manuscript card: `ReviewTab` with its page strip and side bar `ChangeSide`, `OutlineTab`, and Details; the page states are `domain/manuscriptPages.ts`, the outline `domain/outlineModel.ts` with statuses in `storage/blockStatusStore.ts` and block tags `domain/blockTag.ts`; planned moves, set-asides and deletes are `domain/outlinePlan.ts`, their new places `domain/outlineLayout.ts`, and `actions/outlineApply.ts` checks and writes them; what was read is kept in memory by `actions/manuscriptCache.ts` with a page fingerprint, `domain/pageFingerprint.ts`, and checked again in the background by `usePageChecks.ts`; timings are `utils/perf.ts`, saved by `actions/timingsExport.ts`), `screens/tools/` (the lasso screen,
+to them: `screens/manuscript/` (the Manuscript card: `ReviewTab` with its page strip and side bar `ChangeSide`, the Outline in `outline/`, and Details; the page states are `domain/manuscriptPages.ts`; the outline is `domain/outlineModel.ts` (what a block is: a file's divider, a heading by its `#`s — `domain/headingText.ts` — or a paragraph; statuses in `storage/blockStatusStore.ts`, block tags `domain/blockTag.ts`), what its panes show `domain/outlineContents.ts` (the Contents, each entry's own paragraphs, the filter, the moves offered), planned moves, levels, set-asides and deletes `domain/outlinePlan.ts`, their new places `domain/outlineLayout.ts`, and `actions/outlineApply.ts` checks and writes them; the tab (`outline/OutlineTab.tsx`) renders `outline/useOutline.ts` (data and plan) through `outline/useOutlineView.ts` (filter, open entry, panel subject, Move to) in `ContentsColumn`, `ParagraphList` and `DetailsPanel`, with the shared light controls `ui/TextChoices.tsx`, `ui/ActionBar.tsx`, `ui/TextLink.tsx` and the symbols in `ui/glyphs.ts`; what was read is kept in memory by `actions/manuscriptCache.ts` with a page fingerprint, `domain/pageFingerprint.ts`, and checked again in the background by `usePageChecks.ts`; timings are `utils/perf.ts`, saved by `actions/timingsExport.ts`), `screens/tools/` (the lasso screen,
 its Details with "Log All Textboxes"),
 `screens/import/` (Import with its Layout sub-screen and the page drawing), `screens/export/`
 (Export with its Rules sub-screen). Every sub-screen (Details, Layout, Rules) is local state of its
@@ -141,9 +141,10 @@ every file the textboxes from its divider to the next (a note linked before divi
 its old reading by pages); `sourceExport.ts` regenerates each file from its segment. A note's
 files and mode are kept in `sources/note-<key>.json` (`domain/noteLinks.ts`); a note that has
 linked files gets more only linked and after its last page ("Add a file to this note").
-`actions/fileTitles.ts` `syncFileTitles` puts the titles right on given pages
-(`domain/fileTitles.ts` plans it; `supernote/noteTitles.ts` writes them) after an import, an
-Outline apply and on Restore titles. Manuscript reads the note's files with their states
+`actions/titleSync.ts` `syncTitles` puts our NOTE titles right on given pages — over every
+divider and every heading of the levels set in Details → Outline (`domain/noteTitlesPlan.ts` plans
+it, tag `k:'t'` with the file or the level; `supernote/noteTitles.ts` writes them) — after an
+import, an Outline apply and on Restore titles; titles the user made are never touched. Manuscript reads the note's files with their states
 (`actions/linkedFiles.ts`, `domain/fileState.ts`: in sync, changed here, changed in Obsidian, …,
 through the Outline's scan and cache) in the background (`screens/manuscript/useLinkedFiles.ts`)
 and writes every file that changed here after an Apply ("Also update") or from "Update": a fresh
@@ -160,8 +161,14 @@ left out, `index.txt` in sync / to be written / changed in Obsidian) and writes 
 plain `[[name]]` list in the note's order, after the files on Update. New files are added from
 Details after the last page (`textImport.ts` `addLinkedFiles`, linking in
 `actions/importLinking.ts`). In the Outline a file's divider is a block of its own kind: it moves
-with its whole file (`outlinePlan.ts` `sectionOf` ranks dividers above headings) and is never set
-aside or deleted alone.
+with its whole file (`outlinePlan.ts` `sectionOf` ranks a divider above `#`, `##`, `###`) and is
+never set aside or deleted alone.
+
+**Headings keep their `#`s.** On the page the text decides a heading's level: the import writes
+`## Methods` into the textbox, the write-back writes an edited block's text as it is, and the DOCX
+export takes Heading 1–3 from the `#`s (`domain/headingText.ts`). Records made before keep a
+heading's level when its textbox has no `#`s (`sourceExport.ts`, legacy branch; the Outline reads
+it through `buildOutline`'s `recordLevel`).
 
 ### DOCX export (`actions/textboxScan.ts`, `storage/docxExport.ts`)
 
