@@ -1,6 +1,7 @@
 import RNFS from 'react-native-fs';
 import {PluginManager} from 'sn-plugin-lib';
 import {buildBlockStatusPath} from '../domain/backupPaths';
+import {writeTextAtomic} from './jsonFile';
 import {
   parseBlockStatuses,
   serializeBlockStatuses,
@@ -10,7 +11,7 @@ import {
 /**
  * The Outline's block statuses in `<plugin folder>/block-status.json` (technical-design-manuscript.md
  * §5.2): block id → open, review or final. Kept in the plugin only; a missing or unreadable file
- * means every block is open. Written through a temporary file.
+ * means every block is open. Written through a temporary file (`jsonFile.ts`).
  */
 
 async function statusPath(): Promise<string> {
@@ -34,11 +35,6 @@ export async function readBlockStatuses(): Promise<Record<string, BlockStatus>> 
 export async function writeBlockStatus(id: string, status: BlockStatus): Promise<Record<string, BlockStatus>> {
   const path = await statusPath();
   const statuses = {...(await readBlockStatuses()), [id]: status};
-  const temporary = `${path}.tmp`;
-  await RNFS.writeFile(temporary, serializeBlockStatuses(statuses), 'utf8');
-  if (await RNFS.exists(path)) {
-    await RNFS.unlink(path);
-  }
-  await RNFS.moveFile(temporary, path);
+  await writeTextAtomic(path, serializeBlockStatuses(statuses));
   return statuses;
 }

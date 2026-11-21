@@ -132,13 +132,25 @@ the original text. Every block becomes one textbox (protected ones a framed plac
 block tag (`domain/blockTag.ts`: source, block, piece, placeholder). The file's record - path,
 original text, blocks - is written first to `<plugin folder>/sources/<id>.json`
 (`storage/sourceStore.ts`). `domain/sourceExport.ts` regenerates the file from the note's
-textboxes and the original. Manuscript finds the linked file by the tags on the note
-(`actions/sourceLink.ts`, through the Outline's scan and cache), compares the note with it in the
-background (`screens/manuscript/useSourceLink.ts`) and writes it after an Apply ("Also update")
-or from "Update <file>": a fresh scan, the question about deleted protected blocks, the check that
-the file didn't change outside (fingerprint in the record), then `storage/sourceFile.ts` writes
-through the host's copy or directly and reads it back. A block the Outline sets aside gets `a` in
-its tag and is left out of the file.
+textboxes and the original.
+
+**Linked files** (`technical-design-linked-files.md`): a note can hold several linked files. Each
+starts with a divider - a textbox with the file's name (tag `k: 'f'`) under a NOTE title of ours
+(tag `k: 't'`), so the files show in the note's table of contents. `domain/fileSegments.ts` gives
+every file the textboxes from its divider to the next (a note linked before dividers existed keeps
+its old reading by pages); `sourceExport.ts` regenerates each file from its segment. A note's
+files and mode are kept in `sources/note-<key>.json` (`domain/noteLinks.ts`); a note that has
+linked files gets more only linked and after its last page ("Add a file to this note").
+`actions/fileTitles.ts` `syncFileTitles` puts the titles right on given pages
+(`domain/fileTitles.ts` plans it; `supernote/noteTitles.ts` writes them) after an import, an
+Outline apply and on Restore titles. Manuscript reads the note's files with their states
+(`actions/linkedFiles.ts`, `domain/fileState.ts`: in sync, changed here, changed in Obsidian, …,
+through the Outline's scan and cache) in the background (`screens/manuscript/useLinkedFiles.ts`)
+and writes every file that changed here after an Apply ("Also update") or from "Update": a fresh
+scan, one question about deleted protected blocks for all files, the check that a file didn't
+change outside (fingerprint in its record), then `storage/sourceFile.ts` writes through the
+host's copy or directly and reads it back. A file that can't be written is named; the others are
+written. A block the Outline sets aside gets `a` in its tag and is left out of the file.
 
 ### DOCX export (`actions/textboxScan.ts`, `storage/docxExport.ts`)
 

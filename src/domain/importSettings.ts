@@ -43,6 +43,11 @@ export type TextboxImportSettings = {
    * (technical-design-source-link.md §3).
    */
   linkToFile: boolean;
+  /**
+   * The NOTE title style over a linked file's name (technical-design-linked-files.md §1.5):
+   * 1 black, 2 light grey, 3 dark grey, 4 shadow.
+   */
+  fileTitleStyle: number;
   fontSize: number;
   structure: TextboxImportStructureSettings;
   marginLeft: number;
@@ -55,6 +60,7 @@ export type TextboxImportSettings = {
 export const DEFAULT_TEXTBOX_IMPORT_SETTINGS: TextboxImportSettings = {
   filePath: '',
   linkToFile: true,
+  fileTitleStyle: 1,
   fontSize: 36,
   structure: {
     layoutMode: 'continuous',

@@ -3,10 +3,14 @@
  * textbox's `userData`. It gives a textbox an identity that survives page reads, renumbering and
  * saves (uuids and numbers don't, host facts §3). The Outline uses `id` for a block's status; the
  * source link (technical-design-source-link.md) adds `s` (source), `i` (source block) and `p`
- * (piece). Pure.
+ * (piece); linked files (technical-design-linked-files.md) add the file divider and its title.
+ * Pure.
  */
 
 const PREFIX = 'tbt:b:';
+
+export type BlockKind = 'x' | 'f' | 't';
+const KINDS: BlockKind[] = ['x', 'f', 't'];
 
 export type BlockTag = {
   v: 1;
@@ -17,8 +21,12 @@ export type BlockTag = {
   i?: number;
   /** Piece of a block cut by the import. */
   p?: number;
-  /** "x": the placeholder of a protected block (technical-design-source-link.md §2.5). */
-  k?: 'x';
+  /**
+   * "x": the placeholder of a protected block (technical-design-source-link.md §2.5).
+   * "f": a file divider, the textbox with a linked file's name that starts its part of the note.
+   * "t": the NOTE title element over a file divider (technical-design-linked-files.md §1).
+   */
+  k?: BlockKind;
   /** 1: set aside by the Outline; a linked file leaves it out (technical-design-source-link.md §2.4). */
   a?: 1;
 };
@@ -47,8 +55,8 @@ export function parseBlockTag(userData: unknown): BlockTag | null {
     if (Number.isInteger(value.p)) {
       tag.p = value.p as number;
     }
-    if (value.k === 'x') {
-      tag.k = 'x';
+    if (KINDS.includes(value.k as BlockKind)) {
+      tag.k = value.k as BlockKind;
     }
     if (value.a === 1) {
       tag.a = 1;
@@ -82,4 +90,14 @@ export function withAside(userData: string | null, aside: boolean): string | nul
     delete next.a;
   }
   return formatBlockTag(next);
+}
+
+/** The tag of a linked file's divider textbox. */
+export function dividerTag(sourceId: string, now: Date): BlockTag {
+  return {v: 1, id: newBlockId(now), s: sourceId, k: 'f'};
+}
+
+/** The tag of the NOTE title element over a linked file's divider. */
+export function titleTag(sourceId: string, now: Date): BlockTag {
+  return {v: 1, id: newBlockId(now), s: sourceId, k: 't'};
 }

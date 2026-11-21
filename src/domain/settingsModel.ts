@@ -96,6 +96,7 @@ function parseImport(value: unknown): TextboxImportSettings {
   return {
     filePath,
     linkToFile: bool(raw.linkToFile, d.linkToFile),
+    fileTitleStyle: [1, 2, 3, 4].includes(raw.fileTitleStyle as number) ? (raw.fileTitleStyle as number) : d.fileTitleStyle,
     fontSize: num(raw.fontSize, d.fontSize, MIN_FONT_SIZE, MAX_FONT_SIZE),
     structure: {
       layoutMode: oneOf(structure.layoutMode, ['continuous', 'paragraphTextboxes'] as const, d.structure.layoutMode),

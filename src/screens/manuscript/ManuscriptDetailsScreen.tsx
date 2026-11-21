@@ -1,20 +1,20 @@
 /**
- * Details of the Manuscript card: the linked text file (technical-design-source-link.md §4), the
+ * Details of the Manuscript card: the linked text files (technical-design-linked-files.md §3.3), the
  * calibration of the text measurement, Save Diagnostics and the timings (Speed). Shares the
  * review's state, so a calibration change re-reads the page the review shows when going back.
  */
-import React, {useEffect, useState} from 'react';
+import React, {useEffect} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import PillButton from '../../ui/PillButton';
 import ScreenFrame from '../../ui/ScreenFrame';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
-import {sourceFileName, sourceFolder} from '../../domain/sourceRecord';
 import type {ManuscriptReview} from './useManuscriptReview';
-import type {SourceLink} from './useSourceLink';
+import FilesSection from './FilesSection';
+import type {LinkedFiles} from './useLinkedFiles';
 
 interface Props {
   review: ManuscriptReview;
-  source: SourceLink;
+  source: LinkedFiles;
   onBack: () => void;
   onClose: () => void;
 }
@@ -36,7 +36,7 @@ export default function ManuscriptDetailsScreen({review, source, onBack, onClose
       primary={{label: 'Done', onPress: onBack}}
       screenKey="details">
       <View style={styles.body}>
-        {source.linked && <SourceSection source={source} />}
+        <FilesSection source={source} />
 
         <Section title="Calibration">
           <Text style={styles.hint}>
@@ -88,87 +88,6 @@ export default function ManuscriptDetailsScreen({review, source, onBack, onClose
         </Section>
       </View>
     </ScreenFrame>
-  );
-}
-
-/** "2026-11-20 17:04" in the device's time. */
-function shortTime(iso: string | null): string {
-  if (!iso) {
-    return '';
-  }
-  const date = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function SourceSection({source}: {source: SourceLink}): React.JSX.Element | null {
-  const [confirmUnlink, setConfirmUnlink] = useState(false);
-  const linked = source.linked;
-  if (!linked) {
-    return null;
-  }
-  const {record, diff, regeneration} = linked;
-  const folder = sourceFolder(record.filePath).replace(/^\/storage\/emulated\/0\//, '');
-  const counts = regeneration.counts;
-  const state = diff.differs
-    ? `The note differs from the file: ${diff.changedBlocks} changed ${diff.changedBlocks === 1 ? 'block' : 'blocks'}.`
-    : 'The file matches the note.';
-  const blocks = [
-    `${counts.unchanged} unchanged`,
-    counts.edited ? `${counts.edited} edited` : null,
-    counts.added ? `${counts.added} new` : null,
-    counts.missing ? `${counts.missing} missing` : null,
-    counts.protectedKept ? `${counts.protectedKept} kept as is` : null,
-    counts.protectedRemoved ? `${counts.protectedRemoved} removed` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  const warnings = source.warnings.slice(0, 3);
-  return (
-    <Section title="Source file">
-      <Text style={styles.line}>
-        {sourceFileName(record)} <Text style={styles.hint}>in {folder || 'storage'}</Text>
-      </Text>
-      <Text style={styles.hint}>
-        Imported {shortTime(record.importedAt)}
-        {record.lastWrittenAt ? ` · last written ${shortTime(record.lastWrittenAt)}` : ' · not written yet'}
-        {linked.sourceCount > 1 ? ` · ${linked.sourceCount} linked files on this note, this one has the most textboxes` : ''}
-      </Text>
-      <Text style={styles.hint}>
-        {state} {blocks}.
-      </Text>
-      {warnings.map(warning => (
-        <Text key={warning} style={styles.hint} numberOfLines={1}>
-          ⚠ {warning}
-        </Text>
-      ))}
-      {source.warnings.length > warnings.length && (
-        <Text style={styles.hint}>+{source.warnings.length - warnings.length} more warnings</Text>
-      )}
-      {source.access && <Text style={styles.hint}>{source.access}</Text>}
-      {confirmUnlink ? (
-        <View style={styles.buttons}>
-          <Text style={styles.hint}>Unlink? The note and the file stay as they are.</Text>
-          <PillButton
-            size="small"
-            label="Unlink"
-            disabled={source.busy}
-            onPress={() => {
-              setConfirmUnlink(false);
-              source.unlink();
-            }}
-          />
-          <PillButton size="small" label="Cancel" onPress={() => setConfirmUnlink(false)} />
-        </View>
-      ) : (
-        <View style={styles.buttons}>
-          <PillButton size="small" label="Save as copy" disabled={source.busy} onPress={() => source.write('copy')} />
-          <PillButton size="small" label="Save to EXPORT" disabled={source.busy} onPress={() => source.write('export')} />
-          <PillButton size="small" label="Check write access" disabled={source.busy} onPress={source.checkAccess} />
-          <PillButton size="small" label="Unlink" disabled={source.busy} onPress={() => setConfirmUnlink(true)} />
-        </View>
-      )}
-    </Section>
   );
 }
 
@@ -229,10 +148,6 @@ const styles = StyleSheet.create({
     fontSize: FONT.small,
     color: COLORS.muted,
     lineHeight: 21,
-  },
-  line: {
-    fontSize: FONT.medium,
-    color: COLORS.text,
   },
   buttons: {
     flexDirection: 'row',

@@ -62,14 +62,17 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
 
   const setStructure = (next: Partial<TextboxImportSettings['structure']>) =>
     flow.change({...settings, structure: {...settings.structure, ...next}});
-  const linked = isLinkedImport(settings);
+  const adding = preview?.addingTo ?? null;
+  const linked = isLinkedImport(settings) || !!adding;
   const headings = linked || settings.structure.detectMarkdownHeadings;
   const filePath = settings.filePath;
   const fileName = filePath ? filePath.split('/').slice(-1)[0] : '';
   const folder = filePath ? filePath.slice(0, filePath.lastIndexOf('/')).replace(/^\/storage\/emulated\/0\//, '') : '';
 
   const context = preview
-    ? preview.effectiveInsertMode === 'currentPage'
+    ? adding
+      ? `after page ${adding.afterPage + 1}, the end of the note`
+      : preview.effectiveInsertMode === 'currentPage'
       ? `into page ${preview.currentPage + 1}`
       : `on new pages after page ${preview.currentPage + 1}`
     : undefined;
@@ -77,7 +80,7 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
   const primary = imported
     ? {label: 'Close', onPress: onClose}
     : {
-        label: 'Import',
+        label: adding ? 'Add' : 'Import',
         onPress: flow.runImport,
         disabled: !preview || flow.previewing,
         busy,
@@ -90,7 +93,7 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
 
   return (
     <ScreenFrame
-      title="Import text file"
+      title={adding ? 'Add a file to this note' : 'Import text file'}
       context={context}
       help={{title: 'Import text file', text: IMPORT_HELP}}
       onClose={onClose}
@@ -110,17 +113,26 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
             {filePath ? `${folder || 'Storage'}/` : '.txt files from any folder'}
           </Text>
 
-          <Text style={styles.label}>Layout</Text>
-          <Segmented
-            options={[
-              {key: 'continuous', label: 'Continuous text'},
-              {key: 'paragraphTextboxes', label: 'Paragraph boxes'},
-            ]}
-            value={settings.structure.layoutMode}
-            onChange={layoutMode => setStructure({layoutMode})}
-          />
+          {adding ? (
+            <Text style={styles.path}>
+              This note has {plural(adding.fileCount, 'linked file')}: the file is added linked, with its name as a
+              title, after the last page.
+            </Text>
+          ) : (
+            <>
+              <Text style={styles.label}>Layout</Text>
+              <Segmented
+                options={[
+                  {key: 'continuous', label: 'Continuous text'},
+                  {key: 'paragraphTextboxes', label: 'Paragraph boxes'},
+                ]}
+                value={settings.structure.layoutMode}
+                onChange={layoutMode => setStructure({layoutMode})}
+              />
+            </>
+          )}
 
-          {settings.structure.layoutMode === 'paragraphTextboxes' && (
+          {!adding && settings.structure.layoutMode === 'paragraphTextboxes' && (
             <Checkbox
               label="Link to file (write changes back)"
               checked={settings.linkToFile}

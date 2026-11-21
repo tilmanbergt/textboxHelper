@@ -296,3 +296,28 @@ export function blockName(block: SourceBlock, words = 5): string {
   const all = block.text.replace(/\s+/g, ' ').trim().split(' ');
   return all.length > words ? `${all.slice(0, words).join(' ')}…` : all.join(' ');
 }
+
+/** The summaries of several files added up (the import overview of several files). */
+export function addSummaries(summaries: SourceSummary[]): SourceSummary {
+  const total: SourceSummary = {
+    blocks: 0,
+    headings: 0,
+    paragraphs: 0,
+    lists: 0,
+    protectedCount: 0,
+    protectedKinds: {},
+    frontmatter: false,
+  };
+  for (const summary of summaries) {
+    total.blocks += summary.blocks;
+    total.headings += summary.headings;
+    total.paragraphs += summary.paragraphs;
+    total.lists += summary.lists;
+    total.protectedCount += summary.protectedCount;
+    total.frontmatter = total.frontmatter || summary.frontmatter;
+    for (const [kind, n] of Object.entries(summary.protectedKinds) as [ProtectedKind, number][]) {
+      total.protectedKinds[kind] = (total.protectedKinds[kind] ?? 0) + n;
+    }
+  }
+  return total;
+}

@@ -107,3 +107,9 @@ export function parseSourceRecord(text: string): SourceRecord | null {
     return null;
   }
 }
+
+/** The text of a file's divider on the note: its name without the `.txt`. */
+export function dividerText(filePath: string): string {
+  const name = filePath.split('/').slice(-1)[0] || filePath;
+  return name.replace(/\.txt$/i, '');
+}

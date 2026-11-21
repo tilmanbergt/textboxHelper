@@ -25,6 +25,9 @@ export type PlannedTextboxChunk = {
   piece?: number;
   /** A protected block's placeholder: italic and framed. */
   placeholder?: boolean;
+  /** Linked import of several files: which file, and whether this is its divider. */
+  sourceFile?: number;
+  divider?: boolean;
   /** The block tag the textbox carries. */
   userData?: string;
 };

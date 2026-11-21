@@ -5,14 +5,16 @@
  * be rebuilt, and the Outline's button leads to the Review of that page. Details (the linked file,
  * calibration, diagnostics) is a sub-screen with the Review's state.
  *
- * A note imported linked to its text file (technical-design-source-link.md §4) names the file in
- * the header. Apply also updates the file ("Also update <file>", on every time the card opens);
- * with no edits waiting but the note differing from the file, the button is "Update <file>". A
- * protected block deleted on the page is asked about above the tabs before it leaves the file.
+ * A note with linked text files (technical-design-linked-files.md §3) names them in the header.
+ * Apply also updates the files that changed ("Also update …", on every time the card opens); with
+ * no edits waiting but files differing from the note, the button is "Update …". Protected blocks
+ * deleted on the page are asked about above the tabs before they leave their files.
  */
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {plural} from '../../domain/plural';
+import {filesHeldBack, type LinkedFile} from '../../actions/linkedFiles';
+import {FILE_STATE_LABEL} from '../../domain/fileState';
 import {blockName} from '../../domain/sourceBlocks';
 import {sourceFileName} from '../../domain/sourceRecord';
 import Checkbox from '../../ui/Checkbox';
@@ -26,7 +28,7 @@ import OutlineTab from './OutlineTab';
 import ReviewTab, {reviewContext} from './ReviewTab';
 import {useManuscriptReview} from './useManuscriptReview';
 import {useOutline, type Outline} from './useOutline';
-import {useSourceLink, type SourceLink} from './useSourceLink';
+import {useLinkedFiles, type LinkedFiles} from './useLinkedFiles';
 
 type Tab = 'review' | 'outline';
 
@@ -42,7 +44,7 @@ export default function ManuscriptScreen({
 }: Props): React.JSX.Element {
   const review = useManuscriptReview();
   const outline = useOutline(review.note, review.pages);
-  const source = useSourceLink(review.note, !review.loading);
+  const source = useLinkedFiles(review.note, !review.loading);
   const [view, setView] = useState<'card' | 'details'>('card');
   const [tab, setTab] = useState<Tab>('review');
   const [reviewBlocked, setReviewBlocked] = useState(false);
@@ -75,9 +77,9 @@ export default function ManuscriptScreen({
     if (review.applied) {
       clearOutline();
       const link = sourceAfterApply.current;
-      if (link.linked && link.alsoUpdate) {
-        link.write('file');
-      } else if (link.linked) {
+      if (link.note && link.alsoUpdate) {
+        link.write();
+      } else if (link.note) {
         link.refind();
       }
     }
@@ -109,20 +111,20 @@ export default function ManuscriptScreen({
     setShowPage(page);
     setTab('review');
   };
-  const fileName = source.linked ? sourceFileName(source.linked.record) : null;
-  const fileDiffers = !!source.linked?.diff.differs;
+  const files = filesLabel(source);
+  const toWrite = source.toWrite;
   const primary: FramePrimary =
     tab === 'outline'
       ? outlinePrimary(outline, onClose, reviewPage)
       : applied
-      ? {label: 'Close', onPress: onClose, busy: source.busy, busyLabel: `Writing ${fileName}…`}
-      : changes.readyCount === 0 && fileName && fileDiffers
+      ? {label: 'Close', onPress: onClose, busy: source.busy, busyLabel: 'Writing the files…'}
+      : changes.readyCount === 0 && toWrite.length > 0
       ? {
-          label: `Update ${fileName} · ${plural(source.linked?.diff.changedBlocks ?? 1, 'changed block')}`,
-          onPress: () => source.write('file'),
+          label: updateLabel(toWrite),
+          onPress: source.write,
           disabled: loading || source.finding || !!source.confirm,
           busy: source.busy,
-          busyLabel: `Writing ${fileName}…`,
+          busyLabel: 'Writing the files…',
         }
       : {
           label:
@@ -135,9 +137,9 @@ export default function ManuscriptScreen({
           busyLabel: 'Applying…',
         };
   const accessory =
-    tab === 'review' && !applied && fileName && changes.readyCount > 0 ? (
+    tab === 'review' && !applied && source.note && changes.readyCount > 0 ? (
       <Checkbox
-        label={`Also update ${fileName}`}
+        label={source.note.files.length === 1 ? `Also update ${files}` : 'Also update changed files'}
         checked={source.alsoUpdate}
         disabled={busy}
         onChange={source.setAlsoUpdate}
@@ -162,7 +164,7 @@ export default function ManuscriptScreen({
   return (
     <ScreenFrame
       title="Manuscript"
-      context={[reviewContext(review), fileName].filter(Boolean).join(' · ')}
+      context={[reviewContext(review), files].filter(Boolean).join(' · ')}
       actions={[{label: 'Details', onPress: () => setView('details')}]}
       help={{title: 'Edit marks', marks: true}}
       onClose={onClose}
@@ -170,7 +172,7 @@ export default function ManuscriptScreen({
       primary={primary}
       accessory={accessory}
       screenKey={`manuscript-${tab}`}>
-      {source.confirm && <ProtectedQuestion source={source} fileName={fileName ?? 'the file'} />}
+      {source.confirm && <ProtectedQuestion source={source} />}
       <View style={styles.tabs}>
         <CountTabs<Tab>
           tabs={[
@@ -202,13 +204,33 @@ export default function ManuscriptScreen({
   );
 }
 
+/** The header's name for the linked files: the file's name, or how many there are. */
+function filesLabel(source: LinkedFiles): string | null {
+  const files = source.note?.files ?? [];
+  if (files.length === 0) {
+    return null;
+  }
+  return files.length === 1 ? sourceFileName(files[0].record) : plural(files.length, 'file');
+}
+
+/** "Update Essay.txt · 3 changed blocks" or "Update 2 files". */
+function updateLabel(toWrite: LinkedFile[]): string {
+  if (toWrite.length > 1) {
+    return `Update ${plural(toWrite.length, 'file')}`;
+  }
+  const file = toWrite[0];
+  return file.state === 'new'
+    ? `Create ${sourceFileName(file.record)}`
+    : `Update ${sourceFileName(file.record)} · ${plural(file.diff.changedBlocks, 'changed block')}`;
+}
+
 /**
- * The Review's status line: the review's own (an apply, an error) with the file's after it, or the
- * file's alone; with nothing else to say, that the file is up to date.
+ * The Review's status line: the review's own (an apply, an error) with the files' after it, or the
+ * files' alone; with nothing else to say, whether the files are up to date.
  */
 function reviewStatus(
   own: FrameStatus | null,
-  source: SourceLink,
+  source: LinkedFiles,
   focusNote: string | null,
   readyCount: number,
   loading: boolean,
@@ -220,23 +242,29 @@ function reviewStatus(
     };
   }
   const shown = own ?? source.status ?? (focusNote ? {text: focusNote} : null);
-  if (shown || !source.linked || loading || readyCount > 0) {
+  if (shown || !source.note || loading || readyCount > 0 || source.toWrite.length > 0) {
     return shown;
   }
-  return source.linked.diff.differs ? null : {text: `${sourceFileName(source.linked.record)} is up to date.`};
+  const held = filesHeldBack(source.note);
+  if (held.length > 0) {
+    return {text: `${plural(held.length, 'file')} changed here but can't be written (${FILE_STATE_LABEL[held[0].state].toLowerCase()}): see Details.`};
+  }
+  return {text: source.note.files.length === 1 ? `${filesLabel(source)} is up to date.` : 'All files are up to date.'};
 }
 
-/** Protected blocks deleted on the page: remove them from the file too, or keep them. */
-function ProtectedQuestion({source, fileName}: {source: SourceLink; fileName: string}): React.JSX.Element {
-  const blocks = source.confirm ?? [];
-  const several = blocks.length > 1;
-  const names = blocks.map(block => blockName(block)).join(', ');
+/** Protected blocks deleted on the page: remove them from their files too, or keep them. */
+function ProtectedQuestion({source}: {source: LinkedFiles}): React.JSX.Element {
+  const pending = source.confirm ?? [];
+  const count = pending.reduce((sum, file) => sum + file.blocks.length, 0);
+  const several = count > 1;
+  const names = pending.flatMap(file => file.blocks.map(block => blockName(block))).join(', ');
+  const files = pending.map(file => file.fileName).join(', ');
   return (
     <View style={styles.question}>
       <Text style={styles.questionText}>
         {several
-          ? `${blocks.length} protected blocks were deleted on the page: ${names}. Remove them from ${fileName} too?`
-          : `${names} was deleted on the page. Remove it from ${fileName} too?`}
+          ? `${count} protected blocks were deleted on the page: ${names}. Remove them from ${files} too?`
+          : `${names} was deleted on the page. Remove it from ${files} too?`}
       </Text>
       <PillButton
         size="small"

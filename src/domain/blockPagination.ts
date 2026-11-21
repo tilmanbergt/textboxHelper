@@ -19,6 +19,9 @@ export type TextboxBlockPageChunk = {
   sourceIndex?: number;
   piece?: number;
   placeholder?: boolean;
+  /** Linked import of several files (technical-design-linked-files.md §2.2). */
+  sourceFile?: number;
+  divider?: boolean;
 };
 
 export type TextboxBlockPage = {
@@ -207,6 +210,8 @@ export async function paginateTextboxBlocksIntoPages(
         ? {sourceIndex: params.block.sourceIndex, piece: params.piece}
         : {}),
       ...(params.block.placeholder ? {placeholder: true} : {}),
+      ...(params.block.sourceFile !== undefined ? {sourceFile: params.block.sourceFile} : {}),
+      ...(params.block.divider ? {divider: true} : {}),
     });
 
     cursorTop = cursorTop + height + blockGap;

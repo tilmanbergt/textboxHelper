@@ -19,6 +19,10 @@ export type TextboxImportBlock = {
   sourceIndex?: number;
   /** Linked import: a protected block's placeholder, italic and framed. */
   placeholder?: boolean;
+  /** Linked import of several files: which of them (0, 1, …) the block belongs to. */
+  sourceFile?: number;
+  /** Linked import: the divider with the file's name that starts the file on the note. */
+  divider?: boolean;
 };
 
 export type TextboxImportBlockSummary = {
@@ -165,31 +169,52 @@ export function summarizeTextboxImportBlocks(
 /**
  * The blocks of a linked import (technical-design-source-link.md §3): one per block of the file,
  * headings always recognized (levels 4–6 take the `###` style), lists and paragraphs in the
- * paragraph style, protected blocks as their placeholder label in the paragraph size.
+ * paragraph style, protected blocks as their placeholder label in the paragraph size. With a
+ * `divider` name, a divider block in the `#` style comes first (technical-design-linked-files.md
+ * §1.2); `sourceFile` says which file of the import the blocks belong to.
  */
 export function sourceImportBlocks(
   blocks: SourceBlock[],
   structure: TextboxImportStructureSettings,
+  file?: {index: number; divider: string},
 ): TextboxImportBlock[] {
-  return blocks.map(block => {
-    if (block.role === 'heading') {
-      const level = Math.min(3, Math.max(1, block.level)) as 1 | 2 | 3;
-      const style = getHeadingStyle(structure, level);
+  const of = file ? {sourceFile: file.index} : {};
+  const divider: TextboxImportBlock[] = file
+    ? [
+        {
+          role: 'heading1',
+          text: file.divider,
+          fontSize: structure.heading1.fontSize,
+          bold: structure.heading1.bold,
+          divider: true,
+          ...of,
+        },
+      ]
+    : [];
+  return [
+    ...divider,
+    ...blocks.map((block): TextboxImportBlock => {
+      if (block.role === 'heading') {
+        const level = Math.min(3, Math.max(1, block.level)) as 1 | 2 | 3;
+        const style = getHeadingStyle(structure, level);
+        return {
+          role: `heading${level}` as TextboxImportBlockRole,
+          text: block.text,
+          fontSize: style.fontSize,
+          bold: style.bold,
+          sourceIndex: block.index,
+          ...of,
+        };
+      }
       return {
-        role: `heading${level}` as TextboxImportBlockRole,
+        role: 'paragraph',
         text: block.text,
-        fontSize: style.fontSize,
-        bold: style.bold,
+        fontSize: structure.paragraph.fontSize,
+        bold: block.role === 'protected' ? false : structure.paragraph.bold,
         sourceIndex: block.index,
+        placeholder: block.role === 'protected' || undefined,
+        ...of,
       };
-    }
-    return {
-      role: 'paragraph',
-      text: block.text,
-      fontSize: structure.paragraph.fontSize,
-      bold: block.role === 'protected' ? false : structure.paragraph.bold,
-      sourceIndex: block.index,
-      placeholder: block.role === 'protected' || undefined,
-    };
-  });
+    }),
+  ];
 }

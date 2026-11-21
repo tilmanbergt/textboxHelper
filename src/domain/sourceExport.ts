@@ -1,7 +1,8 @@
 /**
  * Regenerating a linked text file from the note (technical-design-source-link.md §2.4–§2.6). The
- * note is the truth: the file is rebuilt from the textboxes of the linked range in reading order
- * and the original text, every time it is written. Pure.
+ * note is the truth: the file is rebuilt from the textboxes of its segment in reading order
+ * (`fileSegments.ts`, technical-design-linked-files.md §1.2) and the original text, every time it
+ * is written. Pure.
  *
  * - A textbox tagged with a block of this source whose text is still the block's text writes the
  *   original span byte for byte; an edited one writes its new text (a heading with its `#`s).
@@ -14,6 +15,8 @@
  * - Between two blocks that were neighbours in the file and are both untouched, the original text
  *   between them is kept; elsewhere one blank line.
  * - A block the Outline set aside (`a` in its tag) is left out, and doesn't count as missing.
+ * - A textbox of another linked file moved into this file's segment is new text here (`movedIn`);
+ *   in its own file it is missing.
  */
 import type {BlockTag} from './blockTag';
 import {blockName, type SourceBlock} from './sourceBlocks';
@@ -34,6 +37,8 @@ export type SourceCounts = {
   protectedKept: number;
   protectedRemoved: number;
   setAside: number;
+  /** Textboxes of another linked file in this file's segment, written here as new text. */
+  movedIn: number;
 };
 
 export type SourceRegeneration = {
@@ -44,8 +49,8 @@ export type SourceRegeneration = {
   /** Protected blocks whose placeholder is gone and whose removal isn't confirmed yet. */
   pendingRemoval: SourceBlock[];
   warnings: string[];
-  /** The linked range (first and last page with a tag of this source); null when none is left. */
-  range: {first: number; last: number} | null;
+  /** Whether any textbox of this file is left in its segment. */
+  present: boolean;
   identical: boolean;
 };
 
@@ -72,12 +77,6 @@ export function normalizeForCompare(text: string): string {
 function ownTag(item: SourceItem, sourceId: string): BlockTag | null {
   const tag = item.tag;
   return tag && tag.s === sourceId && Number.isInteger(tag.i) && !tag.a ? tag : null;
-}
-
-/** The pages from the first to the last one holding a tag of this source. */
-export function linkedRange(items: SourceItem[], sourceId: string): {first: number; last: number} | null {
-  const pages = items.filter(item => ownTag(item, sourceId)).map(item => item.page);
-  return pages.length > 0 ? {first: Math.min(...pages), last: Math.max(...pages)} : null;
 }
 
 function serialize(block: SourceBlock, text: string): string {
@@ -110,9 +109,9 @@ function listWarning(block: SourceBlock, text: string): string | null {
   return nested ? `List "${blockName(block)}" changed: check its indentation.` : null;
 }
 
+/** Rebuilds the file from `items`, the textboxes of its segment in reading order. */
 export function regenerateSource(record: RecordPart, items: SourceItem[]): SourceRegeneration {
   const {blocks, original, sourceId} = record;
-  const range = linkedRange(items, sourceId);
   const counts: SourceCounts = {
     unchanged: 0,
     edited: 0,
@@ -121,6 +120,7 @@ export function regenerateSource(record: RecordPart, items: SourceItem[]): Sourc
     protectedKept: 0,
     protectedRemoved: 0,
     setAside: 0,
+    movedIn: 0,
   };
   // Blocks set aside count as neither written nor missing.
   const aside = new Set(
@@ -130,14 +130,24 @@ export function regenerateSource(record: RecordPart, items: SourceItem[]): Sourc
   const warnings: string[] = [];
   const entries: Entry[] = [];
   const seen = new Set<number>();
-  const inRange = range
-    ? items.filter(item => item.page >= range.first && item.page <= range.last)
-    : [];
+  const inRange = items.filter(item => item.tag?.k !== 'f');
+  const present = inRange.some(item => ownTag(item, sourceId));
 
   for (let at = 0; at < inRange.length; at++) {
     const item = inRange[at];
-    // A textbox of another linked file in the same pages belongs to that file; one set aside is left out.
-    if ((item.tag?.s && item.tag.s !== sourceId) || (item.tag?.s && item.tag.a)) {
+    // A block set aside by the Outline is left out, whichever file it came from.
+    if (item.tag?.s && item.tag.a) {
+      continue;
+    }
+    if (item.tag?.s && item.tag.s !== sourceId) {
+      // Moved here from another linked file: new text in this one (protected placeholders say
+      // nothing about their content here, so they are left out).
+      const text = item.text.replace(/\r\n?/g, '\n').trim();
+      if (text && item.tag.k !== 'x') {
+        entries.push({index: null, original: false, text});
+        counts.added++;
+        counts.movedIn++;
+      }
       continue;
     }
     const tag = ownTag(item, sourceId);
@@ -213,7 +223,7 @@ export function regenerateSource(record: RecordPart, items: SourceItem[]): Sourc
   }
 
   const text = assemble(record, entries);
-  return {text, counts, missing, pendingRemoval, warnings, range, identical: text === original};
+  return {text, counts, missing, pendingRemoval, warnings, present, identical: text === original};
 }
 
 /** Puts a block right after the nearest earlier block of the file that is in the output. */

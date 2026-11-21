@@ -13,8 +13,10 @@ import type {PlannedOrder} from '../domain/outlinePlan';
 import {isPenEditDecoration} from '../domain/penEditTags';
 import {plural} from '../domain/plural';
 import {isNormalTextElement} from '../domain/textboxEditPlan';
-import {ELEMENT_TYPE_TITLE, type TextboxData} from '../domain/textboxModel';
+import {isFileTitle} from '../domain/fileTitles';
+import {ELEMENT_TYPE_TITLE, type PageElementData, type TextboxData} from '../domain/textboxModel';
 import {writeBackupFile} from '../storage/backupFile';
+import {syncFileTitles} from './fileTitles';
 import {
   deletePageElements,
   modifyPageElements,
@@ -129,7 +131,9 @@ export async function checkRebuild(
             'handwriting outside textboxes would stay where it is while the text moves: lasso it into a textbox, move it off the page, or erase it',
         });
       }
-      if (elements.some(element => element.type === ELEMENT_TYPE_TITLE)) {
+      // The titles over linked files' names are put back after the rebuild (`syncFileTitles`);
+      // other titles can't be moved yet.
+      if (elements.some(element => element.type === ELEMENT_TYPE_TITLE && !isFileTitle(element as unknown as PageElementData))) {
         blockers.push({
           page,
           kind: 'title',
@@ -263,6 +267,13 @@ export async function applyOutlinePlan(
     for (const [page, items] of inserts) {
       onProgress(`Writing page ${page + 1}…`);
       await insertTextboxesIntoFile(notePath, page, items);
+    }
+    // Titles over linked files' names follow their dividers (technical-design-linked-files.md §4).
+    const touched = [...check.pages, ...inserts.keys()];
+    try {
+      await syncFileTitles(notePath, touched);
+    } catch (error) {
+      console.warn('[OutlineApply] file titles not synced', String(error));
     }
 
     const counts = [

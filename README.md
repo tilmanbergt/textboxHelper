@@ -80,8 +80,9 @@ be wrong.
 The plugin remembers the import settings, the export pages and rules, and the edit-marker
 calibration in `settings.json` in its own plugin folder. Tagged replacements and insertions are
 kept in `pen-edits/` in the same folder, the Outline's block statuses in `block-status.json`, and
-what a linked import came from (the file's path and its original text) in `sources/`, together
-with the linked file's text before the plugin's latest write to it.
+what a linked import came from (the file's path and its original text) and which files a note is
+linked to in `sources/`, together with each linked file's text before the plugin's latest write
+to it.
 
 ## Installation
 

@@ -1,12 +1,20 @@
 import RNFS from 'react-native-fs';
 import {PluginManager} from 'sn-plugin-lib';
-import {buildSourceOriginalPath, buildSourcePreviousPath, buildSourceRecordPath} from '../domain/backupPaths';
+import {
+  buildNoteLinksPath,
+  buildSourceOriginalPath,
+  buildSourcePreviousPath,
+  buildSourceRecordPath,
+} from '../domain/backupPaths';
+import {noteKey, parseNoteLinks, serializeNoteLinks, type NoteLinks} from '../domain/noteLinks';
 import {parseSourceRecord, serializeSourceRecord, type SourceRecord} from '../domain/sourceRecord';
+import {writeTextAtomic} from './jsonFile';
 
 /**
  * The records of linked text files in `<plugin folder>/sources/` (technical-design-source-link.md
- * §2.3): one JSON file per linked file, written through a temporary file, the copy of the
- * original text kept before the first write-back, and the file's text before the latest write.
+ * §2.3): one JSON file per linked file and one per linked note (technical-design-linked-files.md
+ * §1.3), written through a temporary file; the copy of a file's original text kept before the
+ * first write-back, and its text before the latest write.
  */
 
 async function pluginDir(): Promise<string> {
@@ -25,14 +33,7 @@ async function ensureFolder(path: string): Promise<void> {
 }
 
 export async function writeSourceRecord(record: SourceRecord): Promise<void> {
-  const path = buildSourceRecordPath(await pluginDir(), record.sourceId);
-  await ensureFolder(path);
-  const temporary = `${path}.tmp`;
-  await RNFS.writeFile(temporary, serializeSourceRecord(record), 'utf8');
-  if (await RNFS.exists(path)) {
-    await RNFS.unlink(path);
-  }
-  await RNFS.moveFile(temporary, path);
+  await writeTextAtomic(buildSourceRecordPath(await pluginDir(), record.sourceId), serializeSourceRecord(record));
 }
 
 /** The record, or null when there is none or it can't be read. */
@@ -75,4 +76,26 @@ export async function keepPreviousCopy(record: SourceRecord, text: string): Prom
   const path = buildSourcePreviousPath(await pluginDir(), record.sourceId);
   await ensureFolder(path);
   await RNFS.writeFile(path, text, 'utf8');
+}
+
+/** The linked files of a note (technical-design-linked-files.md §1.3), or null when it has none. */
+export async function readNoteLinks(notePath: string): Promise<NoteLinks | null> {
+  try {
+    const path = buildNoteLinksPath(await pluginDir(), noteKey(notePath));
+    if (!(await RNFS.exists(path))) {
+      return null;
+    }
+    const links = parseNoteLinks(await RNFS.readFile(path, 'utf8'));
+    if (!links) {
+      console.warn('[SourceLink] note links unreadable');
+    }
+    return links;
+  } catch (error) {
+    console.warn('[SourceLink] note links not read', String(error));
+    return null;
+  }
+}
+
+export async function writeNoteLinks(links: NoteLinks): Promise<void> {
+  await writeTextAtomic(buildNoteLinksPath(await pluginDir(), noteKey(links.notePath)), serializeNoteLinks(links));
 }

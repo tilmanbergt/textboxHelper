@@ -198,8 +198,9 @@ describe('regenerating the file', () => {
     const result = regenerateSource(r, [{page: 0, text: 'A. B.', tag: tag(0)}]);
     expect(result.text).toBe('A. B.\n');
     expect(result.missing).toEqual(['B.']);
-    // With no tag of the file left on the pages there is nothing to link: the range is null.
-    expect(regenerateSource(r, [{page: 0, text: 'A. B.', tag: null}]).range).toBeNull();
+    expect(result.present).toBe(true);
+    // With no tag of the file left in its segment, nothing of it is on the note.
+    expect(regenerateSource(r, [{page: 0, text: 'A. B.', tag: null}]).present).toBe(false);
   });
 
   it('writes typed markdown as typed, and follows the page order', () => {
@@ -260,19 +261,17 @@ describe('regenerating the file', () => {
     ]);
   });
 
-  it('counts a deleted paragraph as missing and leaves other files and pages alone', () => {
+  it('counts a deleted paragraph as missing and writes a textbox moved in from another file as new text', () => {
     const r = record('A.\n\nB.\n\nC.\n');
     const items: SourceItem[] = [
-      {page: 0, text: 'Before the import', tag: null},
       {page: 1, text: 'A.', tag: tag(0)},
       {page: 1, text: 'Other file', tag: {v: 1, id: 'x', s: 's-2', i: 0}},
       {page: 2, text: 'C.', tag: tag(2)},
-      {page: 3, text: 'After the import', tag: null},
     ];
     const result = regenerateSource(r, items);
-    expect(result.range).toEqual({first: 1, last: 2});
-    expect(result.text).toBe('A.\n\nC.\n');
+    expect(result.text).toBe('A.\n\nOther file\n\nC.\n');
     expect(result.missing).toEqual(['B.']);
+    expect(result.counts.movedIn).toBe(1);
   });
 
   it('leaves out blocks the Outline set aside, without calling them missing', () => {
@@ -286,7 +285,6 @@ describe('regenerating the file', () => {
     expect(result.text).toBe('A.\n\nC.\n');
     expect(result.missing).toEqual([]);
     expect(result.counts.setAside).toBe(1);
-    expect(result.range).toEqual({first: 0, last: 0});
   });
 
   it('writes CRLF for edited text in a CRLF file', () => {

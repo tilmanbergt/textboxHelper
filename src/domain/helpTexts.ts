@@ -64,7 +64,10 @@ This is the first paragraph.
 ## A section
 
 ## Link to file
-In the Paragraph boxes layout, "Link to file" places one textbox per heading, paragraph or list of the file and remembers where each came from, so changes can be written back to the file. Blank lines separate the blocks, and headings of every level are recognized. Frontmatter stays out of the note and is kept. Code, formulas, tables, quotes and callouts, HTML, comments, embeds and horizontal lines are kept exactly as they are: a framed placeholder stands for each, which can be moved but isn't edited. Links and formatting stay as text.
+In the Paragraph boxes layout, "Link to file" places one textbox per heading, paragraph or list of the file and remembers where each came from, so changes can be written back to the file. Blank lines separate the blocks, and headings of every level are recognized. Frontmatter stays out of the note and is kept. Code, formulas, tables, quotes and callouts, HTML, comments, embeds and horizontal lines are kept exactly as they are: a framed placeholder stands for each, which can be moved but isn't edited. Links and formatting stay as text. The file starts with its name as a NOTE title, so it shows in the note's table of contents.
+
+## Adding a file
+On a note with linked files, Import adds the file: always linked, after the last page, with its title. Everything below a file's title up to the next title belongs to that file.
 
 ## Where it goes
 Into the current page when its writing area is empty, otherwise onto new pages after it. The preview shows the first pages to scale. Font size and margins are under Layout.`;

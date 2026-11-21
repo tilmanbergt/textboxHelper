@@ -49,6 +49,13 @@ Library: `sn-plugin-lib` 0.2.3.
   element live on `element.title` (`style`, `controlTrailNums`, plus `X`, `Y`, `width`, `height`,
   `page`), not on the element itself. Title style 0 removes a heading; 1-4 are the heading
   styles.
+- **Plugins can write titles** the way Kept GTD does: an element of type 100 from
+  `createElement`, its `title` set to the covered textbox's rectangle, its number in
+  `controlTrailNums` and a style, inserted with `PluginFileAPI.insertElements`
+  (`supernote/noteTitles.ts`). The titles over linked files' names carry the plugin's tag in
+  `userData`. `controlTrailNums` from `getTitles` don't always name the page's element numbers, so
+  the plugin matches a title to its textbox by their rectangles. Whether NOTE keeps a title's
+  `userData` through saves and edits is checked on the device.
 
 - **Element uuids are not identities.** The same untouched textbox comes back with a different
   `uuid` from one read to the next, and the lasso's elements have other uuids than the page's.
