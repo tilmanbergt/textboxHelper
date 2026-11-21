@@ -26,6 +26,7 @@ import ScreenFrame from '../../ui/ScreenFrame';
 import Segmented from '../../ui/Segmented';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
 import {requestEinkRefresh} from '../../utils/screenRefresh';
+import FolderSetupScreen from './FolderSetupScreen';
 import ImportLayoutScreen from './ImportLayoutScreen';
 import PagePreview from './PagePreview';
 import {useTextImport} from './useTextImport';
@@ -37,7 +38,7 @@ interface Props {
 export default function ImportScreen({onClose}: Props): React.JSX.Element {
   const flow = useTextImport();
   const {settings, preview, busy, imported} = flow;
-  const [view, setView] = useState<'import' | 'layout'>('import');
+  const [view, setView] = useState<'import' | 'layout' | 'folder'>('import');
   const [pageIndex, setPageIndex] = useState(0);
 
   useEffect(() => {
@@ -60,10 +61,24 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
     );
   }
 
+  if (view === 'folder' && flow.folder) {
+    return (
+      <FolderSetupScreen
+        folder={flow.folder}
+        setup={flow.setup}
+        onChange={flow.setSetup}
+        status={flow.status}
+        onBack={() => setView('import')}
+        onClose={onClose}
+      />
+    );
+  }
+
   const setStructure = (next: Partial<TextboxImportSettings['structure']>) =>
     flow.change({...settings, structure: {...settings.structure, ...next}});
   const adding = preview?.addingTo ?? null;
-  const linked = isLinkedImport(settings) || !!adding;
+  const whole = flow.wholeFolder && !adding;
+  const linked = isLinkedImport(settings) || !!adding || whole;
   const headings = linked || settings.structure.detectMarkdownHeadings;
   const filePath = settings.filePath;
   const fileName = filePath ? filePath.split('/').slice(-1)[0] : '';
@@ -80,7 +95,7 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
   const primary = imported
     ? {label: 'Close', onPress: onClose}
     : {
-        label: adding ? 'Add' : 'Import',
+        label: adding ? 'Add' : whole ? `Import ${plural(flow.folderImport?.names.length ?? 0, 'file')}` : 'Import',
         onPress: flow.runImport,
         disabled: !preview || flow.previewing,
         busy,
@@ -113,7 +128,37 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
             {filePath ? `${folder || 'Storage'}/` : '.txt files from any folder'}
           </Text>
 
-          {adding ? (
+          {!adding && (
+            <Segmented
+              options={[
+                {key: 'file', label: 'This file'},
+                {key: 'folder', label: 'Whole folder'},
+              ]}
+              value={flow.wholeFolder ? 'folder' : 'file'}
+              onChange={value => flow.setWholeFolder(value === 'folder')}
+            />
+          )}
+          {whole && (
+            <Pressable
+              accessibilityRole="button"
+              disabled={!flow.folder}
+              onPress={() => setView('folder')}
+              style={styles.link}>
+              <View style={styles.linkText}>
+                <Text style={styles.linkTitle}>Files and order</Text>
+                <Text style={styles.path}>
+                  {flow.folderImport
+                    ? `${flow.folderImport.names.length} of ${flow.folder?.files.length ?? 0} · ${
+                        flow.folderImport.ordered ? 'ordered (index.txt)' : 'unordered'
+                      } · linked, each file under its name as a title`
+                    : 'Reading the folder…'}
+                </Text>
+              </View>
+              <Text style={styles.linkTitle}>›</Text>
+            </Pressable>
+          )}
+
+          {whole ? null : adding ? (
             <Text style={styles.path}>
               This note has {plural(adding.fileCount, 'linked file')}: the file is added linked, with its name as a
               title, after the last page.
@@ -132,7 +177,7 @@ export default function ImportScreen({onClose}: Props): React.JSX.Element {
             </>
           )}
 
-          {!adding && settings.structure.layoutMode === 'paragraphTextboxes' && (
+          {!adding && !whole && settings.structure.layoutMode === 'paragraphTextboxes' && (
             <Checkbox
               label="Link to file (write changes back)"
               checked={settings.linkToFile}

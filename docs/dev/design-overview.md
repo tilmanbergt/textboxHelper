@@ -152,6 +152,17 @@ change outside (fingerprint in its record), then `storage/sourceFile.ts` writes 
 host's copy or directly and reads it back. A file that can't be written is named; the others are
 written. A block the Outline sets aside gets `a` in its tag and is left out of the file.
 
+**Folder mode:** "Whole folder" on the Import screen binds the chosen file's folder
+(`screens/import/FolderSetupScreen.tsx`: which files, ordered or not). The note record then holds
+the folder (`LinkedFolder`: path, ordered, files left out, the index as last written).
+`actions/folderLink.ts` reads the folder for the setup, its state on the card (new files, files
+left out, `index.txt` in sync / to be written / changed in Obsidian) and writes `index.txt`, a
+plain `[[name]]` list in the note's order, after the files on Update. New files are added from
+Details after the last page (`textImport.ts` `addLinkedFiles`, linking in
+`actions/importLinking.ts`). In the Outline a file's divider is a block of its own kind: it moves
+with its whole file (`outlinePlan.ts` `sectionOf` ranks dividers above headings) and is never set
+aside or deleted alone.
+
 ### DOCX export (`actions/textboxScan.ts`, `storage/docxExport.ts`)
 
 Reads the note context, scans the textboxes of the current page, the whole note or a page range,

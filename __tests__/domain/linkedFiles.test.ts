@@ -5,10 +5,18 @@ import {covers, isFileTitle, planFileTitles} from '../../src/domain/fileTitles';
 import {fingerprint} from '../../src/domain/fingerprint';
 import {sourceImportBlocks} from '../../src/domain/importParsing';
 import {
+  baseName,
+  fileNameProblem,
+  indexLinks,
+  indexText,
+  newFiles,
+  newLinkedFolder,
   newNoteLinks,
   noteKey,
   parseNoteLinks,
   serializeNoteLinks,
+  startOrder,
+  withFolder,
   withoutSource,
   withSources,
 } from '../../src/domain/noteLinks';
@@ -221,5 +229,49 @@ describe('importing several files', () => {
       parseSourceBlocks('Text\n\n```\nx\n```\n\n| y |\n').summary,
     ]);
     expect(total).toMatchObject({blocks: 5, headings: 1, paragraphs: 1, protectedCount: 3, protectedKinds: {table: 2, code: 1}});
+  });
+});
+
+describe('folder mode', () => {
+  it('keeps a bound folder in the note record', () => {
+    const links = withSources(
+      newNoteLinks('/n.note', 'folder', newLinkedFolder('/storage/emulated/0/Document/Zettel', true, ['Draft.txt'])),
+      ['a'],
+    );
+    expect(parseNoteLinks(serializeNoteLinks(links))).toEqual(links);
+    expect(withFolder(links, {ordered: false}).folder?.ordered).toBe(false);
+    // A folder record without its folder is read as files mode.
+    expect(parseNoteLinks('{"version":1,"notePath":"/n","mode":"folder","sources":[]}')?.mode).toBe('files');
+  });
+
+  it('writes and reads the index as plain links', () => {
+    const text = indexText(['Intro.txt', 'Atomic notes.txt']);
+    expect(text).toBe('[[Intro]]\n[[Atomic notes]]\n');
+    expect(indexLinks(text)).toEqual(['Intro', 'Atomic notes']);
+    expect(indexLinks('# Book\n- [[Books/Zettel/Intro|Start]]\n- [[Atomic notes#Why]]\n[[Intro]]\n')).toEqual([
+      'Intro',
+      'Atomic notes',
+    ]);
+  });
+
+  it('orders files by the index, by name or by date', () => {
+    const files = [
+      {name: 'b.txt', size: 1, mtime: 1},
+      {name: 'a10.txt', size: 1, mtime: 3},
+      {name: 'a2.txt', size: 1, mtime: 2},
+    ];
+    const names = (list: {name: string}[]) => list.map(file => file.name);
+    expect(names(startOrder(files, null, 'name'))).toEqual(['a2.txt', 'a10.txt', 'b.txt']);
+    expect(names(startOrder(files, null, 'date'))).toEqual(['b.txt', 'a2.txt', 'a10.txt']);
+    expect(names(startOrder(files, ['b', 'a10'], 'name'))).toEqual(['b.txt', 'a10.txt', 'a2.txt']);
+  });
+
+  it('finds new files and checks new names', () => {
+    expect(newFiles(['a.txt', 'B.txt', 'index.txt', 'c.txt'], ['b.txt'], ['c.txt'])).toEqual(['a.txt']);
+    expect(fileNameProblem('Intro')).toBeNull();
+    expect(fileNameProblem('  ')).toMatch(/empty/);
+    expect(fileNameProblem('a/b')).toMatch(/can't contain/);
+    expect(fileNameProblem('Index.txt')).toMatch(/index/);
+    expect(baseName('Intro.TXT')).toBe('Intro');
   });
 });

@@ -3,7 +3,7 @@ import type {ScannedTextBox} from '../domain/exportClassification';
 import {segmentByFile} from '../domain/fileSegments';
 import {fileState, isWritable, FILE_STATE_LABEL, type FileState} from '../domain/fileState';
 import {fingerprint} from '../domain/fingerprint';
-import {withoutSource, type NoteLinks} from '../domain/noteLinks';
+import {INDEX_FILE, withFolder, withoutSource, type LinkedFolder, type NoteLinks} from '../domain/noteLinks';
 import {plural} from '../domain/plural';
 import type {SourceBlock} from '../domain/sourceBlocks';
 import {fileDiff, regenerateSource, type SourceItem, type SourceRegeneration} from '../domain/sourceExport';
@@ -28,6 +28,7 @@ import {
 } from '../storage/sourceStore';
 import {saveCurrentNoteForConsistency} from '../supernote/noteElements';
 import {syncFileTitles} from './fileTitles';
+import {linkedFileNames, readFolderState, writeIndexFile, type FolderState} from './folderLink';
 import {cachedOutline, rememberOutline} from './manuscriptCache';
 import {scanTextBoxes} from './textboxScan';
 import {timed} from '../utils/perf';
@@ -62,6 +63,8 @@ export type LinkedNote = {
   files: LinkedFile[];
   /** Textboxes before the first file's divider that belong to no file. */
   orphans: number;
+  /** Folder mode: the bound folder's new files, files left out and index. */
+  folder: FolderState | null;
 };
 
 export function sourceItems(scanned: ScannedTextBox[]): SourceItem[] {
@@ -115,10 +118,18 @@ export async function readLinkedNote(notePath: string, pageCount: number, fresh 
     },
     {files: sourceIds.length},
   );
-  if (files.length === 0) {
+  if (files.length === 0 && !links?.folder) {
     return null;
   }
-  return {links, files, orphans: segments.orphans.length};
+  const folder = links?.folder
+    ? await timed('source.folder', () =>
+        readFolderState(
+          links.folder as LinkedFolder,
+          linkedFileNames(files.filter(file => file.hasDivider).map(file => file.record.filePath)),
+        ),
+      )
+    : null;
+  return {links, files, orphans: segments.orphans.length, folder};
 }
 
 async function linkedFile(record: SourceRecord, segment: SourceItem[], hasDivider: boolean): Promise<LinkedFile> {
@@ -132,6 +143,11 @@ async function linkedFile(record: SourceRecord, segment: SourceItem[], hasDivide
     onNote: hasDivider || regeneration.present,
   });
   return {record, segment, regeneration, diff, state, hasDivider};
+}
+
+/** Whether Update would write the folder's `index.txt` (only when it didn't change in Obsidian). */
+export function indexToWrite(note: LinkedNote | null): boolean {
+  return note?.folder?.index === 'stale';
 }
 
 /** Files that Update / an Apply would write. */
@@ -198,6 +214,8 @@ export type FilesWriteResult =
       /** Files that changed here but weren't written, with the reason. */
       skipped: {name: string; reason: string}[];
       warnings: string[];
+      /** Whether `index.txt` was written. */
+      index: boolean;
     }
   | {kind: 'confirm'; pending: PendingRemoval[]};
 
@@ -224,6 +242,8 @@ export async function writeLinkedFiles(params: {
   pageCount: number;
   only?: string[];
   protectedAnswer?: 'remove' | 'keep';
+  /** Also overwrite an `index.txt` changed in Obsidian (Details → Rewrite index.txt). */
+  rewriteIndex?: boolean;
 }): Promise<FilesWriteResult> {
   const note = await readLinkedNote(params.notePath, params.pageCount, true);
   if (!note) {
@@ -260,7 +280,43 @@ export async function writeLinkedFiles(params: {
       skipped.push({name, reason: error instanceof Error ? error.message : String(error)});
     }
   }
-  return {kind: 'written', written, unchanged, skipped, warnings};
+  let index = false;
+  const state = note.folder;
+  if (
+    note.links &&
+    state?.folder.ordered &&
+    (state.index === 'stale' || (state.index === 'changedOutside' && params.rewriteIndex))
+  ) {
+    try {
+      await writeIndexFile(note.links, state.wantedIndex);
+      index = true;
+    } catch (error) {
+      console.warn('[SourceLink] index not written', String(error));
+      skipped.push({name: INDEX_FILE, reason: error instanceof Error ? error.message : String(error)});
+    }
+  } else if (state?.index === 'changedOutside') {
+    skipped.push({name: INDEX_FILE, reason: 'changed in Obsidian: Details → Rewrite index.txt'});
+  }
+  return {kind: 'written', written, unchanged, skipped, warnings, index};
+}
+
+/** Folder mode: keep the order in `index.txt` (ordered) or not; the file itself stays either way. */
+export async function setFolderOrdered(notePath: string, ordered: boolean): Promise<void> {
+  const links = await readNoteLinks(notePath);
+  if (links?.folder) {
+    await writeNoteLinks(withFolder(links, {ordered}));
+  }
+}
+
+/** Folder mode: files the user chose to leave out, or takes back (`leave: false`). */
+export async function setFilesLeftOut(notePath: string, names: string[], leave: boolean): Promise<void> {
+  const links = await readNoteLinks(notePath);
+  if (!links?.folder) {
+    return;
+  }
+  const lower = new Set(names.map(name => name.toLowerCase()));
+  const kept = links.folder.skipped.filter(name => !lower.has(name.toLowerCase()));
+  await writeNoteLinks(withFolder(links, {skipped: leave ? [...kept, ...names] : kept}));
 }
 
 /**
@@ -345,7 +401,10 @@ export function writeResultText(result: FilesWriteResult): string {
   } else if (result.written.length > 1) {
     parts.push(`${plural(result.written.length, 'file')} updated`);
   }
-  if (result.written.length === 0 && result.unchanged.length > 0) {
+  if (result.index) {
+    parts.push(result.written.length > 0 ? 'index.txt too' : 'index.txt updated');
+  }
+  if (result.written.length === 0 && !result.index && result.unchanged.length > 0) {
     parts.push(result.unchanged.length === 1 ? `${result.unchanged[0]} is up to date` : 'All files are up to date');
   }
   if (result.skipped.length > 0) {

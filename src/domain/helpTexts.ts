@@ -69,6 +69,9 @@ In the Paragraph boxes layout, "Link to file" places one textbox per heading, pa
 ## Adding a file
 On a note with linked files, Import adds the file: always linked, after the last page, with its title. Everything below a file's title up to the next title belongs to that file.
 
+## Whole folder
+"Whole folder" binds the chosen file's folder to the note: under "Files and order" choose its files and whether the folder is ordered. An ordered folder keeps the note's order of the files in its index.txt (index.md in Obsidian, a list of [[links]] the plugin writes); a folder with an index.txt is ordered by it. New files of the folder are added later from Manuscript → Details. A note is bound to one folder; it can't get files from elsewhere.
+
 ## Where it goes
 Into the current page when its writing area is empty, otherwise onto new pages after it. The preview shows the first pages to scale. Font size and margins are under Layout.`;
 

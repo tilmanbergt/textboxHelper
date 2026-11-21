@@ -1,8 +1,8 @@
 import type {OutlineBlock} from '../../src/domain/outlineModel';
 import {layoutAside, layoutRebuild, type LayoutBlock} from '../../src/domain/outlineLayout';
-import {canMoveBefore, plannedOrder, plannedSummary, sectionOf, undoFor, undoLast} from '../../src/domain/outlinePlan';
+import {canMoveBefore, canRemove, plannedOrder, plannedSummary, sectionOf, undoFor, undoLast} from '../../src/domain/outlinePlan';
 
-const block = (key: string, page: number, heading = false): OutlineBlock => ({
+const block = (key: string, page: number, heading = false, fileSource: string | null = null): OutlineBlock => ({
   key,
   tagId: null,
   page,
@@ -11,6 +11,7 @@ const block = (key: string, page: number, heading = false): OutlineBlock => ({
   firstLine: key,
   lastLine: '',
   heading,
+  fileSource,
   status: 'open',
   pendingEdits: 0,
   rect: {left: 100, top: 0, right: 900, bottom: 100},
@@ -20,6 +21,34 @@ const blocks = [block('H1', 0, true), block('a', 0), block('b', 0), block('H2', 
 const keys = (list: OutlineBlock[]) => list.map(item => item.key);
 
 describe('outline plan', () => {
+  it('moves a linked file with its whole section, headings included', () => {
+    const files = [
+      block('A', 0, true, 's-a'),
+      block('A1', 0, true),
+      block('a', 0),
+      block('B', 1, true, 's-b'),
+      block('b', 1),
+      block('B1', 2, true),
+      block('b1', 2),
+    ];
+    expect(sectionOf(files, 'A')).toEqual(['A', 'A1', 'a']);
+    // A heading's section ends at the next file.
+    expect(sectionOf(files, 'A1')).toEqual(['A1', 'a']);
+    expect(sectionOf(files, 'B')).toEqual(['B', 'b', 'B1', 'b1']);
+    expect(keys(plannedOrder(files, [{kind: 'move', key: 'B', before: 'A'}]).order)).toEqual([
+      'B',
+      'b',
+      'B1',
+      'b1',
+      'A',
+      'A1',
+      'a',
+    ]);
+    // A file's divider can't be set aside or deleted on its own.
+    expect(canRemove(files[0])).toBe(false);
+    expect(keys(plannedOrder(files, [{kind: 'delete', key: 'A'}]).order)).toEqual(keys(files));
+  });
+
   it('moves a heading with its section', () => {
     expect(sectionOf(blocks, 'H2')).toEqual(['H2', 'c', 'd']);
     expect(sectionOf(blocks, 'a')).toEqual(['a']);

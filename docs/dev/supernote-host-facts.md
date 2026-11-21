@@ -56,6 +56,9 @@ Library: `sn-plugin-lib` 0.2.3.
   `userData`. `controlTrailNums` from `getTitles` don't always name the page's element numbers, so
   the plugin matches a title to its textbox by their rectangles. Whether NOTE keeps a title's
   `userData` through saves and edits is checked on the device.
+- **Folder listing:** a bound folder is listed with `RNFS.readDir` (`storage/folderFiles.ts`);
+  whether that works in every folder the file selector offers (Document, the sync folder) is
+  checked on the device.
 
 - **Element uuids are not identities.** The same untouched textbox comes back with a different
   `uuid` from one read to the next, and the lasso's elements have other uuids than the page's.

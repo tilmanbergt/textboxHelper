@@ -2,7 +2,8 @@
  * Details → Files (technical-design-linked-files.md §3.3): the note's linked files, a few rows at a
  * time (no scrolling), each with its state; the chosen file's own part below (where it is, when
  * it was imported and written, its block counts and warnings, Save as copy, Save to EXPORT, Check
- * write access, Unlink); and Restore titles for the note.
+ * write access, Unlink); Restore titles for the note; and in folder mode the folder (ordered or
+ * not, its new files and files left out, the index).
  */
 import React, {useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
@@ -11,6 +12,7 @@ import {FILE_STATE_GLYPH, FILE_STATE_LABEL} from '../../domain/fileState';
 import {plural} from '../../domain/plural';
 import {sourceFileName, sourceFolder} from '../../domain/sourceRecord';
 import PillButton from '../../ui/PillButton';
+import Segmented from '../../ui/Segmented';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
 import type {LinkedFiles} from './useLinkedFiles';
 
@@ -20,7 +22,7 @@ export default function FilesSection({source}: {source: LinkedFiles}): React.JSX
   const files = source.note?.files ?? [];
   const [chosenId, setChosenId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  if (files.length === 0) {
+  if (files.length === 0 && !source.note?.folder) {
     return null;
   }
   const chosen = files.find(file => file.record.sourceId === chosenId) ?? files[0];
@@ -59,10 +61,72 @@ export default function FilesSection({source}: {source: LinkedFiles}): React.JSX
       {orphans > 0 && (
         <Text style={styles.hint}>⚠ {plural(orphans, 'textbox', 'textboxes')} before the first file title belong to no linked file.</Text>
       )}
-      <FileDetails source={source} file={chosen} />
+      {source.note?.folder && <FolderPart source={source} />}
+      {chosen && <FileDetails source={source} file={chosen} />}
       <View style={styles.buttons}>
         <PillButton size="small" label="Restore titles" disabled={source.busy} onPress={source.restoreTitles} />
       </View>
+    </View>
+  );
+}
+
+function names(list: string[]): string {
+  const shown = list.slice(0, 3).map(name => name.replace(/\.txt$/i, '')).join(', ');
+  return list.length > 3 ? `${shown} +${list.length - 3}` : shown;
+}
+
+const INDEX_LINE: Record<string, string> = {
+  inSync: 'index.txt follows the note.',
+  stale: 'index.txt is written at the next Update.',
+  changedOutside: 'index.txt was changed in Obsidian; it is only overwritten on request.',
+};
+
+/** The bound folder: ordered or not, its index, new files and files left out. */
+function FolderPart({source}: {source: LinkedFiles}): React.JSX.Element | null {
+  const state = source.note?.folder;
+  if (!state) {
+    return null;
+  }
+  const {folder} = state;
+  return (
+    <View style={styles.file}>
+      <View style={styles.buttons}>
+        <Text style={styles.line}>Folder {state.name}</Text>
+        <Segmented
+          options={[
+            {key: 'ordered', label: 'Ordered'},
+            {key: 'unordered', label: 'Unordered'},
+          ]}
+          value={folder.ordered ? 'ordered' : 'unordered'}
+          onChange={value => value !== (folder.ordered ? 'ordered' : 'unordered') && source.setOrdered(value === 'ordered')}
+        />
+      </View>
+      {state.problem && <Text style={styles.hint}>⚠ {state.problem}</Text>}
+      {state.index && (
+        <View style={styles.buttons}>
+          <Text style={styles.hint}>{INDEX_LINE[state.index]}</Text>
+          {state.index === 'changedOutside' && (
+            <PillButton size="small" label="Rewrite index.txt" disabled={source.busy} onPress={source.rewriteIndex} />
+          )}
+        </View>
+      )}
+      {state.newFiles.length > 0 && (
+        <View style={styles.buttons}>
+          <Text style={styles.hint} numberOfLines={1}>
+            New: {names(state.newFiles)}
+          </Text>
+          <PillButton size="small" label={`Add ${state.newFiles.length}`} disabled={source.busy || source.added} onPress={() => source.addFiles(state.newFiles)} />
+          <PillButton size="small" label="Leave out" disabled={source.busy} onPress={() => source.leaveOut(state.newFiles, true)} />
+        </View>
+      )}
+      {state.leftOut.length > 0 && (
+        <View style={styles.buttons}>
+          <Text style={styles.hint} numberOfLines={1}>
+            Left out: {names(state.leftOut)}
+          </Text>
+          <PillButton size="small" label="Take back" disabled={source.busy} onPress={() => source.leaveOut(state.leftOut, false)} />
+        </View>
+      )}
     </View>
   );
 }

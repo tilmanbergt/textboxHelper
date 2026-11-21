@@ -116,9 +116,9 @@ export default function ManuscriptScreen({
   const primary: FramePrimary =
     tab === 'outline'
       ? outlinePrimary(outline, onClose, reviewPage)
-      : applied
+      : applied || source.added
       ? {label: 'Close', onPress: onClose, busy: source.busy, busyLabel: 'Writing the files…'}
-      : changes.readyCount === 0 && toWrite.length > 0
+      : changes.readyCount === 0 && (toWrite.length > 0 || source.indexStale)
       ? {
           label: updateLabel(toWrite),
           onPress: source.write,
@@ -207,14 +207,21 @@ export default function ManuscriptScreen({
 /** The header's name for the linked files: the file's name, or how many there are. */
 function filesLabel(source: LinkedFiles): string | null {
   const files = source.note?.files ?? [];
+  const folder = source.note?.folder;
+  if (folder) {
+    return `${folder.name} · ${plural(files.length, 'file')}`;
+  }
   if (files.length === 0) {
     return null;
   }
   return files.length === 1 ? sourceFileName(files[0].record) : plural(files.length, 'file');
 }
 
-/** "Update Essay.txt · 3 changed blocks" or "Update 2 files". */
+/** "Update Essay.txt · 3 changed blocks", "Update 2 files" or "Update index.txt". */
 function updateLabel(toWrite: LinkedFile[]): string {
+  if (toWrite.length === 0) {
+    return 'Update index.txt';
+  }
   if (toWrite.length > 1) {
     return `Update ${plural(toWrite.length, 'file')}`;
   }
@@ -242,8 +249,15 @@ function reviewStatus(
     };
   }
   const shown = own ?? source.status ?? (focusNote ? {text: focusNote} : null);
-  if (shown || !source.note || loading || readyCount > 0 || source.toWrite.length > 0) {
+  if (shown || !source.note || loading || readyCount > 0 || source.toWrite.length > 0 || source.indexStale) {
     return shown;
+  }
+  const folder = source.note.folder;
+  if (folder && folder.newFiles.length > 0) {
+    return {text: `${plural(folder.newFiles.length, 'new file')} in ${folder.name}: Details → Add.`};
+  }
+  if (folder?.index === 'changedOutside') {
+    return {text: 'index.txt was changed in Obsidian: Details → Rewrite index.txt.'};
   }
   const held = filesHeldBack(source.note);
   if (held.length > 0) {

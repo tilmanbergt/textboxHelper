@@ -3,7 +3,8 @@ import type {OutlineBlock} from './outlineModel';
 /**
  * Planned changes in the Outline (technical-design-manuscript.md §5.3): moves, set aside and
  * delete, collected and applied together. Nothing on the page changes until then. A heading moves
- * with its section (the blocks up to the next heading). Pure.
+ * with its section (the blocks up to the next heading), a linked file's divider with its whole file
+ * (technical-design-linked-files.md §4). Pure.
  */
 
 /** Where a moved block goes: before this block (its key), or to the end of the note. */
@@ -26,24 +27,41 @@ export type PlannedOrder = {
   marks: Map<string, ChangeMark>;
 };
 
-/** A heading and the blocks after it up to the next heading; any other block alone. */
+/** A section starts at a linked file's divider (rank 0) or a heading (rank 1); others don't. */
+function rank(block: OutlineBlock): number | null {
+  return block.fileSource ? 0 : block.heading ? 1 : null;
+}
+
+/**
+ * A linked file's divider and everything up to the next divider; a heading and the blocks after it
+ * up to the next heading or divider; any other block alone.
+ */
 export function sectionOf(order: OutlineBlock[], key: string): string[] {
   const start = order.findIndex(block => block.key === key);
   if (start < 0) {
     return [];
   }
-  if (!order[start].heading) {
+  const own = rank(order[start]);
+  if (own === null) {
     return [key];
   }
   const keys = [key];
-  for (
-    let index = start + 1;
-    index < order.length && !order[index].heading;
-    index++
-  ) {
+  for (let index = start + 1; index < order.length; index++) {
+    const next = rank(order[index]);
+    if (next !== null && next <= own) {
+      break;
+    }
     keys.push(order[index].key);
   }
   return keys;
+}
+
+/**
+ * Whether a block can be set aside or deleted on its own: not a linked file's divider (without it
+ * the file's text would belong to the file before it).
+ */
+export function canRemove(block: OutlineBlock): boolean {
+  return !block.fileSource;
 }
 
 export function plannedOrder(
@@ -61,6 +79,9 @@ export function plannedOrder(
       continue;
     }
     if (change.kind !== 'move') {
+      if (!canRemove(block)) {
+        continue;
+      }
       order = order.filter(item => item !== block);
       (change.kind === 'aside' ? aside : deleted).push(block);
       marks.set(block.key, change.kind);

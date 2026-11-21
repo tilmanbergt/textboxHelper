@@ -1,9 +1,10 @@
 /**
  * The Manuscript card's Outline tab (technical-design-manuscript.md §5; canvas "Outline · All,
  * block selected"). Above: the filters (All, Pending edits, each status) with counts. The list:
- * every textbox of the note in reading order, one block per textbox (H for a heading, ¶ for a
- * paragraph), its first and last line, ✎ with the edits pending on it, and its status on the right
- * (○ open, ◐ review, ● final). Below, the bottom panel: the selected block's whole text, paged, and
+ * every textbox of the note in reading order, one block per textbox (§ for a linked file's title,
+ * H for a heading, ¶ for a paragraph), its first and last line, ✎ with the edits pending on it,
+ * and its status on the right (○ open, ◐ review, ● final). A linked file's title moves with its
+ * whole file and is never set aside or deleted on its own. Below, the bottom panel: the selected block's whole text, paged, and
  * its action bar. Nothing is typed here, so the writing pad never covers anything that matters.
  *
  * Moving: while a block is selected (under All), a ← sits at the top right of every row it can go
@@ -149,7 +150,9 @@ export default function OutlineTab({
           header={`${plural(
             all.length,
             'block',
-          )} · H heading · ¶ textbox · ✎ edits pending${
+          )} · H heading · ¶ textbox${
+            all.some(block => block.fileSource) ? ' · § linked file' : ''
+          } · ✎ edits pending${
             moving ? ' · ← move here' : ''
           }`}
           rows={rows}
@@ -299,7 +302,7 @@ function BlockRow({
         accessibilityRole="button"
         accessibilityState={{selected}}
         accessibilityLabel={`${
-          block.heading ? 'Heading' : 'Paragraph'
+          kindName(block)
         } on page ${block.page + 1}: ${block.firstLine}`}
         onPress={onPress}
         style={[
@@ -308,7 +311,7 @@ function BlockRow({
           selected && styles.rowSelected,
           onMoveHere && styles.rowWithTarget,
         ]}>
-        <Text style={styles.kind}>{block.heading ? 'H' : '¶'}</Text>
+        <Text style={styles.kind}>{block.fileSource ? '§' : block.heading ? 'H' : '¶'}</Text>
         <View style={styles.lines}>
           <Text
             style={[styles.line, block.heading && styles.heading, markStyle]}
@@ -396,7 +399,7 @@ function BlockPanel({
             onPress={onUndo}
             disabled={disabled}
           />
-        ) : (
+        ) : block.fileSource ? null : (
           <>
             <PillButton
               size="small"
@@ -424,9 +427,9 @@ function BlockPanel({
         <PagedText
           segments={[{text: block.text}]}
           resetKey={block.key}
-          header={`Page ${block.page + 1} · ${
-            block.heading ? 'heading' : 'paragraph'
-          } · ${pending}`}
+          header={`Page ${block.page + 1} · ${kindName(block).toLowerCase()} · ${
+            block.fileSource ? 'moves with its whole file' : pending
+          }`}
           headerAccessory={
             <PillButton
               size="small"
@@ -592,3 +595,7 @@ const styles = StyleSheet.create({
     gap: SPACING.md,
   },
 });
+
+function kindName(block: OutlineBlock): string {
+  return block.fileSource ? 'Linked file' : block.heading ? 'Heading' : 'Paragraph';
+}

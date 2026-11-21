@@ -7,7 +7,8 @@ import type {PageReview} from './manuscriptPages';
  * The Manuscript Outline (technical-design-manuscript.md §5.1): every textbox of the note as one
  * block in reading order, with its status (kept in the plugin, by block tag) and the edits still
  * pending on it (from the pages the Review has read). Plain notes: each textbox is a block; a
- * heading is guessed by its style, as the DOCX export does. Pure.
+ * heading is guessed by its style, as the DOCX export does. A linked file's divider is a block of
+ * its own kind (technical-design-linked-files.md §4): it starts the file's section. Pure.
  */
 
 export type BlockStatus = 'open' | 'review' | 'final';
@@ -30,6 +31,8 @@ export type OutlineBlock = {
   /** Empty when the block is short enough to show whole in its first line. */
   lastLine: string;
   heading: boolean;
+  /** A linked file's divider (its name under a title): the file's source id. */
+  fileSource: string | null;
   status: BlockStatus;
   /** Edits waiting on this block; null while its page is not read by the Review. */
   pendingEdits: number | null;
@@ -86,7 +89,8 @@ export function buildOutline(
 ): OutlineBlock[] {
   const pending = pendingByTextbox(pages);
   return items.map(item => {
-    const tagId = parseBlockTag(item.userData)?.id ?? null;
+    const tag = parseBlockTag(item.userData);
+    const tagId = tag?.id ?? null;
     const place = `${item.page}:${item.numInPage}`;
     return {
       key: tagId ?? place,
@@ -98,6 +102,7 @@ export function buildOutline(
       firstLine: firstLineOf(item.text),
       lastLine: lastLineOf(item.text),
       heading: item.role === 'heading',
+      fileSource: tag?.k === 'f' && tag.s ? tag.s : null,
       status: (tagId && statuses[tagId]) || 'open',
       pendingEdits: pages[item.page]?.state === 'read' ? pending.get(place) ?? 0 : null,
     };

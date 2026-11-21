@@ -10,6 +10,9 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {
   checkSourceWriteAccess,
   filesToWrite,
+  indexToWrite,
+  setFilesLeftOut,
+  setFolderOrdered,
   readLinkedNote,
   restoreFileTitles,
   saveFileCopy,
@@ -21,6 +24,7 @@ import {
   type LinkedNote,
   type PendingRemoval,
 } from '../../actions/linkedFiles';
+import {addLinkedFiles} from '../../actions/textImport';
 import {userMessage} from '../../domain/userMessage';
 import type {NoteInfo} from '../../supernote/noteElements';
 import type {FrameStatus} from '../../ui/ScreenFrame';
@@ -29,6 +33,10 @@ export interface LinkedFiles {
   note: LinkedNote | null;
   /** Files Update would write now. */
   toWrite: LinkedFile[];
+  /** Update would also write the folder's index.txt. */
+  indexStale: boolean;
+  /** Files were added to the note: the card is out of date and only closes. */
+  added: boolean;
   /** True while the note's textboxes are read to find the files and compare them. */
   finding: boolean;
   busy: boolean;
@@ -51,6 +59,13 @@ export interface LinkedFiles {
   checkAccess: (file: LinkedFile) => void;
   unlink: (file: LinkedFile) => void;
   restoreTitles: () => void;
+  /** Folder mode: add files of the folder after the last page. */
+  addFiles: (names: string[]) => void;
+  /** Folder mode: leave files out (not offered again), or take them back. */
+  leaveOut: (names: string[], leave: boolean) => void;
+  setOrdered: (ordered: boolean) => void;
+  /** Overwrite an index.txt changed in Obsidian with the note's order. */
+  rewriteIndex: () => void;
 }
 
 function dryRunWarnings(note: LinkedNote | null): string[] {
@@ -71,6 +86,7 @@ export function useLinkedFiles(info: NoteInfo | null, ready: boolean): LinkedFil
   const [warnings, setWarnings] = useState<string[]>([]);
   const [alsoUpdate, setAlsoUpdate] = useState(true);
   const [confirm, setConfirm] = useState<PendingRemoval[] | null>(null);
+  const [added, setAdded] = useState(false);
   const started = useRef(false);
 
   const find = useCallback(
@@ -137,14 +153,19 @@ export function useLinkedFiles(info: NoteInfo | null, ready: boolean): LinkedFil
   );
 
   const run = useCallback(
-    (protectedAnswer?: 'remove' | 'keep') => {
+    (protectedAnswer?: 'remove' | 'keep', rewriteIndex = false) => {
       if (!info || !note) {
         return;
       }
       step(
         'Writing the files…',
         async () => {
-          const result = await writeLinkedFiles({notePath: info.notePath, pageCount: info.pageCount, protectedAnswer});
+          const result = await writeLinkedFiles({
+            notePath: info.notePath,
+            pageCount: info.pageCount,
+            protectedAnswer,
+            rewriteIndex,
+          });
           if (result.kind === 'confirm') {
             setConfirm(result.pending);
             return writeResultText(result);
@@ -216,9 +237,77 @@ export function useLinkedFiles(info: NoteInfo | null, ready: boolean): LinkedFil
     }
   }, [info, step]);
 
+  const folderPath = note?.folder?.folder.path ?? null;
+  const ordered = !!note?.folder?.folder.ordered;
+
+  const addFiles = useCallback(
+    (names: string[]) => {
+      if (!info || !folderPath || names.length === 0) {
+        return;
+      }
+      step(
+        'Adding the files…',
+        async () => {
+          await setFilesLeftOut(info.notePath, names, false);
+          const result = await addLinkedFiles(names.map(name => `${folderPath}/${name}`));
+          setAdded(true);
+          return `${result.message} ${
+            ordered
+              ? 'Open Manuscript again to move them to their place (Outline ←); Update then writes index.txt.'
+              : 'Open Manuscript again to see them.'
+          }`;
+        },
+        'The files could not be added.',
+      );
+    },
+    [folderPath, info, ordered, step],
+  );
+
+  const leaveOut = useCallback(
+    (names: string[], leave: boolean) => {
+      if (info) {
+        step(
+          leave ? 'Leaving out…' : 'Taking back…',
+          async () => {
+            await setFilesLeftOut(info.notePath, names, leave);
+            return null;
+          },
+          'Could not change the files left out.',
+        );
+      }
+    },
+    [info, step],
+  );
+
+  const setOrdered = useCallback(
+    (next: boolean) => {
+      if (info) {
+        step(
+          'Saving…',
+          async () => {
+            await setFolderOrdered(info.notePath, next);
+            return next
+              ? 'Ordered: Update writes the note\'s order to index.txt.'
+              : 'Unordered: index.txt is no longer written (the file stays).';
+          },
+          'Could not change the folder.',
+        );
+      }
+    },
+    [info, step],
+  );
+
+  const rewriteIndex = useCallback(() => run(undefined, true), [run]);
+
   return {
     note,
     toWrite: filesToWrite(note),
+    indexStale: indexToWrite(note),
+    added,
+    addFiles,
+    leaveOut,
+    setOrdered,
+    rewriteIndex,
     finding,
     busy,
     status,

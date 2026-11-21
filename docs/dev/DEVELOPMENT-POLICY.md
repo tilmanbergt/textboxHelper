@@ -66,6 +66,9 @@ The architecture as built is described in `design-overview.md`. These rules are 
   user's Apply or Update, and only when the file didn't change outside since the plugin last read
   or wrote it; a copy next to it or into EXPORT on Save as copy / Save to EXPORT; and a probe file
   `.textbox-tools-probe.txt` there only on Check write access (`technical-design-source-link.md`).
+  In a folder bound to a note as ordered, it writes the folder's `index.txt` (a list of
+  `[[links]]`, the plugin's own file) on import and Update, and lists the folder's `.txt` files
+  (`technical-design-linked-files.md`); it never deletes or renames a user's file.
   It reads font files from `/system/fonts`, `MyStyle/fonts` and
   `MyStyle/TextboxHelper/fonts`. A new place needs a line in the README and in
   `supernote-host-facts.md` if the host restricts it.
