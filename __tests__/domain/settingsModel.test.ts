@@ -17,7 +17,8 @@ describe('parseSettings', () => {
       ...DEFAULT_PLUGIN_SETTINGS,
       import: {
         ...DEFAULT_PLUGIN_SETTINGS.import,
-        filename: 'Obsidian/day.txt',
+        filePath: '/storage/emulated/0/Document/day.txt',
+        linkToFile: false,
         marginLeft: 80,
         structure: {...DEFAULT_PLUGIN_SETTINGS.import.structure, layoutMode: 'paragraphTextboxes' as const},
       },
@@ -44,7 +45,7 @@ describe('parseSettings', () => {
         future: {anything: true},
       }),
     );
-    expect(parsed.import.filename).toBe('a.txt');
+    expect(parsed.import.filePath).toBe('/storage/emulated/0/INBOX/a.txt');
     expect(parsed.import.marginTop).toBe(DEFAULT_PLUGIN_SETTINGS.import.marginTop);
     expect(parsed.import.insertMode).toBe('auto');
     expect(parsed.import.structure.layoutMode).toBe('paragraphTextboxes');
@@ -57,7 +58,13 @@ describe('parseSettings', () => {
   });
 
   it('forgets a file from the former MyStyle import folder', () => {
-    expect(parseSettings(JSON.stringify({import: {sourceFolder: 'myStyle', filename: 'a.txt'}})).import.filename).toBe('');
+    expect(parseSettings(JSON.stringify({import: {sourceFolder: 'myStyle', filename: 'a.txt'}})).import.filePath).toBe('');
+  });
+
+  it('prefers the absolute path over an older INBOX-relative one', () => {
+    const parsed = parseSettings(JSON.stringify({import: {filePath: '/a/b.txt', filename: 'c.txt'}}));
+    expect(parsed.import.filePath).toBe('/a/b.txt');
+    expect(parsed.import.linkToFile).toBe(true);
   });
 });
 

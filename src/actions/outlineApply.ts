@@ -1,4 +1,5 @@
 import type {Element, TextBox} from 'sn-plugin-lib';
+import {withAside} from '../domain/blockTag';
 import {createOutlineBackupPayload} from '../domain/backupPayload';
 import {
   layoutAside,
@@ -252,7 +253,7 @@ export async function applyOutlinePlan(
         if (place) {
           inserts.set(place.page, [
             ...(inserts.get(place.page) ?? []),
-            insertOf(element, place),
+            insertOf(element, place, check.aside.has(block.key)),
           ]);
         }
       }
@@ -285,11 +286,12 @@ export async function applyOutlinePlan(
   }
 }
 
-function insertOf(element: TextElement, place: Placement): StyledTextboxInsert {
+/** A set-aside block's tag says so, so a linked file leaves it out (technical-design-source-link.md §2.4). */
+function insertOf(element: TextElement, place: Placement, aside: boolean): StyledTextboxInsert {
   return {
     text: element.textBox.textContentFull ?? '',
     rect: place.rect,
-    userData: typeof element.userData === 'string' ? element.userData : null,
+    userData: withAside(typeof element.userData === 'string' ? element.userData : null, aside),
     style: textboxStyle(element.textBox as TextboxData),
   };
 }

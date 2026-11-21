@@ -17,6 +17,7 @@ import {
 import type {ExportScope} from './exportClassification';
 import {
   DEFAULT_TEXTBOX_IMPORT_SETTINGS,
+  pathFromInboxRelative,
   type TextboxImportRoleStyle,
   type TextboxImportSettings,
 } from './importSettings';
@@ -84,10 +85,17 @@ function parseImport(value: unknown): TextboxImportSettings {
   const raw = asObject(value);
   const d = DEFAULT_TEXTBOX_IMPORT_SETTINGS;
   const structure = asObject(raw.structure);
-  // A file chosen in the former second import folder (MyStyle) can't be read any more.
-  const filename = typeof raw.filename === 'string' && raw.sourceFolder !== 'myStyle' ? raw.filename : d.filename;
+  // An older file stored the path relative to INBOX (`filename`); a file chosen in the former second
+  // import folder (MyStyle) can't be read any more.
+  const filePath =
+    typeof raw.filePath === 'string'
+      ? raw.filePath
+      : typeof raw.filename === 'string' && raw.sourceFolder !== 'myStyle'
+      ? pathFromInboxRelative(raw.filename)
+      : d.filePath;
   return {
-    filename,
+    filePath,
+    linkToFile: bool(raw.linkToFile, d.linkToFile),
     fontSize: num(raw.fontSize, d.fontSize, MIN_FONT_SIZE, MAX_FONT_SIZE),
     structure: {
       layoutMode: oneOf(structure.layoutMode, ['continuous', 'paragraphTextboxes'] as const, d.structure.layoutMode),

@@ -145,6 +145,10 @@ export const REVIEW_HELP: HelpBlock[] = [
     text: 'Applies every change that is ready, after writing a backup of the page. Tagged text still being recognized stays on the page for another pass. Used marks, numbers and tagged handwriting are removed.',
   },
   {
+    title: 'A linked text file',
+    text: 'A note imported with "Link to file" names its file in the header. Apply also updates the file ("Also update …", untick it for one Apply). With no marks waiting but the note changed - typed in a textbox, joined, moved - the button is "Update …". A file changed outside since the last write is not overwritten: Details → Save as copy. Deleting a framed "kept as is" block asks before it leaves the file.',
+  },
+  {
     title: 'Wrong words picked?',
     text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/TextboxHelper/fonts and open Manuscript again. Details has the calibration and Save Diagnostics for a bug report.',
   },

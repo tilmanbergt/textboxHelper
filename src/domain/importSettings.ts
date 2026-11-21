@@ -1,10 +1,10 @@
 /**
  * Settings of the text import: the chosen file, layout, paragraph separator, heading styles,
- * margins, insert mode, their defaults, and where the text file is read from.
+ * margins, insert mode, whether the import is linked to its file, and their defaults.
  *
- * Text files are read from INBOX only (the device folder's exact name). The file is chosen with
- * the Supernote file selector, which is limited to INBOX; `filename` is its path relative to
- * INBOX, so files in subfolders work. An empty `filename` means no file is chosen yet.
+ * A text file can come from any folder on the device (technical-design-source-link.md §3). It is
+ * chosen with the Supernote file selector, which opens in the folder of the last file, else INBOX;
+ * `filePath` is the absolute path. An empty `filePath` means no file is chosen yet.
  */
 
 export type TextboxImportLayoutMode =
@@ -36,8 +36,13 @@ export type TextboxImportInsertMode =
   | 'afterCurrentPage';
 
 export type TextboxImportSettings = {
-  /** Path relative to INBOX; '' = no file chosen. */
-  filename: string;
+  /** Absolute path of the text file; '' = no file chosen. */
+  filePath: string;
+  /**
+   * In the Paragraph boxes layout: link the textboxes to the file, so changes can be written back
+   * (technical-design-source-link.md §3).
+   */
+  linkToFile: boolean;
   fontSize: number;
   structure: TextboxImportStructureSettings;
   marginLeft: number;
@@ -48,7 +53,8 @@ export type TextboxImportSettings = {
 };
 
 export const DEFAULT_TEXTBOX_IMPORT_SETTINGS: TextboxImportSettings = {
-  filename: '',
+  filePath: '',
+  linkToFile: true,
   fontSize: 36,
   structure: {
     layoutMode: 'continuous',
@@ -80,34 +86,41 @@ export const DEFAULT_TEXTBOX_IMPORT_SETTINGS: TextboxImportSettings = {
 
 export const IMPORT_FOLDER = '/storage/emulated/0/INBOX';
 
-/** The same storage under the other names Android uses for it. */
-const STORAGE_ROOTS = ['/storage/emulated/0/', '/sdcard/', '/storage/self/primary/'];
-
 export function resolveTextboxImportPath(settings: TextboxImportSettings): string {
-  const filename = settings.filename.trim().replace(/^\/+/, '');
-  if (!filename) {
+  const path = settings.filePath.trim();
+  if (!path) {
     throw new Error('Choose a text file first.');
   }
-  return `${IMPORT_FOLDER}/${filename}`;
+  return path;
+}
+
+/** Whether the import is linked to its file: only paragraph boxes map back to the file's blocks. */
+export function isLinkedImport(settings: TextboxImportSettings): boolean {
+  return settings.linkToFile && settings.structure.layoutMode === 'paragraphTextboxes';
 }
 
 /**
- * The path a file selector returned, relative to INBOX, or null when the file is outside INBOX
- * or not a .txt file (the selector is limited to INBOX and .txt, this checks it anyway).
+ * A path the file selector returned, cleaned up, or null when it is not a .txt file (the selector
+ * is limited to .txt, this checks it anyway).
  */
-export function importPathRelativeToInbox(absolutePath: string): string | null {
-  const path = absolutePath.trim().replace(/\/{2,}/g, '/');
-  for (const root of STORAGE_ROOTS) {
-    const prefix = `${root}INBOX/`;
-    if (path.length > prefix.length && path.slice(0, prefix.length).toLowerCase() === prefix.toLowerCase()) {
-      const relative = path.slice(prefix.length);
-      if (relative.split('/').includes('..') || !/\.txt$/i.test(relative)) {
-        return null;
-      }
-      return relative;
-    }
+export function chosenTextFilePath(path: string): string | null {
+  const clean = path.trim().replace(/\/{2,}/g, '/');
+  if (!clean.startsWith('/') || clean.split('/').includes('..') || !/[^/]\.txt$/i.test(clean)) {
+    return null;
   }
-  return null;
+  return clean;
+}
+
+/** The folder the file selector opens in: the last file's folder, else INBOX. */
+export function importStartFolder(filePath: string): string {
+  const slash = filePath.lastIndexOf('/');
+  return slash > 0 ? filePath.slice(0, slash) : IMPORT_FOLDER;
+}
+
+/** The import setting's path from an older settings file, where it was relative to INBOX. */
+export function pathFromInboxRelative(filename: string): string {
+  const relative = filename.trim().replace(/^\/+/, '');
+  return relative ? `${IMPORT_FOLDER}/${relative}` : '';
 }
 
 export type HeadingStyleKey = 'heading1' | 'heading2' | 'heading3';

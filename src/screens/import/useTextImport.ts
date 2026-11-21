@@ -9,11 +9,7 @@ import {
   performTextboxImport,
   type TextboxImportPreview,
 } from '../../actions/textImport';
-import {
-  IMPORT_FOLDER,
-  importPathRelativeToInbox,
-  type TextboxImportSettings,
-} from '../../domain/importSettings';
+import {chosenTextFilePath, type TextboxImportSettings} from '../../domain/importSettings';
 import {userMessage} from '../../domain/userMessage';
 import {getSettings, updateSettings} from '../../storage/settingsFile';
 import {chooseImportFile} from '../../supernote/fileSelector';
@@ -51,9 +47,9 @@ export function useTextImport(): TextImport {
 
   useEffect(() => {
     const run = ++runRef.current;
-    if (!settings.filename.trim()) {
+    if (!settings.filePath.trim()) {
       setPreview(null);
-      setPreviewError('Choose a text file in INBOX.');
+      setPreviewError('Choose a text file.');
       return;
     }
     setPreviewing(true);
@@ -81,20 +77,19 @@ export function useTextImport(): TextImport {
     if (busy) {
       return;
     }
-    const current = settings.filename ? `${IMPORT_FOLDER}/${settings.filename}` : null;
-    chooseImportFile(current)
+    chooseImportFile(settings.filePath || null)
       .then(path => {
         if (!path) {
           return;
         }
-        const relative = importPathRelativeToInbox(path);
-        if (!relative) {
-          setStatus({kind: 'error', text: 'Choose a .txt file in INBOX.'});
+        const chosen = chosenTextFilePath(path);
+        if (!chosen) {
+          setStatus({kind: 'error', text: 'Choose a .txt file.'});
           return;
         }
         setStatus(null);
         setImported(false);
-        change({...settings, filename: relative});
+        change({...settings, filePath: chosen});
       })
       .catch(error => {
         console.warn('[TextImport] file selector failed', String(error));

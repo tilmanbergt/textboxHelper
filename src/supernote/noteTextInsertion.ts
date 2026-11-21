@@ -16,6 +16,11 @@ export type TextboxInsertInstruction = {
   fontSize: number;
   fontPath?: string;
   bold?: boolean;
+  /** A protected block's placeholder in a linked import: italic and framed. */
+  italic?: boolean;
+  framed?: boolean;
+  /** The block tag of a linked import (technical-design-source-link.md §2.2). */
+  userData?: string;
   createPage?: boolean;
 };
 
@@ -30,6 +35,8 @@ export type InsertTextboxPagesResult = {
 
 const DEFAULT_TEMPLATE_NAME = 'style_white';
 const INSERT_PAGE_TIMEOUT_MS = 8000;
+/** A thin frame around a textbox (NOTE's first frame style). */
+const FRAME_STYLE_LINE = 1;
 
 /* -----------------------------
    helpers
@@ -77,13 +84,16 @@ async function createTextboxElement(instruction: TextboxInsertInstruction): Prom
   textBox.textRect = instruction.rect;
   textBox.textAlign = 0;
   textBox.textBold = instruction.bold ? 1 : 0;
-  textBox.textItalics = 0;
+  textBox.textItalics = instruction.italic ? 1 : 0;
   textBox.textFrameWidthType = 0;
-  textBox.textFrameStyle = 0;
+  textBox.textFrameStyle = instruction.framed ? FRAME_STYLE_LINE : 0;
   textBox.textEditable = 0;
   textBox.textDigestData = null;
 
   element.textBox = textBox;
+  if (instruction.userData) {
+    element.userData = instruction.userData;
+  }
 
   return element;
 }

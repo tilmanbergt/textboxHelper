@@ -46,12 +46,14 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 - The whole note: a page strip with each page's count of changes; tap a page, or read them all
 - Apply every ready change of the pages read after the preview; one backup of those pages is written first
 - Outline: every textbox of the note as a block in reading order, with its pending edits and a status (open, review, final) you set; filter by status, pending edits or planned changes
+- A note imported linked to its text file: Apply also updates the file, and "Update <file>" writes changes made directly in the textboxes; untouched text is written back exactly, a file changed outside is never overwritten (Save as copy instead)
 - Move a block with ←, set it aside (to a new page at the end of the note) or delete it; the changes are planned first, each can be undone, and "Apply n changes" rebuilds the pages from the first change with one backup. A block with pending edits stays in place until its edits are applied
 
 ### Import Text File
 
-- Import plain text into NOTE textboxes, from a `.txt` file in the Supernote's `INBOX` folder (or a folder inside it), chosen with the Supernote file selector
+- Import plain text into NOTE textboxes, from a `.txt` file in any folder (for example `INBOX`), chosen with the Supernote file selector
 - Split imported text into paragraph-based textboxes
+- Link the import to its file: one textbox per heading, paragraph or list; frontmatter, code, tables, callouts and other blocks are kept exactly as they are and shown as framed placeholders
 - See the planned pages drawn to scale before importing; the preview updates by itself
 
 ### Export DOCX
@@ -77,7 +79,9 @@ be wrong.
 
 The plugin remembers the import settings, the export pages and rules, and the edit-marker
 calibration in `settings.json` in its own plugin folder. Tagged replacements and insertions are
-kept in `pen-edits/` in the same folder, the Outline's block statuses in `block-status.json`.
+kept in `pen-edits/` in the same folder, the Outline's block statuses in `block-status.json`, and
+what a linked import came from (the file's path and its original text) in `sources/`, together
+with the linked file's text before the plugin's latest write to it.
 
 ## Installation
 

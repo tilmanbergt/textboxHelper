@@ -1,8 +1,12 @@
 import {paginateTextboxBlocksIntoPages, type TextboxBlockPage} from '../domain/blockPagination';
+import {formatBlockTag, newBlockId} from '../domain/blockTag';
+import {fingerprint} from '../domain/fingerprint';
 import {appendFontWarning, NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
 import {
   parseTextboxImportBlocks,
+  sourceImportBlocks,
   summarizeTextboxImportBlocks,
+  type TextboxImportBlock,
   type TextboxImportBlockSummary,
 } from '../domain/importParsing';
 import {
@@ -21,15 +25,19 @@ import {
   type TextboxImportPlan,
 } from '../domain/importPlan';
 import {
+  isLinkedImport,
   resolveTextboxImportPath,
   type TextboxImportInsertMode,
   type TextboxImportLayoutMode,
   type TextboxImportParagraphSeparator,
   type TextboxImportSettings,
 } from '../domain/importSettings';
+import {parseSourceBlocks, type ParsedSource, type SourceSummary} from '../domain/sourceBlocks';
+import {newSourceId, sourceFileName, type SourceRecord} from '../domain/sourceRecord';
 import {countWords} from '../domain/textSplitting';
 import {paginateTextIntoTextboxPages} from '../domain/textPagination';
 import {readUtf8TextFile} from '../storage/importFile';
+import {writeSourceRecord} from '../storage/sourceStore';
 import {
   getCurrentNoteContext,
   recycleElements,
@@ -42,6 +50,10 @@ import {getFontWarning, measureTextboxHeight, resetFontWarnings} from '../supern
  * The text import behind "Import Text File": read the file, plan the textboxes and pages for the
  * current note, show the preview, and insert them. The planning is in `src/domain/importPlan.ts`
  * and the pagination in `src/domain/*Pagination.ts`.
+ *
+ * A linked import (technical-design-source-link.md §3) places one textbox per block of the file
+ * (`domain/sourceBlocks.ts`), tags each with its block and writes the file's record before the
+ * textboxes, so changes can be written back to the file later.
  */
 
 export type TextboxImportProgressUpdate = {
@@ -60,6 +72,8 @@ export type TextboxImportResult = {
   characterCount: number;
   wordCount: number;
   effectiveInsertMode: Exclude<TextboxImportInsertMode, 'auto'>;
+  /** The linked file's record id, when the import was linked. */
+  sourceId: string | null;
 };
 
 export type TextboxImportPreview = {
@@ -88,6 +102,8 @@ export type TextboxImportPreview = {
   /** The first planned pages with their textboxes, to draw them to scale. */
   pages: PlannedTextboxPage[];
   plannedPageCount: number;
+  /** A linked import: what the file contains (technical-design-source-link.md §3). */
+  source: SourceSummary | null;
 };
 
 /** How many planned pages the preview carries; the counts cover all of them. */
@@ -98,6 +114,8 @@ async function buildImportPlan(params: {
   text: string;
   settings: TextboxImportSettings;
   context: CurrentNoteContext;
+  /** A linked import's blocks, used instead of parsing the text again. */
+  linkedBlocks?: TextboxImportBlock[];
 }): Promise<TextboxImportPlan> {
   const maxRect = buildImportMaxRect(params.context.pageSize, params.settings);
   const currentPageHasImportAreaContent = pageHasContentInImportArea(
@@ -116,10 +134,12 @@ async function buildImportPlan(params: {
   let blockSummary: TextboxImportBlockSummary;
 
   if (params.settings.structure.layoutMode === 'paragraphTextboxes') {
-    const blocks = parseTextboxImportBlocks({
-      text: params.text,
-      structure: params.settings.structure,
-    });
+    const blocks =
+      params.linkedBlocks ??
+      parseTextboxImportBlocks({
+        text: params.text,
+        structure: params.settings.structure,
+      });
 
     if (blocks.length === 0) {
       throw new Error('No import blocks were planned.');
@@ -175,16 +195,36 @@ async function buildImportPlan(params: {
   };
 }
 
+type ImportText = {
+  /** The file as read (a linked import's record keeps it exactly). */
+  raw: string;
+  /** Cleaned up for the counts, the preview text and an unlinked import. */
+  text: string;
+  linked: ParsedSource | null;
+  linkedBlocks?: TextboxImportBlock[];
+};
+
+async function readImportText(settings: TextboxImportSettings, sourcePath: string): Promise<ImportText> {
+  const raw = await readUtf8TextFile(sourcePath);
+  const text = normalizeImportedText(raw);
+  if (!text) {
+    throw new Error('The file is empty.');
+  }
+  if (!isLinkedImport(settings)) {
+    return {raw, text, linked: null};
+  }
+  const linked = parseSourceBlocks(raw);
+  if (linked.blocks.length === 0) {
+    throw new Error('The file has no text outside its frontmatter.');
+  }
+  return {raw, text, linked, linkedBlocks: sourceImportBlocks(linked.blocks, settings.structure)};
+}
+
 export async function getTextboxImportPreview(
   settings: TextboxImportSettings,
 ): Promise<TextboxImportPreview> {
   const sourcePath = resolveTextboxImportPath(settings);
-  const rawText = await readUtf8TextFile(sourcePath);
-  const text = normalizeImportedText(rawText);
-
-  if (!text) {
-    throw new Error('The file is empty.');
-  }
+  const {text, linked, linkedBlocks} = await readImportText(settings, sourcePath);
 
   const context = await getCurrentNoteContext();
 
@@ -193,6 +233,7 @@ export async function getTextboxImportPreview(
       text,
       settings,
       context,
+      linkedBlocks,
     });
 
     return {
@@ -219,6 +260,7 @@ export async function getTextboxImportPreview(
       pageSize: {width: context.pageSize.width, height: context.pageSize.height},
       pages: plan.pages.slice(0, PREVIEW_PAGE_LIMIT),
       plannedPageCount: plan.pages.length,
+      source: linked?.summary ?? null,
     };
   } finally {
     await recycleElements(context.pageElements);
@@ -245,12 +287,7 @@ async function runTextboxImport(
   const sourcePath = resolveTextboxImportPath(settings);
 
   options?.onProgress?.({message: 'Reading import file...'});
-  const rawText = await readUtf8TextFile(sourcePath);
-  const text = normalizeImportedText(rawText);
-
-  if (!text) {
-    throw new Error('The file is empty.');
-  }
+  const {raw, text, linked, linkedBlocks} = await readImportText(settings, sourcePath);
 
   options?.onProgress?.({message: 'Reading current note context...'});
   const context = await getCurrentNoteContext();
@@ -261,7 +298,13 @@ async function runTextboxImport(
       text,
       settings,
       context,
+      linkedBlocks,
     });
+
+    // The record goes first: an import that stops halfway still leaves a usable link.
+    const record = linked
+      ? await linkImport({raw, linked, plan, sourcePath, notePath: context.notePath})
+      : null;
 
     const pages = buildInsertPages({
       pages: plan.pages,
@@ -286,8 +329,12 @@ async function runTextboxImport(
       },
     });
 
+    const linkedNote = record
+      ? ` ${linked?.summary.protectedCount ? `${linked.summary.protectedCount} kept as is · ` : ''}Linked to ${sourceFileName(record)}.`
+      : '';
     return {
-      message: `Imported ${insertResult.insertedTextboxCount} textbox(es) and created ${insertResult.createdPageCount} new page(s).`,
+      message: `Imported ${insertResult.insertedTextboxCount} textbox(es) and created ${insertResult.createdPageCount} new page(s).${linkedNote}`,
+      sourceId: record?.sourceId ?? null,
       sourcePath,
       createdPageCount: insertResult.createdPageCount,
       insertedTextboxCount: insertResult.insertedTextboxCount,
@@ -298,4 +345,54 @@ async function runTextboxImport(
   } finally {
     await recycleElements(context.pageElements);
   }
+}
+
+/**
+ * Writes the record of a linked import and gives every planned textbox its block tag (the block,
+ * the piece of a block cut to fit the pages, and the placeholder kind).
+ */
+async function linkImport(params: {
+  raw: string;
+  linked: ParsedSource;
+  plan: TextboxImportPlan;
+  sourcePath: string;
+  notePath: string;
+}): Promise<SourceRecord> {
+  const now = new Date();
+  const record: SourceRecord = {
+    version: 1,
+    sourceId: newSourceId(now),
+    filePath: params.sourcePath,
+    notePath: params.notePath,
+    importedAt: now.toISOString(),
+    original: params.raw,
+    eol: params.linked.eol,
+    frontmatterEnd: params.linked.frontmatterEnd,
+    blocks: params.linked.blocks,
+    removedProtected: [],
+    lastWrittenAt: null,
+    lastWrittenText: null,
+    fileFingerprint: fingerprint(params.raw),
+  };
+  for (const page of params.plan.pages) {
+    for (const chunk of page.chunks) {
+      if (chunk.sourceIndex === undefined) {
+        continue;
+      }
+      chunk.userData = formatBlockTag({
+        v: 1,
+        id: newBlockId(now),
+        s: record.sourceId,
+        i: chunk.sourceIndex,
+        ...(chunk.piece ? {p: chunk.piece} : {}),
+        ...(chunk.placeholder ? {k: 'x' as const} : {}),
+      });
+    }
+  }
+  await writeSourceRecord(record);
+  console.log(
+    '[TextImport] linked',
+    JSON.stringify({sourceId: record.sourceId, blocks: record.blocks.length, chars: params.raw.length}),
+  );
+  return record;
 }
