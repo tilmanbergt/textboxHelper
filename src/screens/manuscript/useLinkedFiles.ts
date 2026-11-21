@@ -22,6 +22,7 @@ import {
   writeResultText,
   type LinkedFile,
   type LinkedNote,
+  type PendingMove,
   type PendingRemoval,
 } from '../../actions/linkedFiles';
 import {addLinkedFiles} from '../../actions/textImport';
@@ -49,8 +50,9 @@ export interface LinkedFiles {
   alsoUpdate: boolean;
   setAlsoUpdate: (on: boolean) => void;
   /** Protected blocks deleted on the page, waiting for Remove / Keep before the write. */
-  confirm: PendingRemoval[] | null;
-  answer: (remove: boolean) => void;
+  confirm: Question | null;
+  /** The answer to `confirm`: yes = remove the protected blocks / move the textboxes. */
+  answer: (yes: boolean) => void;
   /** Reads the note again and compares it with the files (after the note changed). */
   refind: () => void;
   /** Writes every file that changed here. */
@@ -67,6 +69,14 @@ export interface LinkedFiles {
   /** Overwrite an index.txt changed in Obsidian with the note's order. */
   rewriteIndex: () => void;
 }
+
+/**
+ * What the write asks before it goes on: textboxes moved under another file's title (Move / Keep
+ * apart), or protected blocks deleted on the page (Remove / Keep).
+ */
+export type Question = {kind: 'moves'; moves: PendingMove[]} | {kind: 'protected'; pending: PendingRemoval[]};
+
+type Answers = {protectedAnswer?: 'remove' | 'keep'; movesAnswer?: 'move' | 'keep'};
 
 function dryRunWarnings(note: LinkedNote | null): string[] {
   const files = note?.files ?? [];
@@ -85,7 +95,8 @@ export function useLinkedFiles(info: NoteInfo | null, ready: boolean): LinkedFil
   const [access, setAccess] = useState<Record<string, string>>({});
   const [warnings, setWarnings] = useState<string[]>([]);
   const [alsoUpdate, setAlsoUpdate] = useState(true);
-  const [confirm, setConfirm] = useState<PendingRemoval[] | null>(null);
+  const [confirm, setConfirm] = useState<Question | null>(null);
+  const [answers, setAnswers] = useState<Answers>({});
   const [added, setAdded] = useState(false);
   const started = useRef(false);
 
@@ -153,7 +164,7 @@ export function useLinkedFiles(info: NoteInfo | null, ready: boolean): LinkedFil
   );
 
   const run = useCallback(
-    (protectedAnswer?: 'remove' | 'keep', rewriteIndex = false) => {
+    (given: Answers, rewriteIndex = false) => {
       if (!info || !note) {
         return;
       }
@@ -163,14 +174,18 @@ export function useLinkedFiles(info: NoteInfo | null, ready: boolean): LinkedFil
           const result = await writeLinkedFiles({
             notePath: info.notePath,
             pageCount: info.pageCount,
-            protectedAnswer,
+            ...given,
             rewriteIndex,
           });
           if (result.kind === 'confirm') {
-            setConfirm(result.pending);
+            setAnswers(given);
+            setConfirm(
+              result.moves.length > 0 ? {kind: 'moves', moves: result.moves} : {kind: 'protected', pending: result.pending},
+            );
             return writeResultText(result);
           }
           setConfirm(null);
+          setAnswers({});
           setWarnings(result.warnings);
           return writeResultText(result);
         },
@@ -180,15 +195,17 @@ export function useLinkedFiles(info: NoteInfo | null, ready: boolean): LinkedFil
     [info, note, step],
   );
 
-  const write = useCallback(() => run(), [run]);
+  const write = useCallback(() => run({}), [run]);
 
   const answer = useCallback(
-    (remove: boolean) => {
-      if (confirm) {
-        run(remove ? 'remove' : 'keep');
+    (yes: boolean) => {
+      if (confirm?.kind === 'moves') {
+        run({...answers, movesAnswer: yes ? 'move' : 'keep'});
+      } else if (confirm) {
+        run({...answers, protectedAnswer: yes ? 'remove' : 'keep'});
       }
     },
-    [confirm, run],
+    [answers, confirm, run],
   );
 
   const saveCopy = useCallback(
@@ -297,7 +314,7 @@ export function useLinkedFiles(info: NoteInfo | null, ready: boolean): LinkedFil
     [info, step],
   );
 
-  const rewriteIndex = useCallback(() => run(undefined, true), [run]);
+  const rewriteIndex = useCallback(() => run({}, true), [run]);
 
   return {
     note,

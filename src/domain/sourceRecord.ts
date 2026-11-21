@@ -24,6 +24,11 @@ export type SourceRecord = {
   lastWrittenText: string | null;
   /** Fingerprint of the file as the plugin last read or wrote it. */
   fileFingerprint: string;
+  /**
+   * Block tags (ids) of textboxes from other linked files the user confirmed to move into this
+   * file (technical-design-linked-files.md §6): written here without asking again.
+   */
+  adopted?: string[];
 };
 
 /** A new source id: "s-" + time in base 36 + four random characters. */
@@ -102,6 +107,7 @@ export function parseSourceRecord(text: string): SourceRecord | null {
       lastWrittenAt: typeof raw.lastWrittenAt === 'string' ? raw.lastWrittenAt : null,
       lastWrittenText: typeof raw.lastWrittenText === 'string' ? raw.lastWrittenText : null,
       fileFingerprint: typeof raw.fileFingerprint === 'string' ? raw.fileFingerprint : '',
+      ...(Array.isArray(raw.adopted) ? {adopted: raw.adopted.filter((id): id is string => typeof id === 'string')} : {}),
     };
   } catch {
     return null;

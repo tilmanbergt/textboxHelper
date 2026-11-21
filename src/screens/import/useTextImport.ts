@@ -18,6 +18,7 @@ import {chosenTextFilePath, type TextboxImportSettings} from '../../domain/impor
 import {userMessage} from '../../domain/userMessage';
 import {getSettings, updateSettings} from '../../storage/settingsFile';
 import {chooseImportFile} from '../../supernote/fileSelector';
+import {readNoteInfo} from '../../supernote/noteElements';
 import type {FrameStatus} from '../../ui/ScreenFrame';
 
 const PREVIEW_DELAY_MS = 500;
@@ -146,7 +147,10 @@ export function useTextImport(): TextImport {
     if (busy) {
       return;
     }
-    chooseImportFile(settings.filePath || null)
+    readNoteInfo()
+      .then(info => info.notePath)
+      .catch(() => null)
+      .then(notePath => chooseImportFile(settings.filePath || null, notePath))
       .then(path => {
         if (!path) {
           return;

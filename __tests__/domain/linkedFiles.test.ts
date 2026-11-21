@@ -1,5 +1,5 @@
 import {dividerTag, formatBlockTag, parseBlockTag, titleTag, type BlockTag} from '../../src/domain/blockTag';
-import {segmentByFile} from '../../src/domain/fileSegments';
+import {heldElsewhere, segmentByFile} from '../../src/domain/fileSegments';
 import {fileState, isWritable} from '../../src/domain/fileState';
 import {covers, isFileTitle, planFileTitles} from '../../src/domain/fileTitles';
 import {fingerprint} from '../../src/domain/fingerprint';
@@ -21,7 +21,7 @@ import {
   withSources,
 } from '../../src/domain/noteLinks';
 import {addSummaries, parseSourceBlocks} from '../../src/domain/sourceBlocks';
-import type {SourceItem} from '../../src/domain/sourceExport';
+import {regenerateSource, type SourceItem} from '../../src/domain/sourceExport';
 import {dividerText} from '../../src/domain/sourceRecord';
 import {ELEMENT_TYPE_TITLE, TEXT_TYPE_NORMAL, type PageElementData, type Rect} from '../../src/domain/textboxModel';
 
@@ -273,5 +273,61 @@ describe('folder mode', () => {
     expect(fileNameProblem('a/b')).toMatch(/can't contain/);
     expect(fileNameProblem('Index.txt')).toMatch(/index/);
     expect(baseName('Intro.TXT')).toBe('Intro');
+  });
+});
+
+describe('blocks moved between files', () => {
+  const recordOf = (sourceId: string, original: string) => {
+    const parsed = parseSourceBlocks(original);
+    return {
+      sourceId,
+      original,
+      eol: parsed.eol,
+      frontmatterEnd: parsed.frontmatterEnd,
+      blocks: parsed.blocks,
+      removedProtected: [],
+    };
+  };
+  const a = recordOf('a', 'A one.\n');
+  const b = recordOf('b', '## B title\n\nB text.\n');
+  const items = [
+    divider('a'),
+    item('A one.', block('a', 0)),
+    item('B title', block('b', 0)),
+    divider('b'),
+    item('B text.', block('b', 1)),
+  ];
+  const segments = segmentByFile(items);
+  const lookup = new Map([
+    ['a', a],
+    ['b', b],
+  ]);
+
+  it('holds a moved block back until the move is confirmed', () => {
+    const held = heldElsewhere(segments, new Map());
+    expect([...(held.get('b') ?? [])]).toEqual([0]);
+    const inA = regenerateSource(a, segments.bySource.get('a') ?? [], {elsewhere: held.get('a'), lookup});
+    expect(inA.text).toBe('A one.\n');
+    expect(inA.crossings).toEqual([{from: 'b', id: 'b-b-0', name: 'B title'}]);
+    const inB = regenerateSource(b, segments.bySource.get('b') ?? [], {elsewhere: held.get('b'), lookup});
+    expect(inB.text).toBe(b.original);
+    expect(inB.counts.heldBack).toBe(1);
+  });
+
+  it('writes a confirmed move where the block is now, as its own file wrote it', () => {
+    const inA = regenerateSource(a, segments.bySource.get('a') ?? [], {accept: true, lookup});
+    expect(inA.text).toBe('A one.\n\n## B title\n');
+    expect(inA.adoptedIds).toEqual(['b-b-0']);
+    const inB = regenerateSource(b, segments.bySource.get('b') ?? [], {accept: true, lookup});
+    expect(inB.text).toBe('B text.\n');
+    expect(inB.missing).toEqual(['B title']);
+  });
+
+  it('does not ask again once the target adopted the block', () => {
+    const adopted = new Map([['a', ['b-b-0']]]);
+    expect(heldElsewhere(segments, adopted).size).toBe(0);
+    const inA = regenerateSource({...a, adopted: ['b-b-0']}, segments.bySource.get('a') ?? [], {lookup});
+    expect(inA.crossings).toEqual([]);
+    expect(inA.text).toBe('A one.\n\n## B title\n');
   });
 });

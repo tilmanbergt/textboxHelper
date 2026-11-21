@@ -261,7 +261,7 @@ describe('regenerating the file', () => {
     ]);
   });
 
-  it('counts a deleted paragraph as missing and writes a textbox moved in from another file as new text', () => {
+  it('counts a deleted paragraph as missing and holds back a textbox of another file', () => {
     const r = record('A.\n\nB.\n\nC.\n');
     const items: SourceItem[] = [
       {page: 1, text: 'A.', tag: tag(0)},
@@ -269,9 +269,11 @@ describe('regenerating the file', () => {
       {page: 2, text: 'C.', tag: tag(2)},
     ];
     const result = regenerateSource(r, items);
-    expect(result.text).toBe('A.\n\nOther file\n\nC.\n');
+    expect(result.text).toBe('A.\n\nC.\n');
     expect(result.missing).toEqual(['B.']);
-    expect(result.counts.movedIn).toBe(1);
+    expect(result.crossings).toEqual([{from: 's-2', id: 'x', name: 'Other file'}]);
+    // Confirmed, it is written here as it is.
+    expect(regenerateSource(r, items, {accept: true}).text).toBe('A.\n\nOther file\n\nC.\n');
   });
 
   it('leaves out blocks the Outline set aside, without calling them missing', () => {

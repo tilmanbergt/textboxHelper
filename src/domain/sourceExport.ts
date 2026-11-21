@@ -15,8 +15,8 @@
  * - Between two blocks that were neighbours in the file and are both untouched, the original text
  *   between them is kept; elsewhere one blank line.
  * - A block the Outline set aside (`a` in its tag) is left out, and doesn't count as missing.
- * - A textbox of another linked file moved into this file's segment is new text here (`movedIn`);
- *   in its own file it is missing.
+ * - A textbox of another linked file in this file's segment is held back until the user confirms
+ *   the move (`CrossingOptions`); then it is written here and is missing in its own file.
  */
 import type {BlockTag} from './blockTag';
 import {blockName, type SourceBlock} from './sourceBlocks';
@@ -37,8 +37,10 @@ export type SourceCounts = {
   protectedKept: number;
   protectedRemoved: number;
   setAside: number;
-  /** Textboxes of another linked file in this file's segment, written here as new text. */
+  /** Textboxes of another linked file in this file's segment, written here (moves confirmed). */
   movedIn: number;
+  /** This file's blocks moved into another file's segment, kept here until the move is confirmed. */
+  heldBack: number;
 };
 
 export type SourceRegeneration = {
@@ -51,10 +53,34 @@ export type SourceRegeneration = {
   warnings: string[];
   /** Whether any textbox of this file is left in its segment. */
   present: boolean;
+  /** Textboxes of other files in this segment waiting for the user's confirmation. */
+  crossings: Crossing[];
+  /** Ids of the other files' textboxes written here. */
+  adoptedIds: string[];
   identical: boolean;
 };
 
-type RecordPart = Pick<SourceRecord, 'sourceId' | 'original' | 'eol' | 'frontmatterEnd' | 'blocks' | 'removedProtected'>;
+type RecordPart = Pick<SourceRecord, 'sourceId' | 'original' | 'eol' | 'frontmatterEnd' | 'blocks' | 'removedProtected'> &
+  Pick<SourceRecord, 'adopted'>;
+
+/** A textbox of another linked file in this file's segment, not (yet) confirmed to move here. */
+export type Crossing = {from: string; id: string; name: string};
+
+/**
+ * How textboxes that crossed between linked files are written (technical-design-linked-files.md
+ * §6). By default a textbox of another file in this file's segment is held back: not written here,
+ * and kept at its old place in its own file (`elsewhere` lists those blocks of this file), until the
+ * user confirms the move. Confirmed (`accept`, or its id in the record's `adopted`) it is written here
+ * as its own file wrote it, and its own file leaves it out.
+ */
+export type CrossingOptions = {
+  /** Write every crossing textbox here (the user confirmed the moves). */
+  accept?: boolean;
+  /** This file's blocks that sit in another file's segment, not confirmed: kept at their place. */
+  elsewhere?: Set<number>;
+  /** The other files' records, to write a moved block as its own file did (heading, placeholder). */
+  lookup?: Map<string, RecordPart>;
+};
 
 type Entry = {
   /** The source block, or null for new text. */
@@ -110,7 +136,11 @@ function listWarning(block: SourceBlock, text: string): string | null {
 }
 
 /** Rebuilds the file from `items`, the textboxes of its segment in reading order. */
-export function regenerateSource(record: RecordPart, items: SourceItem[]): SourceRegeneration {
+export function regenerateSource(
+  record: RecordPart,
+  items: SourceItem[],
+  options: CrossingOptions = {},
+): SourceRegeneration {
   const {blocks, original, sourceId} = record;
   const counts: SourceCounts = {
     unchanged: 0,
@@ -121,7 +151,11 @@ export function regenerateSource(record: RecordPart, items: SourceItem[]): Sourc
     protectedRemoved: 0,
     setAside: 0,
     movedIn: 0,
+    heldBack: 0,
   };
+  const crossings: Crossing[] = [];
+  const adoptedIds: string[] = [];
+  const adopted = new Set(record.adopted ?? []);
   // Blocks set aside count as neither written nor missing.
   const aside = new Set(
     items.filter(item => item.tag?.s === sourceId && item.tag.a && Number.isInteger(item.tag.i)).map(item => item.tag?.i as number),
@@ -140,13 +174,18 @@ export function regenerateSource(record: RecordPart, items: SourceItem[]): Sourc
       continue;
     }
     if (item.tag?.s && item.tag.s !== sourceId) {
-      // Moved here from another linked file: new text in this one (protected placeholders say
-      // nothing about their content here, so they are left out).
-      const text = item.text.replace(/\r\n?/g, '\n').trim();
-      if (text && item.tag.k !== 'x') {
+      const tag = item.tag;
+      const from = options.lookup?.get(tag.s as string);
+      const block = from && Number.isInteger(tag.i) ? from.blocks[tag.i as number] : undefined;
+      if (!options.accept && !adopted.has(tag.id)) {
+        crossings.push({from: tag.s as string, id: tag.id, name: block ? blockName(block) : firstWords(item.text)});
+        continue;
+      }
+      const text = movedText(item, tag, from, block);
+      if (text) {
         entries.push({index: null, original: false, text});
-        counts.added++;
         counts.movedIn++;
+        adoptedIds.push(tag.id);
       }
       continue;
     }
@@ -208,6 +247,12 @@ export function regenerateSource(record: RecordPart, items: SourceItem[]): Sourc
     if (seen.has(block.index) || aside.has(block.index)) {
       continue;
     }
+    if (options.elsewhere?.has(block.index)) {
+      // Under another file's title, the move not confirmed: it stays in this file as it was.
+      insertNearOldPlace(entries, {index: block.index, original: true, text: original.slice(block.start, block.end)});
+      counts.heldBack++;
+      continue;
+    }
     if (block.role !== 'protected') {
       missing.push(blockName(block));
       counts.missing++;
@@ -223,7 +268,42 @@ export function regenerateSource(record: RecordPart, items: SourceItem[]): Sourc
   }
 
   const text = assemble(record, entries);
-  return {text, counts, missing, pendingRemoval, warnings, present, identical: text === original};
+  return {
+    text,
+    counts,
+    missing,
+    pendingRemoval,
+    warnings,
+    present,
+    crossings,
+    adoptedIds,
+    identical: text === original,
+  };
+}
+
+/**
+ * A textbox moved here from another file, as text for this file: a protected placeholder as its
+ * block's original text, a heading with its #s, anything else as it is.
+ */
+function movedText(
+  item: SourceItem,
+  tag: BlockTag,
+  from: RecordPart | undefined,
+  block: SourceBlock | undefined,
+): string {
+  if (from && block && (tag.k === 'x' || block.role === 'protected')) {
+    return from.original.slice(block.start, block.end);
+  }
+  if (tag.k === 'x') {
+    return '';
+  }
+  const text = item.text.replace(/\r\n?/g, '\n').trim();
+  return text && block ? serialize(block, normalizeForCompare(text)) : text;
+}
+
+function firstWords(text: string): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > 40 ? `${flat.slice(0, 40)}…` : flat;
 }
 
 /** Puts a block right after the nearest earlier block of the file that is in the output. */

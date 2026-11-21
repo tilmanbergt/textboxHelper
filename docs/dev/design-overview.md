@@ -117,7 +117,7 @@ the points recognition used, as JSON to the EXPORT folder - only when the user t
 ### Text import (`actions/textImport.ts`)
 
 Import of a UTF-8 text file from any folder, chosen with the Supernote file selector
-(`supernote/fileSelector.ts`, `.txt` only, opening in the last file's folder, else `INBOX`), into textboxes:
+(`supernote/fileSelector.ts`, `.txt` only, opening in the note's folder, else the last file's, else `INBOX`), into textboxes:
 paragraphs split by blank lines (by default), markdown headings detected and set in larger bold
 text, the text paginated over the current page and new pages as needed. Settings and paths are
 in `domain/importSettings.ts`, parsing in `domain/importParsing.ts`, the page plan in

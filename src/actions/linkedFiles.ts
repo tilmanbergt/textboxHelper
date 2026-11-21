@@ -1,12 +1,18 @@
 import {parseBlockTag} from '../domain/blockTag';
 import type {ScannedTextBox} from '../domain/exportClassification';
-import {segmentByFile} from '../domain/fileSegments';
+import {heldElsewhere, segmentByFile, type FileSegments} from '../domain/fileSegments';
 import {fileState, isWritable, FILE_STATE_LABEL, type FileState} from '../domain/fileState';
 import {fingerprint} from '../domain/fingerprint';
 import {INDEX_FILE, withFolder, withoutSource, type LinkedFolder, type NoteLinks} from '../domain/noteLinks';
 import {plural} from '../domain/plural';
 import type {SourceBlock} from '../domain/sourceBlocks';
-import {fileDiff, regenerateSource, type SourceItem, type SourceRegeneration} from '../domain/sourceExport';
+import {
+  fileDiff,
+  regenerateSource,
+  type CrossingOptions,
+  type SourceItem,
+  type SourceRegeneration,
+} from '../domain/sourceExport';
 import {copyPath, sourceFileName, sourceFolder, type SourceRecord} from '../domain/sourceRecord';
 import {getSettings} from '../storage/settingsFile';
 import {
@@ -55,6 +61,8 @@ export type LinkedFile = {
   state: FileState;
   /** Its divider (name and title) is on the note. */
   hasDivider: boolean;
+  /** How textboxes that crossed between files were treated in this dry run. */
+  options: CrossingOptions;
 };
 
 export type LinkedNote = {
@@ -65,6 +73,10 @@ export type LinkedNote = {
   orphans: number;
   /** Folder mode: the bound folder's new files, files left out and index. */
   folder: FolderState | null;
+  /** Textboxes under another file's title, waiting for the user to confirm the move. */
+  crossings: number;
+  /** What the dry run was made from, to make it again with the moves confirmed. */
+  basis: {segments: FileSegments; records: SourceRecord[]; hasDivider: Map<string, boolean>};
 };
 
 export function sourceItems(scanned: ScannedTextBox[]): SourceItem[] {
@@ -105,19 +117,24 @@ export async function readLinkedNote(notePath: string, pageCount: number, fresh 
   if (sourceIds.length === 0) {
     return null;
   }
-  const files: LinkedFile[] = [];
+  const records: SourceRecord[] = [];
+  const hasDivider = new Map<string, boolean>();
   await timed(
-    'source.files',
+    'source.records',
     async () => {
       for (const sourceId of sourceIds) {
         const record = await readSourceRecord(sourceId);
         if (record) {
-          files.push(await linkedFile(record, segments.bySource.get(sourceId) ?? [], segments.withDivider.has(sourceId)));
+          records.push(record);
+          hasDivider.set(sourceId, segments.withDivider.has(sourceId));
         }
       }
     },
     {files: sourceIds.length},
   );
+  const files = await timed('source.files', () => linkedFiles(records, segments, hasDivider, false), {
+    files: records.length,
+  });
   if (files.length === 0 && !links?.folder) {
     return null;
   }
@@ -129,11 +146,40 @@ export async function readLinkedNote(notePath: string, pageCount: number, fresh 
         ),
       )
     : null;
-  return {links, files, orphans: segments.orphans.length, folder};
+  const crossings = files.reduce((sum, file) => sum + file.regeneration.crossings.length, 0);
+  return {links, files, orphans: segments.orphans.length, folder, crossings, basis: {segments, records, hasDivider}};
 }
 
-async function linkedFile(record: SourceRecord, segment: SourceItem[], hasDivider: boolean): Promise<LinkedFile> {
-  const regeneration = regenerateSource(record, segment);
+/**
+ * Every file's dry run. Textboxes under another file's title are held back (kept at their old place
+ * in their own file) unless `accept`: then every one is written where it is now and adopted there.
+ */
+async function linkedFiles(
+  records: SourceRecord[],
+  segments: FileSegments,
+  hasDivider: Map<string, boolean>,
+  accept: boolean,
+): Promise<LinkedFile[]> {
+  const lookup = new Map(records.map(record => [record.sourceId, record]));
+  const held = accept ? new Map<string, Set<number>>() : heldElsewhere(segments, new Map(records.map(record => [record.sourceId, record.adopted ?? []])));
+  const files: LinkedFile[] = [];
+  for (const record of records) {
+    const segment = segments.bySource.get(record.sourceId) ?? [];
+    const options: CrossingOptions = {accept, elsewhere: held.get(record.sourceId), lookup};
+    files.push(await linkedFile(record, segment, hasDivider.get(record.sourceId) ?? false, options));
+  }
+  return files;
+}
+
+async function linkedFile(
+  record: SourceRecord,
+  segment: SourceItem[],
+  hasDivider: boolean,
+  options: CrossingOptions,
+): Promise<LinkedFile> {
+  const regeneration = regenerateSource(record, segment, options);
+  // Adopted ids are kept in the record when the file is written.
+  const adopted = [...new Set([...(record.adopted ?? []), ...regeneration.adoptedIds])];
   const diff = fileDiff(regeneration, record);
   const current = await readTextFileIfExists(record.filePath).catch(() => null);
   const state = fileState({
@@ -142,7 +188,15 @@ async function linkedFile(record: SourceRecord, segment: SourceItem[], hasDivide
     record,
     onNote: hasDivider || regeneration.present,
   });
-  return {record, segment, regeneration, diff, state, hasDivider};
+  return {
+    record: adopted.length > 0 ? {...record, adopted} : record,
+    segment,
+    regeneration,
+    diff,
+    state,
+    hasDivider,
+    options,
+  };
 }
 
 /** Whether Update would write the folder's `index.txt` (only when it didn't change in Obsidian). */
@@ -152,6 +206,10 @@ export function indexToWrite(note: LinkedNote | null): boolean {
 
 /** Files that Update / an Apply would write. */
 export function filesToWrite(note: LinkedNote | null): LinkedFile[] {
+  // Files with textboxes of other files waiting count too: Update asks about them first.
+  if (note && note.crossings > 0) {
+    return note.files.filter(file => isWritable(file.state) || file.regeneration.crossings.length > 0);
+  }
   return (note?.files ?? []).filter(file => isWritable(file.state));
 }
 
@@ -217,7 +275,35 @@ export type FilesWriteResult =
       /** Whether `index.txt` was written. */
       index: boolean;
     }
-  | {kind: 'confirm'; pending: PendingRemoval[]};
+  | {kind: 'confirm'; pending: PendingRemoval[]; moves: PendingMove[]};
+
+/** Textboxes of one file now under another file's title, waiting for Move / Keep apart. */
+export type PendingMove = {from: string; to: string; count: number; names: string[]; titleGone: boolean};
+
+/** The note's crossings, grouped by the file they came from and the file they are under now. */
+function pendingMoves(note: LinkedNote): PendingMove[] {
+  const name = (sourceId: string) => {
+    const file = note.files.find(item => item.record.sourceId === sourceId);
+    return file ? sourceFileName(file.record) : 'another file';
+  };
+  const moves = new Map<string, PendingMove>();
+  for (const file of note.files) {
+    for (const crossing of file.regeneration.crossings) {
+      const key = `${crossing.from}>${file.record.sourceId}`;
+      const move = moves.get(key) ?? {
+        from: name(crossing.from),
+        to: sourceFileName(file.record),
+        count: 0,
+        names: [],
+        titleGone: !note.basis.hasDivider.get(crossing.from),
+      };
+      move.count++;
+      move.names.push(crossing.name);
+      moves.set(key, move);
+    }
+  }
+  return [...moves.values()];
+}
 
 /** The regeneration with the user's answer about protected blocks deleted on the page. */
 function answered(
@@ -229,26 +315,37 @@ function answered(
   }
   const removed = new Set([...file.record.removedProtected, ...file.regeneration.pendingRemoval.map(block => block.index)]);
   const record = {...file.record, removedProtected: [...removed].sort((a, b) => a - b)};
-  return {record, regeneration: regenerateSource(record, file.segment)};
+  return {record, regeneration: regenerateSource(record, file.segment, file.options)};
 }
 
 /**
- * Writes every file of the note that changed here (or only those in `only`). Protected blocks
- * deleted on the page make the write stop and ask once for all files (`confirm`), unless
- * `protectedAnswer` is given.
+ * Writes every file of the note that changed here (or only those in `only`). Textboxes moved under
+ * another file's title, and protected blocks deleted on the page, make the write stop and ask once
+ * for all files (`confirm`), unless answered: `moves` 'move' writes the textboxes where they are now
+ * (and remembers that), 'keep' leaves them in their own files this time.
  */
 export async function writeLinkedFiles(params: {
   notePath: string;
   pageCount: number;
   only?: string[];
   protectedAnswer?: 'remove' | 'keep';
+  movesAnswer?: 'move' | 'keep';
   /** Also overwrite an `index.txt` changed in Obsidian (Details → Rewrite index.txt). */
   rewriteIndex?: boolean;
 }): Promise<FilesWriteResult> {
-  const note = await readLinkedNote(params.notePath, params.pageCount, true);
-  if (!note) {
+  const read = await readLinkedNote(params.notePath, params.pageCount, true);
+  if (!read) {
     throw new Error('The note has no linked files any more.');
   }
+  const moves = pendingMoves(read);
+  const note =
+    moves.length > 0 && params.movesAnswer === 'move'
+      ? {
+          ...read,
+          crossings: 0,
+          files: await linkedFiles(read.basis.records, read.basis.segments, read.basis.hasDivider, true),
+        }
+      : read;
   const chosen = note.files.filter(file => !params.only || params.only.includes(file.record.sourceId));
   const targets = chosen.filter(file => isWritable(file.state));
   const pending = targets
@@ -258,8 +355,11 @@ export async function writeLinkedFiles(params: {
       fileName: sourceFileName(file.record),
       blocks: file.regeneration.pendingRemoval,
     }));
+  if (moves.length > 0 && !params.movesAnswer) {
+    return {kind: 'confirm', pending: [], moves};
+  }
   if (pending.length > 0 && !params.protectedAnswer) {
-    return {kind: 'confirm', pending};
+    return {kind: 'confirm', pending, moves: []};
   }
   const written: string[] = [];
   const unchanged: string[] = [];
@@ -296,6 +396,9 @@ export async function writeLinkedFiles(params: {
     }
   } else if (state?.index === 'changedOutside') {
     skipped.push({name: INDEX_FILE, reason: 'changed in Obsidian: Details → Rewrite index.txt'});
+  }
+  if (moves.length > 0 && params.movesAnswer === 'keep') {
+    warnings.push(`${plural(moves.reduce((sum, move) => sum + move.count, 0), 'block')} under another file's title stayed in their own files.`);
   }
   return {kind: 'written', written, unchanged, skipped, warnings, index};
 }
@@ -393,7 +496,9 @@ function logWrite(record: SourceRecord, mode: SourceWriteMode, method: WriteMeth
 /** "Essay.txt updated", "3 files updated · 1 skipped (Notes.txt: changed in obsidian)" and the like. */
 export function writeResultText(result: FilesWriteResult): string {
   if (result.kind === 'confirm') {
-    return 'Protected blocks were deleted on the page: answer the question on the card first.';
+    return result.moves.length > 0
+      ? 'Text was moved under another file\'s title: answer the question on the card first.'
+      : 'Protected blocks were deleted on the page: answer the question on the card first.';
   }
   const parts: string[] = [];
   if (result.written.length === 1) {

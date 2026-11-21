@@ -76,3 +76,25 @@ export function segmentByFile(items: SourceItem[]): FileSegments {
   }
   return {bySource, order, orphans: orphans.filter(item => item.text.trim()), withDivider, extraDividers};
 }
+
+/**
+ * Blocks of each file that sit in another file's segment and that file hasn't adopted (the move
+ * not confirmed): their own file keeps them at their place (technical-design-linked-files.md §6).
+ * `adopted` gives each file's confirmed ids.
+ */
+export function heldElsewhere(segments: FileSegments, adopted: Map<string, string[]>): Map<string, Set<number>> {
+  const held = new Map<string, Set<number>>();
+  for (const [owner, items] of segments.bySource) {
+    const confirmed = new Set(adopted.get(owner) ?? []);
+    for (const item of items) {
+      const tag = item.tag;
+      if (!tag?.s || tag.s === owner || tag.a || !Number.isInteger(tag.i) || confirmed.has(tag.id)) {
+        continue;
+      }
+      const set = held.get(tag.s) ?? new Set<number>();
+      set.add(tag.i as number);
+      held.set(tag.s, set);
+    }
+  }
+  return held;
+}

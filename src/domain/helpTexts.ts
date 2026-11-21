@@ -47,7 +47,7 @@ An action that doesn't fit the lasso selection is greyed, with the reason next t
 A backup of the textboxes is written first; the status line names it.`;
 
 export const IMPORT_HELP = `## The file
-A plain UTF-8 .txt file from any folder, for example INBOX. Choose › opens the Supernote file selector in the folder of the last file. Windows and Unix line endings both work.
+A plain UTF-8 .txt file from any folder, for example INBOX. Choose › opens the Supernote file selector in the folder the note sits in. Windows and Unix line endings both work.
 
 ## Layout
 Continuous text: the text flows through textboxes that fill each page from top to bottom.

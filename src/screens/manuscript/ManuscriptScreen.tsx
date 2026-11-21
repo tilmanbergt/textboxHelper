@@ -172,7 +172,7 @@ export default function ManuscriptScreen({
       primary={primary}
       accessory={accessory}
       screenKey={`manuscript-${tab}`}>
-      {source.confirm && <ProtectedQuestion source={source} />}
+      <WriteQuestion source={source} />
       <View style={styles.tabs}>
         <CountTabs<Tab>
           tabs={[
@@ -226,6 +226,9 @@ function updateLabel(toWrite: LinkedFile[]): string {
     return `Update ${plural(toWrite.length, 'file')}`;
   }
   const file = toWrite[0];
+  if (file.diff.changedBlocks === 0) {
+    return `Update ${sourceFileName(file.record)}`;
+  }
   return file.state === 'new'
     ? `Create ${sourceFileName(file.record)}`
     : `Update ${sourceFileName(file.record)} · ${plural(file.diff.changedBlocks, 'changed block')}`;
@@ -248,7 +251,13 @@ function reviewStatus(
       text: `${own.text} ${source.status.text}`,
     };
   }
-  const shown = own ?? source.status ?? (focusNote ? {text: focusNote} : null);
+  const shown =
+    own ??
+    source.status ??
+    (focusNote ? {text: focusNote} : null) ??
+    (source.note && source.note.crossings > 0 && !loading
+      ? {text: `${plural(source.note.crossings, 'block')} under another file's title: Update asks whether to move them.`}
+      : null);
   if (shown || !source.note || loading || readyCount > 0 || source.toWrite.length > 0 || source.indexStale) {
     return shown;
   }
@@ -266,32 +275,48 @@ function reviewStatus(
   return {text: source.note.files.length === 1 ? `${filesLabel(source)} is up to date.` : 'All files are up to date.'};
 }
 
-/** Protected blocks deleted on the page: remove them from their files too, or keep them. */
-function ProtectedQuestion({source}: {source: LinkedFiles}): React.JSX.Element {
-  const pending = source.confirm ?? [];
-  const count = pending.reduce((sum, file) => sum + file.blocks.length, 0);
-  const several = count > 1;
-  const names = pending.flatMap(file => file.blocks.map(block => blockName(block))).join(', ');
-  const files = pending.map(file => file.fileName).join(', ');
+/**
+ * The write's question above the tabs: textboxes moved under another file's title (Move them /
+ * Keep apart), or protected blocks deleted on the page (Remove / Keep).
+ */
+function WriteQuestion({source}: {source: LinkedFiles}): React.JSX.Element | null {
+  const question = source.confirm;
+  if (!question) {
+    return null;
+  }
+  let text: string;
+  let yes: string;
+  let no: string;
+  if (question.kind === 'moves') {
+    const count = question.moves.reduce((sum, move) => sum + move.count, 0);
+    const move = question.moves[0];
+    const gone = question.moves.find(item => item.titleGone);
+    text = gone
+      ? `The title of ${gone.from} was deleted, so its text now belongs to ${gone.to}. Move it into ${gone.to}? (${gone.from} stays as it is.)`
+      : question.moves.length === 1
+      ? `${move.count === 1 ? `"${move.names[0]}"` : plural(move.count, 'block')} of ${move.from} is now under ${move.to}. Move it to ${move.to} in the files too?`
+      : `${plural(count, 'block')} are now under another file's title (${question.moves
+          .map(item => `${item.from} → ${item.to}`)
+          .join(', ')}). Move them in the files too?`;
+    yes = count > 1 ? 'Move them' : 'Move it';
+    no = 'Keep apart';
+  } else {
+    const pending = question.pending;
+    const count = pending.reduce((sum, file) => sum + file.blocks.length, 0);
+    const names = pending.flatMap(file => file.blocks.map(block => blockName(block))).join(', ');
+    const files = pending.map(file => file.fileName).join(', ');
+    text =
+      count > 1
+        ? `${count} protected blocks were deleted on the page: ${names}. Remove them from ${files} too?`
+        : `${names} was deleted on the page. Remove it from ${files} too?`;
+    yes = count > 1 ? 'Remove all' : 'Remove';
+    no = count > 1 ? 'Keep all' : 'Keep it';
+  }
   return (
     <View style={styles.question}>
-      <Text style={styles.questionText}>
-        {several
-          ? `${count} protected blocks were deleted on the page: ${names}. Remove them from ${files} too?`
-          : `${names} was deleted on the page. Remove it from ${files} too?`}
-      </Text>
-      <PillButton
-        size="small"
-        label={several ? 'Remove all' : 'Remove'}
-        disabled={source.busy}
-        onPress={() => source.answer(true)}
-      />
-      <PillButton
-        size="small"
-        label={several ? 'Keep all' : 'Keep it'}
-        disabled={source.busy}
-        onPress={() => source.answer(false)}
-      />
+      <Text style={styles.questionText}>{text}</Text>
+      <PillButton size="small" label={yes} disabled={source.busy} onPress={() => source.answer(true)} />
+      <PillButton size="small" label={no} disabled={source.busy} onPress={() => source.answer(false)} />
     </View>
   );
 }

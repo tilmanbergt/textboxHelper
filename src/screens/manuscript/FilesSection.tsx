@@ -154,6 +154,8 @@ function FileDetails({source, file}: {source: LinkedFiles; file: LinkedFile}): R
     counts.edited ? `${counts.edited} edited` : null,
     counts.added ? `${counts.added} new` : null,
     counts.movedIn ? `${counts.movedIn} from other files` : null,
+    regeneration.crossings.length ? `${regeneration.crossings.length} of other files waiting` : null,
+    counts.heldBack ? `${counts.heldBack} under another file, kept here` : null,
     counts.missing ? `${counts.missing} missing` : null,
     counts.protectedKept ? `${counts.protectedKept} kept as is` : null,
     counts.protectedRemoved ? `${counts.protectedRemoved} removed` : null,
