@@ -1,4 +1,5 @@
-import {parseBlockTag} from './blockTag';
+import {parseBlockTag, type BlockTag} from './blockTag';
+import {headingLevelOf, type HeadingLevel} from './headingText';
 import type {Rect} from './textboxModel';
 import type {ScannedTextBox} from './exportClassification';
 import type {PageReview} from './manuscriptPages';
@@ -6,9 +7,13 @@ import type {PageReview} from './manuscriptPages';
 /**
  * The Manuscript Outline (technical-design-manuscript.md §5.1): every textbox of the note as one
  * block in reading order, with its status (kept in the plugin, by block tag) and the edits still
- * pending on it (from the pages the Review has read). Plain notes: each textbox is a block; a
- * heading is guessed by its style, as the DOCX export does. A linked file's divider is a block of
- * its own kind (technical-design-linked-files.md §4): it starts the file's section. Pure.
+ * pending on it (from the pages the Review has read).
+ *
+ * What a block is (technical-design-outline-sections.md §1.2), first match wins: a linked file's
+ * divider (its tag) starts the file's section; a text starting with `#`s is a heading of that
+ * level; a heading of a note linked before the `#`s stayed on the page counts by its file's record;
+ * a textbox under a NOTE title is a heading of the default level; everything else is a paragraph.
+ * The textbox's look never decides. Pure.
  */
 
 export type BlockStatus = 'open' | 'review' | 'final';
@@ -30,15 +35,34 @@ export type OutlineBlock = {
   firstLine: string;
   /** Empty when the block is short enough to show whole in its first line. */
   lastLine: string;
-  heading: boolean;
+  kind: OutlineBlockKind;
+  /** File 0, heading 1–3, paragraph null. */
+  level: number | null;
   /** A linked file's divider (its name under a title): the file's source id. */
   fileSource: string | null;
+  /** Set aside by the Outline earlier: on the pages at the end, left out of a linked file. */
+  aside: boolean;
   status: BlockStatus;
   /** Edits waiting on this block; null while its page is not read by the Review. */
   pendingEdits: number | null;
 };
 
-export type OutlineFilter = 'all' | 'pending' | BlockStatus;
+export type OutlineBlockKind = 'file' | 'heading' | 'paragraph';
+
+/** What the Outline shows: everything, blocks with edits waiting, blocks not final yet. */
+export type OutlineFilter = 'all' | 'edits' | 'notFinal';
+
+export const OUTLINE_FILTERS: OutlineFilter[] = ['all', 'edits', 'notFinal'];
+
+/** How blocks are told apart beyond their text (technical-design-outline-sections.md §1.2). */
+export type OutlineOptions = {
+  /** The level of a textbox under a NOTE title without `#`s. */
+  defaultLevel: HeadingLevel;
+  /** A heading's level from its linked file's record, for notes linked before the `#`s stayed. */
+  recordLevel?: (tag: BlockTag) => number | null;
+};
+
+export const DEFAULT_OUTLINE_OPTIONS: OutlineOptions = {defaultLevel: 1};
 
 /** About one line of a row: the text is cut at a word near this many characters. */
 const LINE_CHARS = 64;
@@ -86,12 +110,15 @@ export function buildOutline(
   items: ScannedTextBox[],
   statuses: Record<string, BlockStatus>,
   pages: Record<number, PageReview>,
+  options: OutlineOptions = DEFAULT_OUTLINE_OPTIONS,
 ): OutlineBlock[] {
   const pending = pendingByTextbox(pages);
   return items.map(item => {
     const tag = parseBlockTag(item.userData);
     const tagId = tag?.id ?? null;
     const place = `${item.page}:${item.numInPage}`;
+    const fileSource = tag?.k === 'f' && tag.s ? tag.s : null;
+    const level = fileSource ? 0 : headingLevel(item, tag, options);
     return {
       key: tagId ?? place,
       tagId,
@@ -101,29 +128,41 @@ export function buildOutline(
       text: item.text,
       firstLine: firstLineOf(item.text),
       lastLine: lastLineOf(item.text),
-      heading: item.role === 'heading',
-      fileSource: tag?.k === 'f' && tag.s ? tag.s : null,
+      kind: fileSource ? 'file' : level ? 'heading' : 'paragraph',
+      level: fileSource ? 0 : level || null,
+      fileSource,
+      aside: tag?.a === 1,
       status: (tagId && statuses[tagId]) || 'open',
       pendingEdits: pages[item.page]?.state === 'read' ? pending.get(place) ?? 0 : null,
     };
   });
 }
 
-export function matchesFilter(block: OutlineBlock, filter: OutlineFilter): boolean {
-  if (filter === 'all') {
-    return true;
+function headingLevel(item: ScannedTextBox, tag: BlockTag | null, options: OutlineOptions): number {
+  const own = headingLevelOf(item.text);
+  if (own) {
+    return own;
   }
-  if (filter === 'pending') {
-    return (block.pendingEdits ?? 0) > 0;
+  const recorded = tag && options.recordLevel ? options.recordLevel(tag) : null;
+  if (recorded) {
+    return Math.min(3, Math.max(1, recorded));
   }
-  return block.status === filter;
+  return item.underTitle ? options.defaultLevel : 0;
 }
 
-export function filterCounts(blocks: OutlineBlock[]): Record<OutlineFilter, number> {
-  const filters: OutlineFilter[] = ['all', 'pending', ...BLOCK_STATUSES];
-  return Object.fromEntries(
-    filters.map(filter => [filter, blocks.filter(block => matchesFilter(block, filter)).length]),
-  ) as Record<OutlineFilter, number>;
+/** How deep a block starts a section: a file 0, a heading its level; a paragraph starts none. */
+export function rank(block: Pick<OutlineBlock, 'kind' | 'level'>): number {
+  return block.kind === 'paragraph' ? Infinity : block.level ?? Infinity;
+}
+
+export function matchesFilter(block: OutlineBlock, filter: OutlineFilter): boolean {
+  if (filter === 'edits') {
+    return (block.pendingEdits ?? 0) > 0;
+  }
+  if (filter === 'notFinal') {
+    return block.status !== 'final';
+  }
+  return true;
 }
 
 /** The stored statuses: block id → status; anything unreadable is dropped. */

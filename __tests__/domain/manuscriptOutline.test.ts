@@ -5,7 +5,7 @@ import {createEmptyPreview} from '../../src/domain/markerText';
 import type {EditMarkerPreview, RecognizedEditOperation} from '../../src/domain/markerTypes';
 import {
   buildOutline,
-  filterCounts,
+  matchesFilter,
   firstLineOf,
   lastLineOf,
   parseBlockStatuses,
@@ -105,12 +105,45 @@ describe('outline', () => {
       {'b-1': 'final'},
       {0: {state: 'read', preview: preview([operation('x', 5), operation('y', 5), operation('z', 0, 'new:pe')])}},
     );
-    expect(blocks.map(block => [block.key, block.heading, block.status, block.pendingEdits])).toEqual([
-      ['b-1', true, 'final', 0],
-      ['0:5', false, 'open', 2],
-      ['1:2', false, 'open', null],
+    expect(blocks.map(block => [block.key, block.kind, block.status, block.pendingEdits])).toEqual([
+      ['b-1', 'paragraph', 'final', 0],
+      ['0:5', 'paragraph', 'open', 2],
+      ['1:2', 'paragraph', 'open', null],
     ]);
-    expect(filterCounts(blocks)).toEqual({all: 3, pending: 1, open: 2, review: 0, final: 1});
+    expect(blocks.map(block => [matchesFilter(block, 'edits'), matchesFilter(block, 'notFinal')])).toEqual([
+      [false, false],
+      [true, true],
+      [false, true],
+    ]);
+  });
+
+  it('takes a heading\'s level from its #s, its file\'s record or its NOTE title, never its look', () => {
+    const divider = formatBlockTag({v: 1, id: 'b-f', s: 's1', k: 'f'});
+    const linked = formatBlockTag({v: 1, id: 'b-h', s: 's1', i: 3});
+    const blocks = buildOutline(
+      [
+        item(0, 0, 'Essay', {userData: divider, underTitle: true}),
+        item(0, 1, '## Methods', {role: 'paragraph'}),
+        item(0, 2, 'Big and bold', {role: 'heading'}),
+        item(0, 3, 'Old heading', {userData: linked}),
+        item(0, 4, 'Under a title', {underTitle: true}),
+        item(0, 5, '#tag is not a heading'),
+        item(0, 6, 'Set aside', {userData: formatBlockTag({v: 1, id: 'b-a', a: 1})}),
+      ],
+      {},
+      {},
+      {defaultLevel: 2, recordLevel: tag => (tag.i === 3 ? 5 : null)},
+    );
+    expect(blocks.map(block => [block.kind, block.level])).toEqual([
+      ['file', 0],
+      ['heading', 2],
+      ['paragraph', null],
+      ['heading', 3],
+      ['heading', 2],
+      ['paragraph', null],
+      ['paragraph', null],
+    ]);
+    expect(blocks[6].aside).toBe(true);
   });
 
   it('stores statuses without the default and drops what it can\'t read', () => {

@@ -24,6 +24,10 @@ export type ScannedTextBox = {
   italic: boolean;
   border: boolean;
   rect: Rect | null;
+  /** Whether a NOTE title covers the textbox (its middle): such a textbox is a heading. */
+  underTitle?: boolean;
+  /** A heading's level from its `#`s; 0 when its text has none (a heading by style or title). */
+  headingLevel?: number;
 };
 
 export type ScanSummary = {

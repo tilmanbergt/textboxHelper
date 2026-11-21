@@ -16,9 +16,9 @@ import React, {useEffect, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import {
   BLOCK_STATUSES,
+  OUTLINE_FILTERS,
   STATUS_GLYPH,
   STATUS_LABEL,
-  filterCounts,
   matchesFilter,
   type BlockStatus,
   type OutlineBlock,
@@ -26,6 +26,7 @@ import {
 } from '../../domain/outlineModel';
 import {
   canMoveBefore,
+  plannedOrder,
   plannedSummary,
   type ChangeMark,
   type MoveTarget,
@@ -42,7 +43,7 @@ import type {Outline} from './useOutline';
 /** A block row: two lines of text (one for a heading), padding and its bottom line. */
 const ROW_PADDING = 2 * SPACING.sm + 2;
 const rowHeight = (block: OutlineBlock) =>
-  ROW_PADDING + (block.heading || !block.lastLine ? 1 : 2) * LINE_HEIGHT.medium;
+  ROW_PADDING + (block.kind === 'heading' || !block.lastLine ? 1 : 2) * LINE_HEIGHT.medium;
 
 type ListFilter = OutlineFilter | 'planned';
 type Row =
@@ -53,10 +54,8 @@ const END_ROW_HEIGHT = 48;
 const FILTER_LABELS: Record<ListFilter, string> = {
   all: 'All',
   planned: 'Planned',
-  pending: 'Pending edits',
-  open: `${STATUS_GLYPH.open} Open`,
-  review: `${STATUS_GLYPH.review} Review`,
-  final: `${STATUS_GLYPH.final} Final`,
+  edits: 'With edits',
+  notFinal: 'Not final',
 };
 
 interface Props {
@@ -86,7 +85,9 @@ export default function OutlineTab({
   const all = blocks ?? [];
   const marks = planned?.marks ?? new Map<string, ChangeMark>();
   const display = displayOrder(all, planned);
-  const counts = filterCounts(all);
+  const counts = Object.fromEntries(
+    OUTLINE_FILTERS.map(key => [key, all.filter(block => matchesFilter(block, key)).length]),
+  ) as Record<OutlineFilter, number>;
   const shown = display.filter(block =>
     filter === 'planned' ? marks.has(block.key) : matchesFilter(block, filter),
   );
@@ -124,7 +125,7 @@ export default function OutlineTab({
       <View style={styles.filters}>
         <ChipRow<ListFilter>
           chips={(
-            ['all', 'planned', 'pending', ...BLOCK_STATUSES] as ListFilter[]
+            ['all', 'planned', ...OUTLINE_FILTERS.slice(1)] as ListFilter[]
           )
             .filter(key => key !== 'planned' || marks.size > 0)
             .map(key => ({
@@ -185,7 +186,7 @@ export default function OutlineTab({
         <View style={styles.planned}>
           <Text style={styles.plannedText} numberOfLines={2}>
             <Text style={styles.plannedTitle}>Planned: </Text>
-            {plannedSummary(all, outline.plan)}
+            {plannedSummary(all, outline.plan, outline.planned ?? plannedOrder(all, outline.plan))}
             {outline.checking ? ' · checking the pages…' : blockerNote(outline)}
           </Text>
           <PillButton
@@ -311,14 +312,14 @@ function BlockRow({
           selected && styles.rowSelected,
           onMoveHere && styles.rowWithTarget,
         ]}>
-        <Text style={styles.kind}>{block.fileSource ? '§' : block.heading ? 'H' : '¶'}</Text>
+        <Text style={styles.kind}>{block.fileSource ? '§' : block.kind === 'heading' ? 'H' : '¶'}</Text>
         <View style={styles.lines}>
           <Text
-            style={[styles.line, block.heading && styles.heading, markStyle]}
+            style={[styles.line, block.kind === 'heading' && styles.heading, markStyle]}
             numberOfLines={1}>
             {block.firstLine}
           </Text>
-          {!block.heading && block.lastLine ? (
+          {block.kind !== 'heading' && block.lastLine ? (
             <Text style={[styles.line, markStyle]} numberOfLines={1}>
               {block.lastLine}
             </Text>
@@ -345,6 +346,7 @@ function BlockRow({
 
 const MARK_LABEL: Record<ChangeMark, string> = {
   moved: 'moved',
+  level: 'level',
   aside: 'set aside',
   delete: 'delete',
 };
@@ -597,5 +599,5 @@ const styles = StyleSheet.create({
 });
 
 function kindName(block: OutlineBlock): string {
-  return block.fileSource ? 'Linked file' : block.heading ? 'Heading' : 'Paragraph';
+  return block.fileSource ? 'Linked file' : block.kind === 'heading' ? 'Heading' : 'Paragraph';
 }

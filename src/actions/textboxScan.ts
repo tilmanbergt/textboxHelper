@@ -12,6 +12,7 @@ import {
 import type {ExportClassificationConfig} from '../domain/exportConfig';
 import {isPenEditNumberElement} from '../domain/textboxEditPlan';
 import type {PageElementData, Rect} from '../domain/textboxModel';
+import {headingLevelOf} from '../domain/headingText';
 import {assertApiSuccess, tryApiResult} from '../supernote/sdkResult';
 import {timed} from '../utils/perf';
 
@@ -183,19 +184,26 @@ export async function scanTextBoxes(params: ScanParams): Promise<ScanSummary> {
           );
         });
 
+      const ownLevel = headingLevelOf(text);
       items.push({
         page,
         numInPage: Number(element.numInPage ?? -1),
         userData: typeof element.userData === 'string' ? element.userData : null,
         text,
-        role: classifyTextRole({
-          fontSize,
-          bold,
-          italic,
-          border,
-          isInsideTitleRect,
-          config: params.config,
-        }),
+        // `#`s at the start make a heading, whatever its style (technical-design-outline-sections.md §5).
+        role:
+          ownLevel > 0
+            ? 'heading'
+            : classifyTextRole({
+                fontSize,
+                bold,
+                italic,
+                border,
+                isInsideTitleRect,
+                config: params.config,
+              }),
+        headingLevel: ownLevel,
+        underTitle: isInsideTitleRect,
         styleSignature: buildStyleSignature({fontSize, bold, italic, border}),
         fontSize,
         bold,
