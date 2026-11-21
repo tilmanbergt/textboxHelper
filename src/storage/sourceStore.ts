@@ -54,10 +54,17 @@ export async function readSourceRecord(sourceId: string): Promise<SourceRecord |
   }
 }
 
+/** Removes the record and the two copies of the file's text kept with it. */
 export async function deleteSourceRecord(sourceId: string): Promise<void> {
-  const path = buildSourceRecordPath(await pluginDir(), sourceId);
-  if (await RNFS.exists(path)) {
-    await RNFS.unlink(path);
+  const dir = await pluginDir();
+  for (const path of [
+    buildSourceRecordPath(dir, sourceId),
+    buildSourceOriginalPath(dir, sourceId),
+    buildSourcePreviousPath(dir, sourceId),
+  ]) {
+    if (await RNFS.exists(path)) {
+      await RNFS.unlink(path);
+    }
   }
 }
 

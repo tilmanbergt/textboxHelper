@@ -27,6 +27,7 @@ import {jumpToNotePage} from '../../supernote/noteElements';
 import ScreenFrame, {type FramePrimary, type FrameStatus} from '../../ui/ScreenFrame';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
 import {noteHasTextboxes} from '../../actions/noteContent';
+import {runHousekeepingOnce} from '../../actions/housekeeping';
 import ExportScreen from '../export/ExportScreen';
 import ImportScreen from '../import/ImportScreen';
 import FilesTab from './files/FilesTab';
@@ -46,6 +47,8 @@ interface Props {
 }
 
 /** The card; after an import it starts over on the Files tab with the import's message. */
+const HOUSEKEEPING_DELAY_MS = 3000;
+
 export default function ManuscriptScreen(props: Props): React.JSX.Element {
   const [round, setRound] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
@@ -109,6 +112,18 @@ function ManuscriptCard({
       })
       .catch(error => console.warn('[Manuscript] note content not read', String(error)));
   }, [notePath, pageCount]);
+  // Housekeeping (technical-design-housekeeping.md) waits until the first list is shown, so it
+  // never competes with the first page read; it runs once per JS context.
+  const firstListShown = !review.loading;
+  useEffect(() => {
+    if (!firstListShown) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      runHousekeepingOnce().catch(error => console.warn('[Housekeeping] not run', String(error)));
+    }, HOUSEKEEPING_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [firstListShown]);
   const openSettings = useCallback((at: SettingsTab) => {
     setSettingsTab(at);
     setView('settings');

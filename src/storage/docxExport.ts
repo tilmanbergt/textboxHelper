@@ -29,7 +29,6 @@ export async function exportScannedDocx(params: {
   onProgress?: (message: string) => void;
 }): Promise<{
   exportPath: string;
-  tempPath: string;
   exportedItemCount: number;
   base64Length: number;
 }> {
@@ -121,7 +120,9 @@ export async function exportScannedDocx(params: {
 
   onProgress?.('Copying DOCX into EXPORT...');
   logExport('filesystem:copyToExport:start', {tempPath, exportPath});
-  const copied = await FileUtils.copyFile(tempPath, exportPath);
+  const copied = await FileUtils.copyFile(tempPath, exportPath).finally(() =>
+    RNFS.unlink(tempPath).catch(() => undefined),
+  );
   if (!copied) {
     logExport('filesystem:copyToExport:failed', {tempPath, exportPath});
     throw new Error('Could not copy the DOCX file into EXPORT.');
@@ -130,7 +131,6 @@ export async function exportScannedDocx(params: {
 
   return {
     exportPath,
-    tempPath,
     exportedItemCount: includedItems.length,
     base64Length,
   };

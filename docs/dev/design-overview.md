@@ -23,7 +23,7 @@ confirmed change to the open note - rather than around a generic editor architec
 5. After the user confirms, the flow writes a **backup** of the affected text
    (`src/storage/backupFile.ts`: a JSON file in the plugin folder plus a summary on the clipboard),
    then changes the page elements through `src/supernote/` and saves the note. The result message
-   names the backup file.
+   names the backup file. Only the 3 newest backups of the last 14 days are kept.
 
 ## 2. Layers
 
@@ -124,6 +124,15 @@ mark written just before it (a replace mark or a caret) decides what it is; badg
 on the page show which text belongs to which mark. A snippet without a mark can be given one later
 (Select mark). The tagged strokes and a picture are stored in the plugin folder (`pen-edits/`);
 the review recognizes them while it is open and the user can edit the text in place.
+
+**Housekeeping** (`domain/housekeeping.ts`, `storage/housekeepingStore.ts`,
+`actions/housekeeping.ts`) keeps the plugin folder small: once per JS context, a few seconds after
+the Manuscript card shows its first list, it removes pen edits applied or dropped more than 3 days
+ago (entry and folder; `doneAt` says when), pen-edit folders without an entry and broken indexes
+older than 3 days, and lasso pictures left in `pen-edits/tmp/` for more than a day. Backups are
+pruned after every backup write. Unlinking a file removes its two text copies; exports remove
+their temporary file after the copy into EXPORT. Settings → Diagnostics → Storage shows the plugin
+folder's size and runs it on demand (Clean up now).
 
 Every stage of a marker preview is also recorded in memory (`utils/editMarkerLog.ts`); "Save
 Diagnostics" (Manuscript → Settings → Diagnostics) writes that trace, with the stroke's raw sample points next to
