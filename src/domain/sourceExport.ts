@@ -5,7 +5,8 @@
  * is written. Pure.
  *
  * - A textbox tagged with a block of this source whose text is still the block's text writes the
- *   original span byte for byte; an edited one writes its new text (a heading with its `#`s).
+ *   original span byte for byte; an edited one writes its new text as it is: a heading's `#`s are
+ *   part of its text, so a struck `#` changes the level in the file too.
  * - Pieces of a paragraph the import cut (same block, one after the other) are one block again.
  * - An untagged textbox (a split tail, a joined textbox, typed or converted text) is new text,
  *   written as it is.
@@ -19,6 +20,7 @@
  *   the move (`CrossingOptions`); then it is written here and is missing in its own file.
  */
 import type {BlockTag} from './blockTag';
+import {headingLevelOf} from './headingText';
 import {blockName, type SourceBlock} from './sourceBlocks';
 import type {SourceRecord} from './sourceRecord';
 
@@ -105,8 +107,13 @@ function ownTag(item: SourceItem, sourceId: string): BlockTag | null {
   return tag && tag.s === sourceId && Number.isInteger(tag.i) && !tag.a ? tag : null;
 }
 
+/**
+ * An edited block's text for the file. Records made before headings kept their `#`s on the page
+ * hold a heading's text without them: such a heading, edited without `#`s, gets its level back.
+ */
 function serialize(block: SourceBlock, text: string): string {
-  return block.role === 'heading' ? `${'#'.repeat(Math.max(1, block.level))} ${text}` : text;
+  const legacyHeading = block.role === 'heading' && headingLevelOf(block.text) === 0;
+  return legacyHeading && headingLevelOf(text) === 0 ? `${'#'.repeat(Math.max(1, block.level))} ${text}` : text;
 }
 
 function linkCounts(text: string): number[] {
@@ -283,7 +290,7 @@ export function regenerateSource(
 
 /**
  * A textbox moved here from another file, as text for this file: a protected placeholder as its
- * block's original text, a heading with its #s, anything else as it is.
+ * block's original text, anything else as it is (a heading carries its #s).
  */
 function movedText(
   item: SourceItem,

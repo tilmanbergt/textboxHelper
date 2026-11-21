@@ -16,9 +16,9 @@ const TEXT = '# Title\r\n\r\nFirst paragraph\nstill first.\n\n  \n## Part two \n
 describe('import parsing', () => {
   it('splits at blank lines and styles markdown headings up to level 3', () => {
     expect(parseTextboxImportBlocks({text: TEXT, structure: STRUCTURE})).toEqual([
-      {role: 'heading1', text: 'Title', fontSize: 60, bold: true},
+      {role: 'heading1', text: '# Title', fontSize: 60, bold: true},
       {role: 'paragraph', text: 'First paragraph\nstill first.', fontSize: 36, bold: false},
-      {role: 'heading2', text: 'Part two', fontSize: 48, bold: true},
+      {role: 'heading2', text: '## Part two', fontSize: 48, bold: true},
       {role: 'paragraph', text: 'Second.', fontSize: 36, bold: false},
       {role: 'paragraph', text: '#### Too deep', fontSize: 36, bold: false},
       {role: 'paragraph', text: '#NoSpace', fontSize: 36, bold: false},

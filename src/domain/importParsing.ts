@@ -118,7 +118,8 @@ export function parseTextboxImportBlocks(params: {
 
         return {
           role: `heading${heading.level}` as TextboxImportBlockRole,
-          text: heading.text,
+          // The #s stay: the text decides a heading's level (technical-design-outline-sections.md §5).
+          text: `${'#'.repeat(heading.level)} ${heading.text}`,
           fontSize: style.fontSize,
           bold: style.bold,
         };

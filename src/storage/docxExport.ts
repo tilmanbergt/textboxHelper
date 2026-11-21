@@ -2,6 +2,7 @@ import {Document, HeadingLevel, Packer, Paragraph, TextRun} from 'docx';
 import RNFS from 'react-native-fs';
 import {FileUtils} from 'sn-plugin-lib';
 import {getIncludedScanItems, type ScanSummary} from '../domain/exportClassification';
+import {headingLevelOf, headingTitleOf} from '../domain/headingText';
 
 export const MAX_EXPORT_ITEM_COUNT = 999;
 
@@ -70,9 +71,12 @@ export async function exportScannedDocx(params: {
   onProgress?.('Building DOCX document...');
   const children = includedItems.map(item => {
     if (item.role === 'heading') {
+      // A heading's #s say its level and aren't written (technical-design-outline-sections.md §5);
+      // one recognized by its style is a level-1 heading.
+      const level = headingLevelOf(item.text);
       return new Paragraph({
-        text: item.text,
-        heading: HeadingLevel.HEADING_1,
+        text: headingTitleOf(item.text),
+        heading: level === 3 ? HeadingLevel.HEADING_3 : level === 2 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_1,
       });
     }
 

@@ -2,7 +2,7 @@
  * The blocks of a linked text file (technical-design-source-link.md §2.1): frontmatter, headings,
  * paragraphs, lists and protected blocks, each with its span in the original text. Pure.
  *
- * What goes onto the page as one textbox is a block's `text`: a heading without its `#`s, a
+ * What goes onto the page as one textbox is a block's `text`: a heading with its `#`s, a
  * paragraph or a list exactly as in the file (line breaks kept, so untouched text compares exactly
  * when it is written back), and for a protected block a short label. Protected blocks (code,
  * math, tables, quotes and callouts, HTML, comments, embeds, rules) are not edited on the page;
@@ -11,6 +11,7 @@
  * The parser works on the original text and its own line endings (`\n` or `\r\n`), so every span
  * indexes the file as read. Everything outside the frontmatter and the spans is whitespace.
  */
+import {headingTitleOf} from './headingText';
 
 export type SourceBlockRole = 'heading' | 'paragraph' | 'list' | 'protected';
 
@@ -224,7 +225,9 @@ export function parseSourceBlocks(original: string): ParsedSource {
     const protectedKind = extent.protectedKind ?? (heading ? undefined : protectedKindOf(blockLines));
     const base = {index: blocks.length, start, end};
     if (heading && heading[2].trim()) {
-      blocks.push({...base, role: 'heading', level: heading[1].length, text: heading[2].trim()});
+      // The #s stay in the text: on the page the text decides a heading's level
+      // (technical-design-outline-sections.md §5).
+      blocks.push({...base, role: 'heading', level: heading[1].length, text: `${heading[1]} ${heading[2].trim()}`});
     } else if (protectedKind) {
       blocks.push({
         ...base,
@@ -293,7 +296,8 @@ export function blockName(block: SourceBlock, words = 5): string {
   if (block.role === 'protected') {
     return block.text.replace(/^⟦/, '').replace(/ · kept as is⟧$/, '');
   }
-  const all = block.text.replace(/\s+/g, ' ').trim().split(' ');
+  const text = block.role === 'heading' ? headingTitleOf(block.text) : block.text;
+  const all = text.replace(/\s+/g, ' ').trim().split(' ');
   return all.length > words ? `${all.slice(0, words).join(' ')}…` : all.join(' ');
 }
 

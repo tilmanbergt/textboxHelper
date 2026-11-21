@@ -37,6 +37,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Changed
 
+- Headings keep their #s on the page: Import writes `## Methods` into the textbox, and the #s decide a heading's level everywhere — in the Outline, in the linked file and in the DOCX export (# → Heading 1, ## → Heading 2, ### → Heading 3, written without the #s). Edit the #s with the pen and the level changes; strike them all and the heading becomes a paragraph, in the file too. Notes linked before keep working: their headings without #s keep their level.
 - Import: the text file can come from any folder on the device, not only INBOX; Choose › opens in the folder of the last file.
 - The lasso toolbar button "Apply Edit Markers" is gone: Manuscript reads the whole page. "Skip for later" is gone too: tagged text still being recognized stays on the page for a later pass, and Drop takes away what isn't wanted.
 - Swap mark: draw a line above one part and below the next, joined by a vertical between them (|‾‾|__| or the other way round), and the two parts change places. Over several lines, three pieces are enough: a start corner, the middle piece where the parts meet, and an end corner. Punctuation stays where it was; "Fix capitals" moves a sentence's capital to the new first word. A delete or replacement inside a part is made first; a change reaching over an edge of the parts leaves the swap under Ignored for a second pass.

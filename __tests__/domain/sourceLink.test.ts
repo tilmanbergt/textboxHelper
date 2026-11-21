@@ -98,9 +98,9 @@ describe('source blocks', () => {
     expect(parsed.eol).toBe('\n');
     expect(ESSAY.slice(0, parsed.frontmatterEnd)).toBe('---\ntitle: Essay\ntags: [draft]\n---');
     expect(parsed.blocks.map(block => [block.role, block.protectedKind ?? block.level, block.text])).toEqual([
-      ['heading', 1, 'Essay'],
+      ['heading', 1, '# Essay'],
       ['paragraph', 0, 'First paragraph,\nwith a second line.'],
-      ['heading', 2, 'Methods'],
+      ['heading', 2, '## Methods'],
       ['paragraph', 0, 'Directly after the heading.'],
       ['list', 0, '- one\n\t- nested\n- [ ] task'],
       ['protected', 'code', '⟦Code · 5 lines · kept as is⟧'],
@@ -128,7 +128,7 @@ describe('source blocks', () => {
       'html',
       'paragraph',
     ]);
-    expect(parsed.blocks[0].text).toBe('Title #');
+    expect(parsed.blocks[0].text).toBe('# Title #');
     expect(outside(text, parsed.blocks, 0).trim()).toBe('');
     expect(text.slice(parsed.blocks[2].start, parsed.blocks[2].end)).toBe('$$\r\nx = 1\r\n\r\n$$');
   });
@@ -172,15 +172,30 @@ describe('regenerating the file', () => {
     }
   });
 
-  it('writes an edited paragraph and keeps a heading level', () => {
+  it('writes an edited paragraph and a heading with the #s its textbox shows', () => {
     const r = record(ESSAY);
     const items = imported(r);
     items[1] = {...items[1], text: 'First paragraph, changed.'};
-    items[2] = {...items[2], text: 'Method'};
+    items[2] = {...items[2], text: '## Method'};
     const result = regenerateSource(r, items);
     expect(result.text).toContain('\n# Essay\n\nFirst paragraph, changed.\n\n## Method\n');
     expect(result.counts).toMatchObject({unchanged: 4, edited: 2, added: 0, missing: 0, protectedKept: 3});
     expect(result.text.startsWith('---\ntitle: Essay')).toBe(true);
+    // The level follows the text: one # more, or none (a paragraph now).
+    items[2] = {...items[2], text: '### Method'};
+    expect(regenerateSource(r, items).text).toContain('\n### Method\n');
+    items[2] = {...items[2], text: 'Method'};
+    expect(regenerateSource(r, items).text).toContain('changed.\n\nMethod\n');
+  });
+
+  it('gives an edited heading of an older record its level back', () => {
+    const r = record(ESSAY);
+    // Records made before headings kept their #s on the page: the heading's text without them.
+    const legacy = {...r, blocks: r.blocks.map(block => (block.role === 'heading' ? {...block, text: block.text.replace(/^#+ /, '')} : block))};
+    const items = imported(legacy);
+    expect(regenerateSource(legacy, items).identical).toBe(true);
+    items[2] = {...items[2], text: 'Method'};
+    expect(regenerateSource(legacy, items).text).toContain('\n## Method\n');
   });
 
   it('writes a split tail as new text after its shortened head', () => {
@@ -364,8 +379,8 @@ describe('linked import', () => {
   it('places one block per textbox with its source index, headings always recognized', () => {
     const {blocks} = parseSourceBlocks('# A\n\n#### Deep\n\ntext\n\n```\nx\n```\n');
     expect(sourceImportBlocks(blocks, structure)).toEqual([
-      {role: 'heading1', text: 'A', fontSize: 60, bold: true, sourceIndex: 0},
-      {role: 'heading3', text: 'Deep', fontSize: 40, bold: true, sourceIndex: 1},
+      {role: 'heading1', text: '# A', fontSize: 60, bold: true, sourceIndex: 0},
+      {role: 'heading3', text: '#### Deep', fontSize: 40, bold: true, sourceIndex: 1},
       {role: 'paragraph', text: 'text', fontSize: 36, bold: false, sourceIndex: 2},
       {role: 'paragraph', text: '⟦Code · 3 lines · kept as is⟧', fontSize: 36, bold: false, sourceIndex: 3, placeholder: true},
     ]);

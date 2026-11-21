@@ -293,7 +293,7 @@ describe('blocks moved between files', () => {
   const items = [
     divider('a'),
     item('A one.', block('a', 0)),
-    item('B title', block('b', 0)),
+    item('## B title', block('b', 0)),
     divider('b'),
     item('B text.', block('b', 1)),
   ];
