@@ -24,10 +24,10 @@ import {jumpToNotePage} from '../../supernote/noteElements';
 import ScreenFrame, {type FramePrimary, type FrameStatus} from '../../ui/ScreenFrame';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
 import ManuscriptDetailsScreen from './ManuscriptDetailsScreen';
-import OutlineTab from './OutlineTab';
+import OutlineTab from './outline/OutlineTab';
 import ReviewTab, {reviewContext} from './ReviewTab';
 import {useManuscriptReview} from './useManuscriptReview';
-import {useOutline, type Outline} from './useOutline';
+import {useOutline, type Outline} from './outline/useOutline';
 import {useLinkedFiles, type LinkedFiles} from './useLinkedFiles';
 
 type Tab = 'review' | 'outline';
@@ -104,6 +104,7 @@ export default function ManuscriptScreen({
       <ManuscriptDetailsScreen
         review={review}
         source={source}
+        outline={outline}
         onBack={() => setView('card')}
         onClose={onClose}
       />

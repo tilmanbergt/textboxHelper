@@ -7,22 +7,22 @@
  * checked for what is in the way.
  */
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {setBlockStatus} from '../../actions/blockStatus';
-import {cachedOutline, forgetOutline, rememberOutline} from '../../actions/manuscriptCache';
+import {setBlockStatus} from '../../../actions/blockStatus';
+import {cachedOutline, forgetOutline, rememberOutline} from '../../../actions/manuscriptCache';
 import {
   applyOutlinePlan,
   checkRebuild,
   type RebuildCheck,
-} from '../../actions/outlineApply';
-import {scanTextBoxes} from '../../actions/textboxScan';
-import {formatBlockTag} from '../../domain/blockTag';
-import type {ScannedTextBox} from '../../domain/exportClassification';
-import {unreadPages, type PageReview} from '../../domain/manuscriptPages';
+} from '../../../actions/outlineApply';
+import {scanTextBoxes} from '../../../actions/textboxScan';
+import {formatBlockTag} from '../../../domain/blockTag';
+import type {ScannedTextBox} from '../../../domain/exportClassification';
+import {unreadPages, type PageReview} from '../../../domain/manuscriptPages';
 import {
   buildOutline,
   type BlockStatus,
   type OutlineBlock,
-} from '../../domain/outlineModel';
+} from '../../../domain/outlineModel';
 import {
   plannedOrder,
   undoFor,
@@ -30,15 +30,15 @@ import {
   type MoveTarget,
   type PlannedChange,
   type PlannedOrder,
-} from '../../domain/outlinePlan';
-import {headingLevelOf, type HeadingLevel} from '../../domain/headingText';
-import type {SourceRecord} from '../../domain/sourceRecord';
-import {fileNameOf, userMessage} from '../../domain/userMessage';
-import {readBlockStatuses} from '../../storage/blockStatusStore';
-import {getSettings} from '../../storage/settingsFile';
-import type {NoteInfo} from '../../supernote/noteElements';
-import type {FrameStatus} from '../../ui/ScreenFrame';
-import {perfEvent, timed} from '../../utils/perf';
+} from '../../../domain/outlinePlan';
+import {headingLevelOf, type HeadingLevel} from '../../../domain/headingText';
+import type {SourceRecord} from '../../../domain/sourceRecord';
+import {fileNameOf, userMessage} from '../../../domain/userMessage';
+import {readBlockStatuses} from '../../../storage/blockStatusStore';
+import {getSettings} from '../../../storage/settingsFile';
+import type {NoteInfo} from '../../../supernote/noteElements';
+import type {FrameStatus} from '../../../ui/ScreenFrame';
+import {perfEvent, timed} from '../../../utils/perf';
 
 export interface Outline {
   blocks: OutlineBlock[] | null;

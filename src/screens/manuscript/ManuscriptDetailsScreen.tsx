@@ -1,20 +1,28 @@
 /**
  * Details of the Manuscript card: the linked text files (technical-design-linked-files.md §3.3), the
- * calibration of the text measurement, Save Diagnostics and the timings (Speed). Shares the
+ * Outline's headings (technical-design-outline-sections.md §8: the default level, which levels get
+ * a NOTE title, Restore titles, Read the outline again), the calibration of the text measurement,
+ * Save Diagnostics and the timings (Speed). Shares the
  * review's state, so a calibration change re-reads the page the review shows when going back.
  */
-import React, {useEffect} from 'react';
+import React, {useEffect, useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
+import {HEADING_LEVELS, type HeadingLevel} from '../../domain/headingText';
+import {getSettings, updateSettings} from '../../storage/settingsFile';
+import Checkbox from '../../ui/Checkbox';
 import PillButton from '../../ui/PillButton';
+import TextChoices from '../../ui/TextChoices';
 import ScreenFrame from '../../ui/ScreenFrame';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
 import type {ManuscriptReview} from './useManuscriptReview';
 import FilesSection from './FilesSection';
 import type {LinkedFiles} from './useLinkedFiles';
+import type {Outline} from './outline/useOutline';
 
 interface Props {
   review: ManuscriptReview;
   source: LinkedFiles;
+  outline: Outline;
   onBack: () => void;
   onClose: () => void;
 }
@@ -22,7 +30,7 @@ interface Props {
 const OFFSET_STEP = 5;
 const WIDTH_STEP = 1;
 
-export default function ManuscriptDetailsScreen({review, source, onBack, onClose}: Props): React.JSX.Element {
+export default function ManuscriptDetailsScreen({review, source, outline, onBack, onClose}: Props): React.JSX.Element {
   const {calibration, loading, busy, timings} = review;
   const disabled = loading || busy;
   const {update: updateTimings} = timings;
@@ -37,6 +45,8 @@ export default function ManuscriptDetailsScreen({review, source, onBack, onClose
       screenKey="details">
       <View style={styles.body}>
         <FilesSection source={source} />
+
+        <HeadingsSection outline={outline} source={source} />
 
         <Section title="Calibration">
           <Text style={styles.hint}>
@@ -88,6 +98,54 @@ export default function ManuscriptDetailsScreen({review, source, onBack, onClose
         </Section>
       </View>
     </ScreenFrame>
+  );
+}
+
+/** How the Outline treats headings; changes are kept and the outline is read again with them. */
+function HeadingsSection({outline, source}: {outline: Outline; source: LinkedFiles}): React.JSX.Element {
+  const [settings, setSettings] = useState(getSettings().outline);
+  const change = (next: typeof settings) => {
+    updateSettings(current => ({...current, outline: next}));
+    setSettings(next);
+  };
+  const levels = HEADING_LEVELS.map(level => ({key: level, label: '#'.repeat(level)}));
+  return (
+    <Section title="Outline">
+      <TextChoices
+        caption="A textbox under a title you made is a heading of level"
+        size="small"
+        choices={levels}
+        value={settings.defaultHeadingLevel}
+        onChange={level => {
+          change({...settings, defaultHeadingLevel: level as HeadingLevel});
+          outline.clear();
+        }}
+      />
+      <View style={styles.buttons}>
+        <Text style={styles.hint}>Titles for</Text>
+        {HEADING_LEVELS.map(level => (
+          <Checkbox
+            key={level}
+            label={'#'.repeat(level)}
+            checked={settings.titleLevels.includes(level)}
+            onChange={on =>
+              change({
+                ...settings,
+                titleLevels: HEADING_LEVELS.filter(item => (item === level ? on : settings.titleLevels.includes(item))),
+              })
+            }
+          />
+        ))}
+      </View>
+      <Text style={styles.hint}>
+        Headings of these levels get a NOTE title, so they show in the note’s table of contents. Restore titles puts
+        them right on every page now; Apply does it on the pages it changes.
+      </Text>
+      <View style={styles.buttons}>
+        <PillButton size="small" label="Restore titles" disabled={source.busy} onPress={source.restoreTitles} />
+        <PillButton size="small" label="Read the outline again" disabled={outline.loading || outline.plan.length > 0} onPress={outline.clear} />
+      </View>
+    </Section>
   );
 }
 

@@ -270,7 +270,7 @@ export function useLinkedFiles(info: NoteInfo | null, ready: boolean): LinkedFil
           setAdded(true);
           return `${result.message} ${
             ordered
-              ? 'Open Manuscript again to move them to their place (Outline ←); Update then writes index.txt.'
+              ? 'Open Manuscript again to move them to their place (Outline: the file, ↑ Up or Move before…); Update then writes index.txt.'
               : 'Open Manuscript again to see them.'
           }`;
         },
