@@ -44,7 +44,7 @@ import {
 } from '../supernote/noteElements';
 import {insertTextboxPages} from '../supernote/noteTextInsertion';
 import {getSettings} from '../storage/settingsFile';
-import {textArea} from '../domain/pageLayout';
+import {startsPage, textArea, type PageLayout} from '../domain/pageLayout';
 import {
   addTitles,
   checkNotLinkedYet,
@@ -172,6 +172,7 @@ async function buildImportPlan(params: {
       maxRect,
       fontPath: NOTE_SYSTEM_FONT_PATH,
       blockGap: layout.blockGap,
+      breakBefore: block => blockStartsPage(block, layout),
       addExplicitEmptyLineHeight: false,
       measureHeight: measureTextboxHeight,
     });
@@ -216,6 +217,12 @@ async function buildImportPlan(params: {
   };
 }
 
+
+/** A linked file's divider starts a page, a heading by its level. */
+function blockStartsPage(block: TextboxImportBlock, layout: PageLayout): boolean {
+  const level = block.role === 'heading1' ? 1 : block.role === 'heading2' ? 2 : block.role === 'heading3' ? 3 : null;
+  return startsPage({kind: block.divider ? 'file' : level ? 'heading' : 'paragraph', level}, layout);
+}
 
 type ImportText = {
   /** Cleaned up for the counts, the preview text and an unlinked import. */

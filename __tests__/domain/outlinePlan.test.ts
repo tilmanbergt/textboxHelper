@@ -223,6 +223,15 @@ describe('rebuild layout', () => {
     expect(layoutRebuild(original, ['a', 'b', 'c', 'd', 'e', 'f'], frame, 3, new Map())).toBeNull();
   });
 
+  it('starts a new page before a block that breaks', () => {
+    // e moves before b and starts a page (a file's divider): b, c, d follow it on the next page.
+    const breaking = original.map(item => (item.key === 'e' ? {...item, startsPage: true} : item));
+    const layout = layoutRebuild(breaking, ['a', 'e', 'b', 'c', 'd', 'f'], frame, 3);
+    expect(layout?.placements.get('a')?.page).toBe(0);
+    expect(layout?.placements.get('e')).toEqual({page: 1, rect: {left: 100, top: 100, right: 900, bottom: 400}});
+    expect(layout?.placements.get('b')?.page).toBe(1);
+  });
+
   it('stacks set-aside blocks on new pages', () => {
     const aside = layoutAside([original[0], original[1], original[2]], frame, 2);
     expect([...aside.values()].map(place => [place.page, place.rect.top])).toEqual([

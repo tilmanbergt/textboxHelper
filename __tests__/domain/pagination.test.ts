@@ -57,4 +57,19 @@ describe('pagination with a passed-in measurement', () => {
     expect(pages[0].chunks[0]).toMatchObject({fontSize: 60, bold: true, rect: {top: 200, bottom: 250}});
     expect(pages[1].chunks[0]).toMatchObject({fontSize: 36, bold: false, rect: {top: 200, bottom: 260}});
   });
+
+  it('starts a new page before a block that breaks, unless it is first on its page', async () => {
+    const pages = await paginateTextboxBlocksIntoPages({
+      blocks: [
+        {role: 'heading1', text: 'a', fontSize: 60, bold: true, divider: true},
+        {role: 'paragraph', text: 'p', fontSize: 36, bold: false},
+        {role: 'heading1', text: 'b', fontSize: 60, bold: true, divider: true},
+        {role: 'heading2', text: 'h', fontSize: 46, bold: true},
+      ],
+      maxRect: {left: 100, top: 0, right: 700, bottom: 2000},
+      breakBefore: block => !!block.divider,
+      measureHeight: measureByLength,
+    });
+    expect(pages.map(page => page.chunks.map(chunk => chunk.text))).toEqual([['a', 'p'], ['b', 'h']]);
+  });
 });

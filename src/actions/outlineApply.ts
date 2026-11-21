@@ -13,6 +13,7 @@ import {
 import type {OutlineBlock} from '../domain/outlineModel';
 import type {PlannedOrder} from '../domain/outlinePlan';
 import {isPenEditDecoration} from '../domain/penEditTags';
+import {startsPage, textArea} from '../domain/pageLayout';
 import {plural} from '../domain/plural';
 import {isNormalTextElement} from '../domain/textboxEditPlan';
 import {isOwnTitle} from '../domain/noteTitlesPlan';
@@ -139,6 +140,7 @@ export async function checkRebuild(
   review: ReviewPages,
 ): Promise<RebuildCheck> {
   const frame = await pageFrame(notePath, blocks);
+  const layoutSettings = getSettings().layout;
   const levels = await levelEdits(notePath, blocks, planned);
   // A heading that grows lays its page out again; one that shrinks keeps its place.
   const heights = new Map(
@@ -149,8 +151,14 @@ export async function checkRebuild(
       })
       .map(([key, edit]) => [key, edit.rect.bottom - edit.rect.top]),
   );
+  // Whether a block starts a page goes by its planned level.
+  const layoutBlocks = blocks.map(block => {
+    const level = planned.levels.get(block.key)?.to ?? block.level;
+    const kind = block.kind === 'file' ? 'file' : level ? 'heading' : 'paragraph';
+    return {...block, startsPage: startsPage({kind, level: level ?? null}, layoutSettings)};
+  });
   const layout = layoutRebuild(
-    blocks,
+    layoutBlocks,
     planned.order.map(block => block.key),
     frame,
     pageCount,
@@ -227,18 +235,23 @@ export async function checkRebuild(
   return {layout, levels, aside, pages, frame, blockers};
 }
 
-/** The area textboxes are stacked in: from the highest textbox top, as far from the page's bottom. */
+/**
+ * The area textboxes are stacked in: the page layout's text area (technical-design-settings-layout-files.md
+ * §1). Without the page size, from the highest textbox top to the lowest bottom.
+ */
 async function pageFrame(
   notePath: string,
   blocks: OutlineBlock[],
 ): Promise<PageFrame> {
   const size = await readPageSizeForDiagnostics(notePath, 0);
-  const top = Math.max(0, Math.min(...blocks.map(block => block.rect.top)));
-  const pageHeight =
-    typeof size === 'string'
-      ? Math.max(...blocks.map(block => block.rect.bottom)) + top
-      : size.height;
-  return {top, bottom: pageHeight - top};
+  if (typeof size !== 'string') {
+    const area = textArea(size, getSettings().layout);
+    return {top: area.top, bottom: area.bottom};
+  }
+  return {
+    top: Math.max(0, Math.min(...blocks.map(block => block.rect.top))),
+    bottom: Math.max(...blocks.map(block => block.rect.bottom)),
+  };
 }
 
 export async function applyOutlinePlan(

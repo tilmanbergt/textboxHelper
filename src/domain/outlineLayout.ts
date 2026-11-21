@@ -6,12 +6,19 @@ import type {Rect} from './textboxModel';
  * above it (within limits); a heading whose new level makes it taller brings its new height
  * (`heights`, measured by the caller) and counts as changed there. From the first page a change
  * touches, blocks are stacked down the pages in their new order; a block that doesn't fit goes to
- * the next page. Blocks are never pulled up from a page past the changes (a gap stays), and the
+ * the next page, and a block that starts a page (a linked file's divider, a heading of a level set to
+ * break, technical-design-settings-layout-files.md §1) begins the next one. Blocks are never pulled up from a page past the changes (a gap stays), and the
  * rebuild stops at the first page from which everything is as before, so pages further on stay
  * untouched. Pure.
  */
 
-export type LayoutBlock = {key: string; page: number; rect: Rect};
+export type LayoutBlock = {
+  key: string;
+  page: number;
+  rect: Rect;
+  /** Starts a new page when it isn't first on one. */
+  startsPage?: boolean;
+};
 
 /** The part of a page textboxes are stacked in. */
 export type PageFrame = {top: number; bottom: number};
@@ -138,7 +145,7 @@ export function layoutRebuild(
       index > lastDiff && block.page > lastTouchedPage && block.page > page;
     if (
       untouchedLater ||
-      (!firstOnPage && y + gap + height(block.rect) > frame.bottom)
+      (!firstOnPage && (block.startsPage || y + gap + height(block.rect) > frame.bottom))
     ) {
       page = untouchedLater ? block.page : page + 1;
       y = frame.top;

@@ -34,6 +34,8 @@ export type TextboxBlockPaginationOptions = {
   fontPath?: string;
   minHeight?: number;
   blockGap?: number;
+  /** Whether a block starts a new page (technical-design-settings-layout-files.md §1). */
+  breakBefore?: (block: TextboxImportBlock) => boolean;
   addExplicitEmptyLineHeight?: boolean;
   measureHeight: MeasureTextboxHeight;
 };
@@ -218,6 +220,9 @@ export async function paginateTextboxBlocksIntoPages(
   };
 
   for (const block of options.blocks) {
+    if (currentPage.chunks.length > 0 && options.breakBefore?.(block)) {
+      startNewPage();
+    }
     const blockHeight = await heightForText({
       text: block.text,
       maxRect: options.maxRect,
