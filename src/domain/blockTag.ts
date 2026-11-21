@@ -24,9 +24,12 @@ export type BlockTag = {
   /**
    * "x": the placeholder of a protected block (technical-design-source-link.md §2.5).
    * "f": a file divider, the textbox with a linked file's name that starts its part of the note.
-   * "t": the NOTE title element over a file divider (technical-design-linked-files.md §1).
+   * "t": a NOTE title element of ours, over a file divider (technical-design-linked-files.md §1)
+   * or a heading (technical-design-outline-sections.md §4).
    */
   k?: BlockKind;
+  /** A title of ours over a heading: the heading's level (1–3). */
+  h?: number;
   /** 1: set aside by the Outline; a linked file leaves it out (technical-design-source-link.md §2.4). */
   a?: 1;
 };
@@ -60,6 +63,9 @@ export function parseBlockTag(userData: unknown): BlockTag | null {
     }
     if (value.a === 1) {
       tag.a = 1;
+    }
+    if (Number.isInteger(value.h)) {
+      tag.h = value.h as number;
     }
     return tag;
   } catch {
@@ -100,4 +106,9 @@ export function dividerTag(sourceId: string, now: Date): BlockTag {
 /** The tag of the NOTE title element over a linked file's divider. */
 export function titleTag(sourceId: string, now: Date): BlockTag {
   return {v: 1, id: newBlockId(now), s: sourceId, k: 't'};
+}
+
+/** The tag of the NOTE title element of ours over a heading of this level. */
+export function headingTitleTag(level: number, now: Date): BlockTag {
+  return {v: 1, id: newBlockId(now), k: 't', h: level};
 }

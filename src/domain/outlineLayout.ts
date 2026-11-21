@@ -2,8 +2,9 @@ import type {Rect} from './textboxModel';
 
 /**
  * Where the textboxes go when the Outline's planned changes are applied
- * (technical-design-manuscript.md §5.4). Text doesn't change, so nothing is measured: every block
- * keeps its size, its left edge and the gap above it (within limits). From the first page a change
+ * (technical-design-manuscript.md §5.4). Every block keeps its size, its left edge and the gap
+ * above it (within limits); a heading whose new level makes it taller brings its new height
+ * (`heights`, measured by the caller) and counts as changed there. From the first page a change
  * touches, blocks are stacked down the pages in their new order; a block that doesn't fit goes to
  * the next page. Blocks are never pulled up from a page past the changes (a gap stays), and the
  * rebuild stops at the first page from which everything is as before, so pages further on stay
@@ -64,8 +65,13 @@ export function layoutRebuild(
   order: string[],
   frame: PageFrame,
   pageCount: number,
+  heights: Map<string, number> = new Map(),
 ): RebuildLayout | null {
-  const byKey = new Map(original.map(block => [block.key, block]));
+  const resized = (block: LayoutBlock): LayoutBlock => {
+    const next = heights.get(block.key);
+    return next === undefined ? block : {...block, rect: {...block.rect, bottom: block.rect.top + next}};
+  };
+  const byKey = new Map(original.map(block => [block.key, resized(block)]));
   const staying = new Set(order);
   const originalStaying = original
     .filter(block => staying.has(block.key))
@@ -80,8 +86,11 @@ export function layoutRebuild(
   );
   let lastDiff = -1;
   order.forEach((key, index) => {
-    if (key !== originalStaying[index]) {
+    if (key !== originalStaying[index] || heights.has(key)) {
       lastDiff = index;
+      if (firstDiff < 0 || index < firstDiff) {
+        firstDiff = index;
+      }
     }
   });
   if (firstDiff < 0 && removedPages.length === 0) {

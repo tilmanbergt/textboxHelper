@@ -46,7 +46,7 @@ import {
 import {insertTextboxPages} from '../supernote/noteTextInsertion';
 import {getSettings} from '../storage/settingsFile';
 import {
-  addFileTitles,
+  addTitles,
   checkNotLinkedYet,
   linkedName,
   linkImport,
@@ -469,11 +469,8 @@ async function runTextboxImport(
       },
     });
 
-    let titleNote = '';
-    if (records.length > 0) {
-      options?.onProgress?.({message: 'Adding the file titles...'});
-      titleNote = await addFileTitles(context.notePath, pages);
-    }
+    options?.onProgress?.({message: 'Adding the titles...'});
+    let titleNote = await addTitles(context.notePath, pages);
     if (linked?.links.folder?.ordered && request.folder) {
       titleNote += await writeFirstIndex(linked.links, records.map(record => record.filePath));
     }
@@ -484,7 +481,7 @@ async function runTextboxImport(
         ? ` ${protectedCount ? `${protectedCount} kept as is · ` : ''}Linked to ${linkedName(records, request.folder)}.${titleNote}`
         : '';
     return {
-      message: `Imported ${insertResult.insertedTextboxCount} textbox(es) and created ${insertResult.createdPageCount} new page(s).${linkedNote}`,
+      message: `Imported ${insertResult.insertedTextboxCount} textbox(es) and created ${insertResult.createdPageCount} new page(s).${linkedNote || titleNote}`,
       sourceId: records[0]?.sourceId ?? null,
       sourceIds: records.map(record => record.sourceId),
       sourcePath,

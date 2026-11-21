@@ -14,7 +14,6 @@ import {
   setFilesLeftOut,
   setFolderOrdered,
   readLinkedNote,
-  restoreFileTitles,
   saveFileCopy,
   unlinkFile,
   writeAccessText,
@@ -29,6 +28,7 @@ import {addLinkedFiles} from '../../actions/textImport';
 import {userMessage} from '../../domain/userMessage';
 import type {NoteInfo} from '../../supernote/noteElements';
 import type {FrameStatus} from '../../ui/ScreenFrame';
+import {restoreTitles as restoreNoteTitles} from '../../actions/titleSync';
 
 export interface LinkedFiles {
   note: LinkedNote | null;
@@ -250,7 +250,7 @@ export function useLinkedFiles(info: NoteInfo | null, ready: boolean): LinkedFil
 
   const restoreTitles = useCallback(() => {
     if (info) {
-      step('Restoring the file titles…', () => restoreFileTitles(info.notePath, info.pageCount), 'Could not restore the file titles.');
+      step('Restoring the titles…', () => restoreNoteTitles(info.notePath, info.pageCount), 'Could not restore the titles.');
     }
   }, [info, step]);
 

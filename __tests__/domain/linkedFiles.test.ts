@@ -1,7 +1,7 @@
-import {dividerTag, formatBlockTag, parseBlockTag, titleTag, type BlockTag} from '../../src/domain/blockTag';
+import {dividerTag, formatBlockTag, headingTitleTag, parseBlockTag, titleTag, type BlockTag} from '../../src/domain/blockTag';
 import {heldElsewhere, segmentByFile} from '../../src/domain/fileSegments';
 import {fileState, isWritable} from '../../src/domain/fileState';
-import {covers, isFileTitle, planFileTitles} from '../../src/domain/fileTitles';
+import {covers, isOwnTitle, planTitles} from '../../src/domain/noteTitlesPlan';
 import {fingerprint} from '../../src/domain/fingerprint';
 import {sourceImportBlocks} from '../../src/domain/importParsing';
 import {
@@ -107,7 +107,7 @@ describe('file state', () => {
   });
 });
 
-function textbox(numInPage: number, rect: Rect, tag: BlockTag | null): PageElementData {
+function textbox(numInPage: number, rect: Rect, tag: BlockTag | null, text = 'Name'): PageElementData {
   return {
     uuid: `t${numInPage}`,
     type: TEXT_TYPE_NORMAL,
@@ -116,7 +116,7 @@ function textbox(numInPage: number, rect: Rect, tag: BlockTag | null): PageEleme
     textBox: {
       fontSize: 60,
       fontPath: null,
-      textContentFull: 'Name',
+      textContentFull: text,
       textRect: rect,
       textAlign: 0,
       textBold: 1,
@@ -153,9 +153,9 @@ describe('file titles', () => {
   const lower: Rect = {left: 100, top: 600, right: 900, bottom: 680};
 
   it('covers a divider without a title, and keeps one that covers it', () => {
-    const plan = planFileTitles([textbox(1, top, dividerTag('a', NOW))]);
-    expect(plan).toEqual({insert: [{sourceId: 'a', numInPage: 1, rect: top}], remove: []});
-    const covered = planFileTitles([
+    const plan = planTitles([textbox(1, top, dividerTag('a', NOW))]);
+    expect(plan).toEqual({insert: [{sourceId: 'a', numInPage: 1, rect: top, level: 0}], remove: []});
+    const covered = planTitles([
       textbox(1, top, dividerTag('a', NOW)),
       title(2, top, formatBlockTag(titleTag('a', NOW))),
     ]);
@@ -163,7 +163,7 @@ describe('file titles', () => {
   });
 
   it('replaces a title left behind by a moved divider and removes one without divider', () => {
-    const plan = planFileTitles([
+    const plan = planTitles([
       textbox(1, lower, dividerTag('a', NOW)),
       title(2, top, formatBlockTag(titleTag('a', NOW))),
       title(3, top, formatBlockTag(titleTag('gone', NOW))),
@@ -173,10 +173,36 @@ describe('file titles', () => {
   });
 
   it('never touches titles that are not ours', () => {
-    const plan = planFileTitles([title(1, top, null), textbox(2, top, null)]);
+    const plan = planTitles([title(1, top, null), textbox(2, top, null)]);
     expect(plan).toEqual({insert: [], remove: []});
-    expect(isFileTitle(title(1, top, null))).toBe(false);
-    expect(isFileTitle(title(1, top, formatBlockTag(titleTag('a', NOW))))).toBe(true);
+    expect(isOwnTitle(title(1, top, null))).toBe(false);
+    expect(isOwnTitle(title(1, top, formatBlockTag(titleTag('a', NOW))))).toBe(true);
+  });
+
+  it('titles headings of the titled levels, and replaces a title whose level changed', () => {
+    const second: Rect = {left: 100, top: 300, right: 900, bottom: 360};
+    const third: Rect = {left: 100, top: 400, right: 900, bottom: 450};
+    const plan = planTitles(
+      [textbox(1, top, null, '# Methods'), textbox(2, second, null, '## Sampling'), textbox(3, third, null, '### Detail')],
+      [1, 2],
+    );
+    expect(plan.insert.map(want => [want.numInPage, want.level, want.sourceId])).toEqual([
+      [1, 1, null],
+      [2, 2, null],
+    ]);
+    // "## Sampling" was "# Sampling": its old title of ours goes, a new one comes.
+    const changed = planTitles(
+      [textbox(2, second, null, '## Sampling'), title(4, second, formatBlockTag(headingTitleTag(1, NOW)))],
+      [1, 2],
+    );
+    expect(changed).toEqual({insert: [{numInPage: 2, rect: second, sourceId: null, level: 2}], remove: [4]});
+    // A heading turned into a paragraph loses our title; one under the user's own title gets none.
+    expect(planTitles([textbox(2, second, null, 'Sampling'), title(4, second, formatBlockTag(headingTitleTag(2, NOW)))], [1, 2])).toEqual({
+      insert: [],
+      remove: [4],
+    });
+    expect(planTitles([textbox(1, top, null, '# Mine'), title(5, top, null)], [1, 2])).toEqual({insert: [], remove: []});
+    expect(isOwnTitle(title(4, second, formatBlockTag(headingTitleTag(2, NOW))))).toBe(true);
   });
 
   it('counts a title as covering when it overlaps half of the smaller rectangle', () => {

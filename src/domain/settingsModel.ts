@@ -1,6 +1,7 @@
 /**
  * What the plugin remembers between sessions (technical-design-calmer-screens.md §3.9): the import
- * settings, the export scope and rules, and the edit-marker calibration. Stored as JSON in the
+ * settings, the export scope and rules, the edit-marker calibration, and how the Outline treats
+ * headings (technical-design-outline-sections.md §8). Stored as JSON in the
  * plugin folder by storage/settingsFile.ts.
  *
  * Reading is field by field: a missing or invalid value takes its default, the rest of the file
@@ -21,6 +22,7 @@ import {
   type TextboxImportRoleStyle,
   type TextboxImportSettings,
 } from './importSettings';
+import {HEADING_LEVELS, type HeadingLevel} from './headingText';
 import {DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION, type TextboxMeasurementCalibration} from './textboxLayout';
 
 export type ExportSettings = {
@@ -29,11 +31,28 @@ export type ExportSettings = {
   rules: ExportClassificationConfig;
 };
 
+/** How the Outline treats headings. */
+export type OutlineSettings = {
+  /** The level of a textbox under a NOTE title without #s. */
+  defaultHeadingLevel: HeadingLevel;
+  /** Heading levels that get a NOTE title, so they show in the note's table of contents. */
+  titleLevels: HeadingLevel[];
+  /** NOTE title style per heading level: 1 black, 2 light grey, 3 dark grey, 4 shadow. */
+  titleStyles: Record<HeadingLevel, number>;
+};
+
 export type PluginSettings = {
   version: 1;
   import: TextboxImportSettings;
   export: ExportSettings;
   markers: {calibration: TextboxMeasurementCalibration};
+  outline: OutlineSettings;
+};
+
+export const DEFAULT_OUTLINE_SETTINGS: OutlineSettings = {
+  defaultHeadingLevel: 1,
+  titleLevels: [1, 2],
+  titleStyles: {1: 1, 2: 3, 3: 2},
 };
 
 export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
@@ -45,6 +64,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
     rules: DEFAULT_EXPORT_CLASSIFICATION_CONFIG,
   },
   markers: {calibration: DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION},
+  outline: DEFAULT_OUTLINE_SETTINGS,
 };
 
 /** Calibration values beyond this are a mistake, not a correction. */
@@ -164,6 +184,24 @@ function parseCalibration(value: unknown): TextboxMeasurementCalibration {
   };
 }
 
+function parseOutline(value: unknown): OutlineSettings {
+  const raw = asObject(value);
+  const d = DEFAULT_OUTLINE_SETTINGS;
+  const level = (item: unknown, fallback: HeadingLevel) => num(item, fallback, 1, 3) as HeadingLevel;
+  const styles = asObject(raw.titleStyles);
+  return {
+    defaultHeadingLevel: level(raw.defaultHeadingLevel, d.defaultHeadingLevel),
+    titleLevels: Array.isArray(raw.titleLevels)
+      ? HEADING_LEVELS.filter(item => (raw.titleLevels as unknown[]).includes(item))
+      : d.titleLevels,
+    titleStyles: {
+      1: num(styles[1], d.titleStyles[1], 1, 4),
+      2: num(styles[2], d.titleStyles[2], 1, 4),
+      3: num(styles[3], d.titleStyles[3], 1, 4),
+    },
+  };
+}
+
 /** The settings from the file's text; null or unreadable JSON gives the defaults. */
 export function parseSettings(json: string | null): PluginSettings {
   let raw: Raw = {};
@@ -179,6 +217,7 @@ export function parseSettings(json: string | null): PluginSettings {
     import: parseImport(raw.import),
     export: parseExport(raw.export),
     markers: {calibration: parseCalibration(raw.markers)},
+    outline: parseOutline(raw.outline),
   };
 }
 

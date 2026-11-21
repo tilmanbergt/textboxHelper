@@ -5,7 +5,7 @@
  * ordered folder's first `index.txt`.
  */
 
-import {dividerTag, formatBlockTag, newBlockId, parseBlockTag} from '../domain/blockTag';
+import {dividerTag, formatBlockTag, newBlockId} from '../domain/blockTag';
 import {fingerprint} from '../domain/fingerprint';
 import type {TextboxImportPlan} from '../domain/importPlan';
 import {indexText, newLinkedFolder, newNoteLinks, withSources, type NoteLinks} from '../domain/noteLinks';
@@ -14,7 +14,7 @@ import type {ParsedSource} from '../domain/sourceBlocks';
 import {newSourceId, sourceFileName, type SourceRecord} from '../domain/sourceRecord';
 import {readSourceRecord, writeNoteLinks, writeSourceRecord} from '../storage/sourceStore';
 import {saveCurrentNoteForConsistency} from '../supernote/noteElements';
-import {syncFileTitles} from './fileTitles';
+import {syncTitles} from './titleSync';
 import {folderName, linkedFileNames, writeIndexFile} from './folderLink';
 
 export type ImportFile = {
@@ -67,18 +67,18 @@ export async function writeFirstIndex(links: NoteLinks, filePaths: string[]): Pr
 }
 
 /**
- * Covers the inserted dividers with NOTE titles and saves the note. A title that can't be written
- * doesn't undo the import: the text and the link are there; Details → Restore titles tries again.
+ * Puts our NOTE titles over the imported files' dividers and the headings of the titled levels
+ * (technical-design-outline-sections.md §4), and saves the note. A title that can't be written
+ * doesn't undo the import: the text (and the link) are there; Details → Restore titles tries again.
  */
-export async function addFileTitles(notePath: string, pages: {pageNumber: number; userData?: string}[]): Promise<string> {
-  const dividerPages = pages.filter(page => parseBlockTag(page.userData)?.k === 'f').map(page => page.pageNumber);
+export async function addTitles(notePath: string, pages: {pageNumber: number}[]): Promise<string> {
   try {
-    await syncFileTitles(notePath, dividerPages);
-    await saveCurrentNoteForConsistency('adding the file titles');
+    await syncTitles(notePath, pages.map(page => page.pageNumber));
+    await saveCurrentNoteForConsistency('adding the titles');
     return '';
   } catch (error) {
-    console.warn('[TextImport] file titles not added', String(error));
-    return ' The file title could not be added: Manuscript → Details → Restore titles.';
+    console.warn('[TextImport] titles not added', String(error));
+    return ' The titles could not be added: Manuscript → Details → Restore titles.';
   }
 }
 

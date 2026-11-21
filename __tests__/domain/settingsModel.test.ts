@@ -36,6 +36,14 @@ describe('parseSettings', () => {
     expect(parseSettings(serializeSettings(settings))).toEqual(settings);
   });
 
+  it('reads the Outline\'s heading settings field by field', () => {
+    const settings = parseSettings(
+      JSON.stringify({outline: {defaultHeadingLevel: 2, titleLevels: [3, 1, 7], titleStyles: {1: 4, 2: 9}}}),
+    );
+    expect(settings.outline).toEqual({defaultHeadingLevel: 2, titleLevels: [1, 3], titleStyles: {1: 4, 2: 3, 3: 2}});
+    expect(parseSettings(null).outline).toEqual({defaultHeadingLevel: 1, titleLevels: [1, 2], titleStyles: {1: 1, 2: 3, 3: 2}});
+  });
+
   it('replaces only the invalid fields', () => {
     const parsed = parseSettings(
       JSON.stringify({

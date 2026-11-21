@@ -1,5 +1,7 @@
 import type {Element, TextBox} from 'sn-plugin-lib';
 import {withAside} from '../domain/blockTag';
+import {withHeadingLevel} from '../domain/headingText';
+import type {TextboxImportRoleStyle} from '../domain/importSettings';
 import {createOutlineBackupPayload} from '../domain/backupPayload';
 import {
   layoutAside,
@@ -13,10 +15,12 @@ import type {PlannedOrder} from '../domain/outlinePlan';
 import {isPenEditDecoration} from '../domain/penEditTags';
 import {plural} from '../domain/plural';
 import {isNormalTextElement} from '../domain/textboxEditPlan';
-import {isFileTitle} from '../domain/fileTitles';
-import {ELEMENT_TYPE_TITLE, type PageElementData, type TextboxData} from '../domain/textboxModel';
+import {isOwnTitle} from '../domain/noteTitlesPlan';
+import {ELEMENT_TYPE_TITLE, type PageElementData, type Rect, type TextboxData} from '../domain/textboxModel';
 import {writeBackupFile} from '../storage/backupFile';
-import {syncFileTitles} from './fileTitles';
+import {getSettings} from '../storage/settingsFile';
+import {estimateTextboxHeight} from '../supernote/textboxMetrics';
+import {syncTitles} from './titleSync';
 import {
   deletePageElements,
   modifyPageElements,
@@ -33,11 +37,14 @@ import {
 } from '../supernote/noteTextInsertion';
 
 /**
- * Applying the Outline's planned changes (technical-design-manuscript.md §5.4–§5.5): check which
- * pages a rebuild touches and what is in the way, then move, set aside and delete the textboxes.
- * A textbox that stays on its page only gets a new place (it keeps its number and tag); one that
- * goes to another page is written there again with its style and tag, then removed from where it
- * was. One backup of every textbox on the pages touched, one save before anything changes.
+ * Applying the Outline's planned changes (technical-design-manuscript.md §5.4–§5.5,
+ * technical-design-outline-sections.md §3): check which pages a rebuild touches and what is in the
+ * way, then change heading levels, move, set aside and delete the textboxes. A level change
+ * rewrites the textbox's #s and gives it the import's style for its level; if that makes it taller,
+ * its page is laid out again from there. A textbox that stays on its page only gets a new place
+ * (it keeps its number and tag); one that goes to another page is written there again with its
+ * style and tag, then removed from where it was. One backup of every textbox on the pages touched,
+ * one save before anything changes, our titles put right afterwards.
  */
 
 type TextElement = Element & {textBox: TextBox};
@@ -58,12 +65,70 @@ export type RebuildBlocker = {
 
 export type RebuildCheck = {
   layout: RebuildLayout | null;
+  /** Headings whose level changes: their new text, style and size (at their old place). */
+  levels: Map<string, LevelEdit>;
   aside: Map<string, Placement>;
   /** Every page the changes touch: rebuilt, or losing a set-aside or deleted block. */
   pages: number[];
   frame: PageFrame;
   blockers: RebuildBlocker[];
 };
+
+/** A heading's new level on the page: its text, the style of its level, its size there. */
+export type LevelEdit = {text: string; style: TextboxImportRoleStyle; rect: Rect};
+
+/** Below this, a new height is the same height (measuring isn't exact to the pixel). */
+const GROWN_PX = 4;
+
+/** The import's style for a level: # to ### their heading styles, 0 the paragraph style. */
+function levelStyle(level: number): TextboxImportRoleStyle {
+  const structure = getSettings().import.structure;
+  return level === 1
+    ? structure.heading1
+    : level === 2
+    ? structure.heading2
+    : level >= 3
+    ? structure.heading3
+    : structure.paragraph;
+}
+
+/** Every level change with its new text, style and measured size. */
+async function levelEdits(
+  notePath: string,
+  blocks: OutlineBlock[],
+  planned: PlannedOrder,
+): Promise<Map<string, LevelEdit>> {
+  const edits = new Map<string, LevelEdit>();
+  const staying = new Set(planned.order.map(block => block.key));
+  const fonts = new Map<number, Map<number, string | undefined>>();
+  for (const block of blocks) {
+    const change = planned.levels.get(block.key);
+    if (!change || !staying.has(block.key)) {
+      continue;
+    }
+    if (!fonts.has(block.page)) {
+      const elements = await readPageElements(notePath, block.page, `Could not read page ${block.page + 1}.`);
+      try {
+        fonts.set(
+          block.page,
+          new Map(elements.filter(isNormalTextElement).map(item => [item.numInPage, item.textBox?.fontPath ?? undefined])),
+        );
+      } finally {
+        await recycleElements(elements);
+      }
+    }
+    const text = withHeadingLevel(block.text, change.to as 0 | 1 | 2 | 3);
+    const style = levelStyle(change.to);
+    const height = await estimateTextboxHeight(
+      text,
+      block.rect.right - block.rect.left,
+      style.fontSize,
+      fonts.get(block.page)?.get(block.numInPage),
+    );
+    edits.set(block.key, {text, style, rect: {...block.rect, bottom: block.rect.top + Math.ceil(height)}});
+  }
+  return edits;
+}
 
 /** Reads the touched pages and says what stands in the way of the rebuild. */
 export async function checkRebuild(
@@ -74,21 +139,32 @@ export async function checkRebuild(
   review: ReviewPages,
 ): Promise<RebuildCheck> {
   const frame = await pageFrame(notePath, blocks);
+  const levels = await levelEdits(notePath, blocks, planned);
+  // A heading that grows lays its page out again; one that shrinks keeps its place.
+  const heights = new Map(
+    [...levels]
+      .filter(([key, edit]) => {
+        const block = blocks.find(item => item.key === key);
+        return !!block && edit.rect.bottom - block.rect.bottom > GROWN_PX;
+      })
+      .map(([key, edit]) => [key, edit.rect.bottom - edit.rect.top]),
+  );
   const layout = layoutRebuild(
     blocks,
     planned.order.map(block => block.key),
     frame,
     pageCount,
+    heights,
   );
   const removedPages = [...planned.aside, ...planned.deleted].map(
     block => block.page,
   );
-  const pages = [
-    ...new Set([
-      ...(layout?.pages ?? []).filter(page => page < pageCount),
-      ...removedPages,
-    ]),
-  ].sort((a, b) => a - b);
+  const rebuilt = new Set([
+    ...(layout?.pages ?? []).filter(page => page < pageCount),
+    ...removedPages,
+  ]);
+  const levelPages = blocks.filter(block => levels.has(block.key)).map(block => block.page);
+  const pages = [...new Set([...rebuilt, ...levelPages])].sort((a, b) => a - b);
   const lastPage = Math.max(pageCount - 1, ...(layout?.pages ?? []));
   const aside = layoutAside(planned.aside, frame, lastPage);
 
@@ -111,6 +187,10 @@ export async function checkRebuild(
         reason: `${plural(pending, 'edit')} waiting: apply or drop them first`,
       });
     }
+    if (!rebuilt.has(page)) {
+      // Only headings change here, in place: nothing on the page moves.
+      continue;
+    }
     const elements = await readPageElements(
       notePath,
       page,
@@ -131,9 +211,9 @@ export async function checkRebuild(
             'handwriting outside textboxes would stay where it is while the text moves: lasso it into a textbox, move it off the page, or erase it',
         });
       }
-      // The titles over linked files' names are put back after the rebuild (`syncFileTitles`);
-      // other titles can't be moved yet.
-      if (elements.some(element => element.type === ELEMENT_TYPE_TITLE && !isFileTitle(element as unknown as PageElementData))) {
+      // Our titles (over linked files' names and headings) are put back after the rebuild
+      // (`syncTitles`); other titles can't be moved yet.
+      if (elements.some(element => element.type === ELEMENT_TYPE_TITLE && !isOwnTitle(element as unknown as PageElementData))) {
         blockers.push({
           page,
           kind: 'title',
@@ -144,7 +224,7 @@ export async function checkRebuild(
       await recycleElements(elements);
     }
   }
-  return {layout, aside, pages, frame, blockers};
+  return {layout, levels, aside, pages, frame, blockers};
 }
 
 /** The area textboxes are stacked in: from the highest textbox top, as far from the page's bottom. */
@@ -178,7 +258,10 @@ export async function applyOutlinePlan(
   ]);
   const removed = new Set(planned.deleted.map(block => block.key));
   const changed = blocks.filter(
-    block => placements.has(block.key) || removed.has(block.key),
+    block =>
+      placements.has(block.key) ||
+      removed.has(block.key) ||
+      check.levels.has(block.key),
   );
 
   onProgress('Saving the note…');
@@ -244,12 +327,15 @@ export async function applyOutlinePlan(
       const moved: Element[] = [];
       const gone: number[] = [];
       for (const block of changed.filter(item => item.page === page)) {
-        const element = elementOf.get(block.key) as TextElement;
+        const element = withLevel(
+          elementOf.get(block.key) as TextElement,
+          removed.has(block.key) ? undefined : check.levels.get(block.key),
+        );
         const place = placements.get(block.key);
-        if (place && place.page === page) {
+        if (!removed.has(block.key) && (!place || place.page === page)) {
           moved.push({
             ...element,
-            textBox: {...element.textBox, textRect: place.rect},
+            textBox: {...element.textBox, textRect: place?.rect ?? element.textBox.textRect},
           } as Element);
           continue;
         }
@@ -271,18 +357,15 @@ export async function applyOutlinePlan(
     // Titles over linked files' names follow their dividers (technical-design-linked-files.md §4).
     const touched = [...check.pages, ...inserts.keys()];
     try {
-      await syncFileTitles(notePath, touched);
+      await syncTitles(notePath, touched);
     } catch (error) {
       console.warn('[OutlineApply] file titles not synced', String(error));
     }
 
+    const moves = [...planned.marks.values()].filter(mark => mark === 'moved').length;
     const counts = [
-      planned.marks.size - planned.aside.length - planned.deleted.length > 0
-        ? plural(
-            planned.marks.size - planned.aside.length - planned.deleted.length,
-            'block',
-          ) + ' moved'
-        : null,
+      check.levels.size > 0 ? `${plural(check.levels.size, 'heading level')} changed` : null,
+      moves > 0 ? `${plural(moves, 'block')} moved` : null,
       planned.aside.length > 0 ? `${planned.aside.length} set aside` : null,
       planned.deleted.length > 0 ? `${planned.deleted.length} deleted` : null,
     ].filter(Boolean);
@@ -295,6 +378,23 @@ export async function applyOutlinePlan(
       await recycleElements(elements);
     }
   }
+}
+
+/** The textbox with its heading's new level: text, size, weight and height; as it was without one. */
+function withLevel(element: TextElement, edit: LevelEdit | undefined): TextElement {
+  if (!edit) {
+    return element;
+  }
+  return {
+    ...element,
+    textBox: {
+      ...element.textBox,
+      textContentFull: edit.text,
+      fontSize: edit.style.fontSize,
+      textBold: edit.style.bold ? 1 : 0,
+      textRect: edit.rect,
+    },
+  } as TextElement;
 }
 
 /** A set-aside block's tag says so, so a linked file leaves it out (technical-design-source-link.md §2.4). */

@@ -31,6 +31,8 @@ import {
   type PlannedChange,
   type PlannedOrder,
 } from '../../domain/outlinePlan';
+import {headingLevelOf, type HeadingLevel} from '../../domain/headingText';
+import type {SourceRecord} from '../../domain/sourceRecord';
 import {fileNameOf, userMessage} from '../../domain/userMessage';
 import {readBlockStatuses} from '../../storage/blockStatusStore';
 import {getSettings} from '../../storage/settingsFile';
@@ -55,6 +57,8 @@ export interface Outline {
   check: RebuildCheck | null;
   checking: boolean;
   move: (key: string, before: MoveTarget) => void;
+  /** Plans a heading level (0: a paragraph); with its subheadings shifting along, or alone. */
+  setLevel: (key: string, level: 0 | HeadingLevel, withSubheadings: boolean) => void;
   setAside: (key: string) => void;
   remove: (key: string) => void;
   undo: (key: string) => void;
@@ -67,6 +71,8 @@ export interface Outline {
 export function useOutline(
   note: NoteInfo | null,
   pages: Record<number, PageReview>,
+  /** The linked files' records: headings of notes linked before keep their level by them. */
+  records: SourceRecord[] = [],
 ): Outline {
   const notePath = note?.notePath ?? null;
   const [items, setItems] = useState<ScannedTextBox[] | null>(null);
@@ -139,10 +145,20 @@ export function useOutline(
       });
   }, [loading, notePath, pageCount]);
 
-  const blocks = useMemo(
-    () => (items ? buildOutline(items, statuses, pages) : null),
-    [items, pages, statuses],
-  );
+  const blocks = useMemo(() => {
+    if (!items) {
+      return null;
+    }
+    const bySource = new Map(records.map(record => [record.sourceId, record]));
+    return buildOutline(items, statuses, pages, {
+      defaultLevel: getSettings().outline.defaultHeadingLevel,
+      // Records made before headings kept their #s hold a heading's text without them.
+      recordLevel: tag => {
+        const block = tag.s && Number.isInteger(tag.i) ? bySource.get(tag.s)?.blocks[tag.i as number] : undefined;
+        return block?.role === 'heading' && headingLevelOf(block.text) === 0 ? block.level : null;
+      },
+    });
+  }, [items, pages, records, statuses]);
   const planned = useMemo(
     () => (blocks && plan.length > 0 ? plannedOrder(blocks, plan) : null),
     [blocks, plan],
@@ -204,8 +220,10 @@ export function useOutline(
     };
   }, [checkKey, notePath, pageCount]);
 
+  // A block's new change replaces its earlier one of the same sort: a level and a move go together.
   const change = useCallback((next: PlannedChange) => {
-    setPlan(current => [...undoFor(current, next.key), next]);
+    const sameSort = (item: PlannedChange) => (item.kind === 'level') === (next.kind === 'level');
+    setPlan(current => [...current.filter(item => item.key !== next.key || !sameSort(item)), next]);
   }, []);
 
   const apply = useCallback(() => {
@@ -301,6 +319,11 @@ export function useOutline(
     checking,
     move: useCallback(
       (key: string, before: MoveTarget) => change({kind: 'move', key, before}),
+      [change],
+    ),
+    setLevel: useCallback(
+      (key: string, level: 0 | HeadingLevel, withSubheadings: boolean) =>
+        change({kind: 'level', key, level, withSubheadings}),
       [change],
     ),
     setAside: useCallback(

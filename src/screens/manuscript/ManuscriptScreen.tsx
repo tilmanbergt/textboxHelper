@@ -10,7 +10,7 @@
  * no edits waiting but files differing from the note, the button is "Update …". Protected blocks
  * deleted on the page are asked about above the tabs before they leave their files.
  */
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {plural} from '../../domain/plural';
 import {filesHeldBack, type LinkedFile} from '../../actions/linkedFiles';
@@ -43,8 +43,12 @@ export default function ManuscriptScreen({
   focusPenEditId = null,
 }: Props): React.JSX.Element {
   const review = useManuscriptReview();
-  const outline = useOutline(review.note, review.pages);
   const source = useLinkedFiles(review.note, !review.loading);
+  const records = useMemo(
+    () => source.note?.files.map(file => file.record) ?? [],
+    [source.note],
+  );
+  const outline = useOutline(review.note, review.pages, records);
   const [view, setView] = useState<'card' | 'details'>('card');
   const [tab, setTab] = useState<Tab>('review');
   const [reviewBlocked, setReviewBlocked] = useState(false);

@@ -214,6 +214,15 @@ describe('rebuild layout', () => {
     expect(more?.placements.get('e')?.page).toBe(3);
   });
 
+  it('lays a page out again from a heading that grew', () => {
+    // a grows by 400: b no longer fits on page 0 and goes on to page 1.
+    const layout = layoutRebuild(original, ['a', 'b', 'c', 'd', 'e', 'f'], frame, 3, new Map([['a', 700]]));
+    expect(layout?.placements.get('a')).toEqual({page: 0, rect: {left: 100, top: 100, right: 900, bottom: 800}});
+    expect(layout?.placements.get('b')?.page).toBe(1);
+    expect(layout?.pages[0]).toBe(0);
+    expect(layoutRebuild(original, ['a', 'b', 'c', 'd', 'e', 'f'], frame, 3, new Map())).toBeNull();
+  });
+
   it('stacks set-aside blocks on new pages', () => {
     const aside = layoutAside([original[0], original[1], original[2]], frame, 2);
     expect([...aside.values()].map(place => [place.page, place.rect.top])).toEqual([

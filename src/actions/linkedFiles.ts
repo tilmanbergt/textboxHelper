@@ -32,8 +32,6 @@ import {
   writeNoteLinks,
   writeSourceRecord,
 } from '../storage/sourceStore';
-import {saveCurrentNoteForConsistency} from '../supernote/noteElements';
-import {syncFileTitles} from './fileTitles';
 import {linkedFileNames, readFolderState, writeIndexFile, type FolderState} from './folderLink';
 import {cachedOutline, rememberOutline} from './manuscriptCache';
 import {scanTextBoxes} from './textboxScan';
@@ -233,21 +231,6 @@ export async function unlinkFile(record: SourceRecord): Promise<void> {
     await writeNoteLinks(withoutSource(links, record.sourceId));
   }
   console.log('[SourceLink] unlinked', record.sourceId);
-}
-
-/**
- * Puts the file titles back over every divider of the note and removes ours left without one
- * (every page is read: a deleted divider may have left its title anywhere), then saves the note.
- */
-export async function restoreFileTitles(notePath: string, pageCount: number): Promise<string> {
-  const pages = Array.from({length: pageCount}, (_, page) => page);
-  const {added, removed} = await syncFileTitles(notePath, pages);
-  if (added + removed > 0) {
-    await saveCurrentNoteForConsistency('restoring the file titles');
-  }
-  return added + removed > 0
-    ? `${plural(added, 'title')} added${removed ? `, ${removed} removed` : ''}.`
-    : 'Every file has its title.';
 }
 
 /** "Can write here (host copy), probe deleted." — for Details. */
