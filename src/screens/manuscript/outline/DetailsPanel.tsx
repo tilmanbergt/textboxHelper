@@ -3,12 +3,14 @@
  * tapped last — an entry of the Contents (a file, a heading, Start, Not in a file, Set aside) or a
  * paragraph. Top to bottom: an info line with Go to page ›, one line with Level (and Status for a
  * paragraph), the text, and the action bar. Moves, levels and removals are planned, not done;
- * anything with edits waiting offers its review instead.
+ * anything with edits waiting offers its review instead. Which actions a block gets, in the text
+ * or in the aside area, comes from `domain/outlineActions.ts`.
  */
 import React, {useEffect, useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {HEADING_LEVELS, type HeadingLevel} from '../../../domain/headingText';
-import {stepMoves, type Contents, type ContentsEntry} from '../../../domain/outlineContents';
+import {blockActions} from '../../../domain/outlineActions';
+import {ASIDE, stepMoves, type Contents} from '../../../domain/outlineContents';
 import {BLOCK_STATUSES, STATUS_GLYPH, STATUS_LABEL, type OutlineBlock} from '../../../domain/outlineModel';
 import {blockedBy, type ChangeMark} from '../../../domain/outlinePlan';
 import {plural} from '../../../domain/plural';
@@ -46,8 +48,11 @@ const UNDO_LABEL: Record<ChangeMark, string> = {
 const PSEUDO_HINT: Record<string, string> = {
   start: 'The text before the first heading.',
   orphans: 'Text before the first file: it belongs to no file and is written nowhere. Move it into a file with Move to….',
-  aside: 'Set aside earlier: on the pages at the end of the note, left out of linked files. Move a paragraph back with Move to….',
+  aside: 'Set aside earlier, before the “Set aside” heading existed: the next Apply in the Outline puts that heading on a page of its own before it. Move a paragraph back with Move back.',
 };
+
+const ASIDE_HINT =
+  'Everything below this heading stays in the note and is never written to a file or exported. Sort it under your own headings typed on the page; Move back puts a paragraph into the text again.';
 
 export default function DetailsPanel({outline, view, disabled, onReviewPage, onGoToPage}: Props): React.JSX.Element {
   const {subject, shown, order, moveContents} = view;
@@ -63,7 +68,7 @@ export default function DetailsPanel({outline, view, disabled, onReviewPage, onG
   const section = entry ? entry.section.map(key => shown.get(key)).filter((item): item is OutlineBlock => !!item) : [];
   const busy = disabled || outline.busy;
 
-  if (entry && (entry.kind === 'start' || entry.kind === 'orphans' || entry.kind === 'aside')) {
+  if (entry && (entry.kind === 'start' || entry.kind === 'orphans' || entry.key === ASIDE)) {
     return (
       <View style={styles.panel}>
         <Text style={styles.info}>
@@ -82,6 +87,24 @@ export default function DetailsPanel({outline, view, disabled, onReviewPage, onG
     ? ['spacer', {key: 'undo', label: UNDO_LABEL[mark], onPress: () => outline.undo(block.key), disabled: busy}]
     : ['spacer'];
   const firstPending = (blocks: OutlineBlock[]) => blocks.find(item => (item.pendingEdits ?? 0) > 0)?.page ?? block.page;
+
+  // --- The aside area's divider: it stays where it is.
+  if (entry?.kind === 'aside') {
+    return (
+      <View style={styles.panel}>
+        <InfoLine
+          text={`Set aside · ${pagesOf(section)} · ${plural(entry.own.length, 'paragraph')}${entry.children.length ? `, ${plural(entry.children.length, 'heading')}` : ''} · in no file`}
+          page={block.page}
+          onGoToPage={onGoToPage}
+          disabled={busy}
+        />
+        <View style={styles.body}>
+          <Text style={styles.title}>{entry.title}</Text>
+          <Text style={styles.hint}>{ASIDE_HINT}</Text>
+        </View>
+      </View>
+    );
+  }
 
   // --- A file's divider.
   if (entry?.kind === 'file') {
@@ -172,7 +195,9 @@ export default function DetailsPanel({outline, view, disabled, onReviewPage, onG
               ...(edits > 0
                 ? [{key: 'review', label: `${GLYPH.edits} Review its ${plural(edits, 'edit')} ${GLYPH.next}`, onPress: () => onReviewPage(firstPending(section))}, 'separator' as const]
                 : []),
-              {key: 'aside', label: 'Set aside section', onPress: () => outline.setAside(block.key), disabled: busy || edits > 0},
+              ...(blockActions(block, view.flat).includes('setAside')
+                ? [{key: 'aside', label: 'Set aside section', onPress: () => outline.setAside(block.key), disabled: busy || edits > 0}]
+                : []),
               ...undo,
             ]}
             more={[{key: 'delete', label: `Delete section (${plural(section.length, 'block')})`, onPress: () => outline.remove(block.key), disabled: busy || edits > 0}]}
@@ -204,7 +229,7 @@ export default function DetailsPanel({outline, view, disabled, onReviewPage, onG
           choices={LEVEL_CHOICES}
           value={block.level ?? 0}
           onChange={level => outline.setLevel(block.key, level as 0 | HeadingLevel, false)}
-          disabled={busy || edits > 0 || block.aside}
+          disabled={busy || edits > 0}
         />
         <TextChoices
           caption="Status"
@@ -217,7 +242,7 @@ export default function DetailsPanel({outline, view, disabled, onReviewPage, onG
       <View style={styles.body}>
         <PagedText segments={[{text: block.text}]} resetKey={block.key} />
       </View>
-      <ActionBar resetKey={block.key} {...paragraphActions({outline, view, block, owner, moveContents, edits, busy, undo, onReviewPage})} />
+      <ActionBar resetKey={block.key} {...paragraphActions({outline, view, block, moveContents, edits, busy, undo, onReviewPage})} />
     </View>
   );
 }
@@ -226,7 +251,6 @@ function paragraphActions({
   outline,
   view,
   block,
-  owner,
   moveContents,
   edits,
   busy,
@@ -236,7 +260,6 @@ function paragraphActions({
   outline: Outline;
   view: OutlineView;
   block: OutlineBlock;
-  owner: ContentsEntry | undefined;
   moveContents: Contents;
   edits: number;
   busy: boolean;
@@ -252,29 +275,33 @@ function paragraphActions({
       note: 'Moving and removing come after the edits.',
     };
   }
-  const deleteAction: BarAction = {key: 'delete', label: 'Delete', onPress: () => outline.remove(block.key), disabled: busy};
-  if (block.aside || owner?.kind === 'aside') {
-    return {
-      items: [{key: 'to', label: `${GLYPH.to} Move to…`, onPress: () => view.setMoving(block.key), disabled: busy}, ...undo],
-      more: [deleteAction],
-    };
-  }
   const steps = stepMoves(moveContents, view.order, block.key);
   const move = (target: string | null) => target !== null && outline.move(block.key, target);
-  return {
-    items: [
-      {key: 'up', label: `${GLYPH.up} Up`, onPress: () => move(steps.up), disabled: busy || steps.up === null},
-      {key: 'down', label: `${GLYPH.down} Down`, onPress: () => move(steps.down), disabled: busy || steps.down === null},
-      {key: 'top', label: `${GLYPH.top} Top`, onPress: () => move(steps.top), disabled: busy || steps.top === null},
-      {key: 'end', label: `${GLYPH.end} End`, onPress: () => move(steps.end), disabled: busy || steps.end === null},
-      'separator',
-      {key: 'to', label: `${GLYPH.to} Move to…`, onPress: () => view.setMoving(block.key), disabled: busy || view.flat},
-      'separator',
-      {key: 'aside', label: 'Set aside', onPress: () => outline.setAside(block.key), disabled: busy},
-      ...undo,
-    ],
-    more: [deleteAction],
-  };
+  const items: BarItem[] = [];
+  const more: BarAction[] = [];
+  for (const action of blockActions(block, view.flat)) {
+    if (action === 'moveBack') {
+      items.push({key: 'back', label: `↩ Move back ${GLYPH.next}`, onPress: () => view.setMoving(block.key, true), disabled: busy}, 'separator');
+    } else if (action === 'steps') {
+      items.push(
+        {key: 'up', label: `${GLYPH.up} Up`, onPress: () => move(steps.up), disabled: busy || steps.up === null},
+        {key: 'down', label: `${GLYPH.down} Down`, onPress: () => move(steps.down), disabled: busy || steps.down === null},
+      );
+      if (!block.aside) {
+        items.push(
+          {key: 'top', label: `${GLYPH.top} Top`, onPress: () => move(steps.top), disabled: busy || steps.top === null},
+          {key: 'end', label: `${GLYPH.end} End`, onPress: () => move(steps.end), disabled: busy || steps.end === null},
+        );
+      }
+    } else if (action === 'moveTo') {
+      items.push('separator', {key: 'to', label: `${GLYPH.to} Move to…`, onPress: () => view.setMoving(block.key), disabled: busy});
+    } else if (action === 'setAside') {
+      items.push('separator', {key: 'aside', label: 'Set aside', onPress: () => outline.setAside(block.key), disabled: busy});
+    } else if (action === 'delete') {
+      more.push({key: 'delete', label: 'Delete', onPress: () => outline.remove(block.key), disabled: busy});
+    }
+  }
+  return {items: [...items, ...undo], more};
 }
 
 /** "pages 2–4" / "page 5". */

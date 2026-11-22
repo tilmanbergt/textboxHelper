@@ -1,4 +1,4 @@
-import {formatBlockTag, headingTitleTag, titleTag} from '../domain/blockTag';
+import {asideTitleTag, formatBlockTag, headingTitleTag, titleTag} from '../domain/blockTag';
 import type {HeadingLevel} from '../domain/headingText';
 import {planTitles, type TitleWanted} from '../domain/noteTitlesPlan';
 import type {PageElementData} from '../domain/textboxModel';
@@ -14,7 +14,7 @@ import {insertTitles} from '../supernote/noteTitles';
 
 /**
  * Puts our NOTE titles right on the given pages (technical-design-outline-sections.md §4): over
- * every linked file's divider and every heading of a titled level; adds the missing ones and
+ * every linked file's divider, the aside divider and every heading of a titled level; adds the missing ones and
  * removes ours that cover nothing they belong to any more. The same call after an import, an
  * Outline apply and on Restore titles; it is safe to run again. Titles made by the user or another
  * plugin stay as they are.
@@ -28,8 +28,11 @@ export async function syncTitles(
 ): Promise<{added: number; removed: number}> {
   const settings = getSettings();
   const {titleLevels, titleStyles} = settings.outline;
+  // The aside divider's title looks like a file's (technical-design-aside-area.md §3.3).
   const styleOf = (want: TitleWanted) =>
-    want.sourceId !== null ? settings.import.fileTitleStyle : titleStyles[want.level as HeadingLevel] ?? 1;
+    want.sourceId !== null || want.aside ? settings.import.fileTitleStyle : titleStyles[want.level as HeadingLevel] ?? 1;
+  const tagOf = (want: TitleWanted, now: Date) =>
+    want.sourceId !== null ? titleTag(want.sourceId, now) : want.aside ? asideTitleTag(now) : headingTitleTag(want.level, now);
   let added = 0;
   let removed = 0;
   for (const page of [...new Set(pages)].sort((a, b) => a - b)) {
@@ -49,9 +52,7 @@ export async function syncTitles(
           textBoxNum: want.numInPage,
           rect: want.rect,
           style: styleOf(want),
-          userData: formatBlockTag(
-            want.sourceId !== null ? titleTag(want.sourceId, now) : headingTitleTag(want.level, now),
-          ),
+          userData: formatBlockTag(tagOf(want, now)),
         })),
       );
       added += plan.insert.length;

@@ -18,6 +18,9 @@ import {plural} from './plural';
  * - Setting aside or deleting a heading takes its whole section; a file's divider can't be removed.
  * - Clean up layout (technical-design-settings-layout-files.md §2) lays the whole note or one file
  *   out again, in the planned order; at most one is planned.
+ * - The aside area (technical-design-aside-area.md §2.6): its divider is a section like a file's
+ *   but never moves, changes level or goes. Set aside puts a block (with its section) at the end of
+ *   the area; moving a block of the area to a place in the text is a plain move (Move back).
  *
  * Pure.
  */
@@ -73,20 +76,26 @@ export function sectionOf(order: OutlineBlock[], key: string): string[] {
 
 /**
  * Whether a block can be set aside or deleted: not a linked file's divider (without it the file's
- * text would belong to the file before it).
+ * text would belong to the file before it), not the aside divider; nothing in the aside area is set
+ * aside again.
  */
 export function canRemove(block: OutlineBlock): boolean {
-  return block.kind !== 'file';
+  return block.kind !== 'file' && block.kind !== 'aside';
 }
 
-/** Whether a block can move: paragraphs and files. Headings stay where they are. */
+/** Whether a block can be set aside: what can be removed, and not already in the aside area. */
+export function canSetAside(block: OutlineBlock): boolean {
+  return canRemove(block) && !block.aside;
+}
+
+/** Whether a block can move: paragraphs and files. Headings and the aside divider stay where they are. */
 export function canMove(block: OutlineBlock): boolean {
-  return block.kind !== 'heading';
+  return block.kind === 'paragraph' || block.kind === 'file';
 }
 
-/** Whether a block's level can change: headings and paragraphs, not a file's divider. */
+/** Whether a block's level can change: headings and paragraphs, not a divider. */
 export function canChangeLevel(block: OutlineBlock): boolean {
-  return block.kind !== 'file';
+  return block.kind === 'heading' || block.kind === 'paragraph';
 }
 
 /** A block with a new level: its `#`s rewritten, kind and lines to match. */
@@ -140,7 +149,7 @@ function applyLevels(
   for (const block of order) {
     const from = original.get(block.key) ?? 0;
     const to = block.level ?? 0;
-    if (block.kind !== 'file' && from !== to) {
+    if (canChangeLevel(block) && from !== to) {
       levels.set(block.key, {from, to});
     }
   }
@@ -172,7 +181,7 @@ export function plannedOrder(
       continue;
     }
     if (change.kind !== 'move') {
-      if (!canRemove(block)) {
+      if (change.kind === 'aside' ? !canSetAside(block) : !canRemove(block)) {
         continue;
       }
       const section = new Set(sectionOf(order, change.key));
@@ -205,7 +214,20 @@ export function plannedOrder(
       }
     });
   }
-  return {order, aside, deleted, marks, levels: levelled.levels, cleanup};
+  return {order: withPlannedAside(order, marks), aside, deleted, marks, levels: levelled.levels, cleanup};
+}
+
+/**
+ * The planned order with each block's part by its planned place: from the aside divider on, the
+ * aside area; before it, the text — so a block moved back is in the text even right before the
+ * divider. A note without divider (set aside before it existed): the area starts at its first
+ * block that wasn't moved.
+ */
+function withPlannedAside(order: OutlineBlock[], marks: Map<string, ChangeMark>): OutlineBlock[] {
+  const divider = order.findIndex(block => block.kind === 'aside');
+  const start = divider >= 0 ? divider : order.findIndex(block => block.aside && marks.get(block.key) !== 'moved');
+  const from = start >= 0 ? start : order.length;
+  return order.map((block, index) => (block.aside === index >= from ? block : {...block, aside: index >= from}));
 }
 
 /** Whether moving `key` before `target` would change anything (not onto itself or its own place). */
@@ -253,10 +275,20 @@ export function plannedSummary(
       `${plural(levelChanges.length, 'heading level')}${along > 0 ? ` (with ${plural(along, 'subheading')})` : ''}`,
     );
   }
-  const moves = plan.filter(change => change.kind === 'move');
+  const moves = plan.filter((change): change is Extract<PlannedChange, {kind: 'move'}> => change.kind === 'move');
   const movedFiles = moves.filter(change => byKey.get(change.key)?.kind === 'file').length;
-  if (moves.length - movedFiles > 0) {
-    parts.push(`${plural(moves.length - movedFiles, 'paragraph')} moved`);
+  // From the aside area to a place in the text (technical-design-aside-area.md §2.5): before a
+  // block of the text, or before the divider (the end of the text).
+  const intoText = (before: MoveTarget) => {
+    const target = before === 'end' ? undefined : byKey.get(before);
+    return !!target && (!target.aside || target.kind === 'aside');
+  };
+  const movedBack = moves.filter(change => byKey.get(change.key)?.aside && intoText(change.before)).length;
+  if (moves.length - movedFiles - movedBack > 0) {
+    parts.push(`${plural(moves.length - movedFiles - movedBack, 'paragraph')} moved`);
+  }
+  if (movedBack > 0) {
+    parts.push(`${plural(movedBack, 'paragraph')} moved back`);
   }
   if (movedFiles > 0) {
     parts.push(`${plural(movedFiles, 'file')} moved`);

@@ -1,14 +1,14 @@
 import type {Element, TextBox} from 'sn-plugin-lib';
-import {withAside} from '../domain/blockTag';
 import {withHeadingLevel} from '../domain/headingText';
 import type {TextboxImportRoleStyle} from '../domain/importSettings';
 import {createOutlineBackupPayload} from '../domain/backupPayload';
 import {
   layoutAside,
-  layoutRebuild,
+  layoutNote,
+  shiftedPage,
+  type NoteRebuild,
   type PageFrame,
   type Placement,
-  type RebuildLayout,
 } from '../domain/outlineLayout';
 import type {OutlineBlock} from '../domain/outlineModel';
 import type {PlannedOrder} from '../domain/outlinePlan';
@@ -22,6 +22,7 @@ import {writeBackupFile} from '../storage/backupFile';
 import {getSettings} from '../storage/settingsFile';
 import {estimateTextboxHeight} from '../supernote/textboxMetrics';
 import {syncTitles} from './titleSync';
+import {ASIDE_DIVIDER_KEY, asideDividerBlock, asideDividerInsert} from './asideArea';
 import {
   deletePageElements,
   modifyPageElements,
@@ -32,6 +33,7 @@ import {
 } from '../supernote/noteElements';
 import {
   appendNotePages,
+  insertNotePages,
   insertTextboxesIntoFile,
   textboxStyle,
   type StyledTextboxInsert,
@@ -65,11 +67,13 @@ export type RebuildBlocker = {
 };
 
 export type RebuildCheck = {
-  layout: RebuildLayout | null;
+  layout: NoteRebuild | null;
   /** Headings whose level changes: their new text, style and size (at their old place). */
   levels: Map<string, LevelEdit>;
   aside: Map<string, Placement>;
-  /** Every page the changes touch: rebuilt, or losing a set-aside or deleted block. */
+  /** Where a new aside divider goes (after the inserted pages), or null. */
+  divider: Placement | null;
+  /** Every page the changes touch: rebuilt, or losing a set-aside or deleted block (as the note is now). */
   pages: number[];
   frame: PageFrame;
   blockers: RebuildBlocker[];
@@ -139,7 +143,8 @@ export async function checkRebuild(
   planned: PlannedOrder,
   review: ReviewPages,
 ): Promise<RebuildCheck> {
-  const frame = await pageFrame(notePath, blocks);
+  const area = await pageArea(notePath, blocks);
+  const frame: PageFrame = {top: area.top, bottom: area.bottom};
   const layoutSettings = getSettings().layout;
   const levels = await levelEdits(notePath, blocks, planned);
   // A heading that grows lays its page out again; one that shrinks keeps its place.
@@ -154,29 +159,49 @@ export async function checkRebuild(
   // Whether a block starts a page goes by its planned level.
   const layoutBlocks = blocks.map(block => {
     const level = planned.levels.get(block.key)?.to ?? block.level;
-    const kind = block.kind === 'file' ? 'file' : level ? 'heading' : 'paragraph';
+    const kind = block.kind === 'file' || block.kind === 'aside' ? block.kind : level ? 'heading' : 'paragraph';
     return {...block, startsPage: startsPage({kind, level: level ?? null}, layoutSettings)};
   });
-  const layout = layoutRebuild(
+  // Set aside before the divider existed: the divider gets a page of its own before the area.
+  const legacy = blocks.some(block => block.aside) && !blocks.some(block => block.kind === 'aside');
+  const planAside = planned.order.findIndex(block => block.aside);
+  const layout = layoutNote(
     layoutBlocks,
     planned.order.map(block => block.key),
+    planAside >= 0 ? planAside : planned.order.length,
     frame,
     pageCount,
     heights,
+    legacy,
   );
   const removedPages = [...planned.aside, ...planned.deleted].map(
     block => block.page,
   );
-  const rebuilt = new Set([
-    ...(layout?.pages ?? []).filter(page => page < pageCount),
-    ...removedPages,
-  ]);
+  const rebuilt = new Set([...(layout?.pages ?? []), ...removedPages]);
   const levelPages = blocks.filter(block => levels.has(block.key)).map(block => block.page);
   const pages = [...new Set([...rebuilt, ...levelPages])].sort((a, b) => a - b);
-  const lastPage = Math.max(pageCount - 1, ...(layout?.pages ?? []));
-  const aside = layoutAside(planned.aside, frame, lastPage);
+  const lastPage = pageCount - 1 + (layout?.insertCount ?? 0) + (layout?.appendCount ?? 0);
+  // The first set aside of a note without aside area starts it with the divider.
+  const newDivider = planned.aside.length > 0 && !blocks.some(block => block.aside);
+  const dividerBlock = newDivider || layout?.dividerPage != null ? await asideDividerBlock(area) : null;
+  const aside = layoutAside([...(newDivider && dividerBlock ? [dividerBlock] : []), ...planned.aside], frame, lastPage);
+  const dividerHeight = dividerBlock ? dividerBlock.rect.bottom - dividerBlock.rect.top : 0;
+  const divider: Placement | null = newDivider
+    ? aside.get(ASIDE_DIVIDER_KEY) ?? null
+    : dividerBlock && layout?.dividerPage != null
+    ? {page: layout.dividerPage, rect: {...dividerBlock.rect, top: frame.top, bottom: frame.top + dividerHeight}}
+    : null;
+  aside.delete(ASIDE_DIVIDER_KEY);
 
   const blockers: RebuildBlocker[] = [];
+  if (legacy && layout?.dividerPage == null && (layout || planned.aside.length > 0)) {
+    const first = blocks.find(block => block.aside);
+    blockers.push({
+      page: first?.page ?? 0,
+      kind: 'plan',
+      reason: 'set-aside text shares this page with the text: move it to a page of its own with the lasso first',
+    });
+  }
   for (const page of pages) {
     if (review.unread.includes(page)) {
       blockers.push({
@@ -232,23 +257,21 @@ export async function checkRebuild(
       await recycleElements(elements);
     }
   }
-  return {layout, levels, aside, pages, frame, blockers};
+  return {layout, levels, aside, divider, pages, frame, blockers};
 }
 
 /**
  * The area textboxes are stacked in: the page layout's text area (technical-design-settings-layout-files.md
- * §1). Without the page size, from the highest textbox top to the lowest bottom.
+ * §1). Without the page size, from the textboxes' extent.
  */
-async function pageFrame(
-  notePath: string,
-  blocks: OutlineBlock[],
-): Promise<PageFrame> {
+async function pageArea(notePath: string, blocks: OutlineBlock[]): Promise<Rect> {
   const size = await readPageSizeForDiagnostics(notePath, 0);
   if (typeof size !== 'string') {
-    const area = textArea(size, getSettings().layout);
-    return {top: area.top, bottom: area.bottom};
+    return textArea(size, getSettings().layout);
   }
   return {
+    left: Math.max(0, Math.min(...blocks.map(block => block.rect.left))),
+    right: Math.max(...blocks.map(block => block.rect.right)),
     top: Math.max(0, Math.min(...blocks.map(block => block.rect.top))),
     bottom: Math.max(...blocks.map(block => block.rect.bottom)),
   };
@@ -323,20 +346,31 @@ export async function applyOutlinePlan(
       ),
     );
 
+    // Pages before the aside area first (text that grew, a divider of its own), then at the end.
+    const shift = {insertAt: check.layout?.insertAt ?? pageCount, insertCount: check.layout?.insertCount ?? 0};
+    const at = (page: number) => shiftedPage(shift, page);
+    if (shift.insertCount > 0) {
+      onProgress(`Adding ${plural(shift.insertCount, 'page')}…`);
+      await insertNotePages(notePath, shift.insertAt, shift.insertCount);
+    }
+    const count = pageCount + shift.insertCount;
     const newPages = Math.max(
-      check.layout?.newPages ?? 0,
-      ...[...check.aside.values()].map(place => place.page + 1 - pageCount),
+      check.layout?.appendCount ?? 0,
+      ...[...check.aside.values(), ...(check.divider ? [check.divider] : [])].map(place => place.page + 1 - count),
       0,
     );
     if (newPages > 0) {
       onProgress(`Adding ${plural(newPages, 'page')}…`);
-      await appendNotePages(notePath, pageCount, newPages);
+      await appendNotePages(notePath, count, newPages);
     }
 
     // Per page: new places first, then removals; new textboxes last (inserting may renumber).
     const inserts = new Map<number, StyledTextboxInsert[]>();
+    if (check.divider) {
+      inserts.set(check.divider.page, [asideDividerInsert(check.divider)]);
+    }
     for (const page of check.pages) {
-      onProgress(`Changing page ${page + 1}…`);
+      onProgress(`Changing page ${at(page) + 1}…`);
       const moved: Element[] = [];
       const gone: number[] = [];
       for (const block of changed.filter(item => item.page === page)) {
@@ -345,7 +379,7 @@ export async function applyOutlinePlan(
           removed.has(block.key) ? undefined : check.levels.get(block.key),
         );
         const place = placements.get(block.key);
-        if (!removed.has(block.key) && (!place || place.page === page)) {
+        if (!removed.has(block.key) && (!place || place.page === at(page))) {
           moved.push({
             ...element,
             textBox: {...element.textBox, textRect: place?.rect ?? element.textBox.textRect},
@@ -354,21 +388,18 @@ export async function applyOutlinePlan(
         }
         gone.push(element.numInPage);
         if (place) {
-          inserts.set(place.page, [
-            ...(inserts.get(place.page) ?? []),
-            insertOf(element, place, check.aside.has(block.key)),
-          ]);
+          inserts.set(place.page, [...(inserts.get(place.page) ?? []), insertOf(element, place)]);
         }
       }
-      await modifyPageElements(notePath, page, moved);
-      await deletePageElements(notePath, page, gone);
+      await modifyPageElements(notePath, at(page), moved);
+      await deletePageElements(notePath, at(page), gone);
     }
     for (const [page, items] of inserts) {
       onProgress(`Writing page ${page + 1}…`);
       await insertTextboxesIntoFile(notePath, page, items);
     }
     // Titles over linked files' names follow their dividers (technical-design-linked-files.md §4).
-    const touched = [...check.pages, ...inserts.keys()];
+    const touched = [...check.pages.map(at), ...inserts.keys()];
     try {
       await syncTitles(notePath, touched);
     } catch (error) {
@@ -381,6 +412,7 @@ export async function applyOutlinePlan(
       moves > 0 ? `${plural(moves, 'block')} moved` : null,
       planned.aside.length > 0 ? `${planned.aside.length} set aside` : null,
       planned.deleted.length > 0 ? `${planned.deleted.length} deleted` : null,
+      check.divider ? '“Set aside” started' : null,
     ].filter(Boolean);
     return {
       message: `${counts.join(', ')} on ${plural(check.pages.length, 'page')}.`,
@@ -410,12 +442,12 @@ function withLevel(element: TextElement, edit: LevelEdit | undefined): TextEleme
   } as TextElement;
 }
 
-/** A set-aside block's tag says so, so a linked file leaves it out (technical-design-source-link.md §2.4). */
-function insertOf(element: TextElement, place: Placement, aside: boolean): StyledTextboxInsert {
+/** A textbox written on another page: its text, style and tag go along. */
+function insertOf(element: TextElement, place: Placement): StyledTextboxInsert {
   return {
     text: element.textBox.textContentFull ?? '',
     rect: place.rect,
-    userData: withAside(typeof element.userData === 'string' ? element.userData : null, aside),
+    userData: typeof element.userData === 'string' ? element.userData : null,
     style: textboxStyle(element.textBox as TextboxData),
   };
 }

@@ -1,8 +1,8 @@
 /**
  * One page layout for everything that places text on a page (technical-design-settings-layout-files.md
  * §1): the import, the Outline's Apply and Clean up layout. The margins leave room for handwriting
- * (about a fifth of the width on the right, a third of the height at the bottom); linked files
- * always start a new page, headings of the chosen levels too. Pure.
+ * (about a fifth of the width on the right, a third of the height at the bottom); linked files and
+ * the aside area always start a new page, headings of the chosen levels too. Pure.
  */
 import type {HeadingLevel} from './headingText';
 import type {Rect} from './textboxModel';
@@ -39,11 +39,11 @@ export function textArea(page: {width: number; height: number}, layout: PageLayo
   return rect;
 }
 
-export type BreakKind = 'file' | 'heading' | 'paragraph';
+export type BreakKind = 'file' | 'heading' | 'paragraph' | 'aside';
 
-/** Whether a block starts a new page: a file's divider always, a heading by its level. */
+/** Whether a block starts a new page: a file's or the aside area's divider always, a heading by its level. */
 export function startsPage(block: {kind: BreakKind; level: number | null}, layout: PageLayout): boolean {
-  if (block.kind === 'file') {
+  if (block.kind === 'file' || block.kind === 'aside') {
     return true;
   }
   return block.kind === 'heading' && block.level !== null && layout.breakBefore.includes(block.level as HeadingLevel);

@@ -10,8 +10,12 @@ import {canMoveBefore, type MoveTarget} from './outlinePlan';
  * logic of its own. Also the moves the details panel offers, as targets for the plan. Pure.
  *
  * Pseudo entries: "Start" holds the paragraphs before the first heading of a note without linked
- * files; "Not in a file" the textboxes before the first file of a linked note (written nowhere);
- * "Set aside" the blocks the Outline set aside earlier (on the pages at the end).
+ * files; "Not in a file" the textboxes before the first file of a linked note (written nowhere).
+ *
+ * The aside area (technical-design-aside-area.md §2.2) is the last top entry: its divider's entry,
+ * with the headings typed in the area (or set aside with their section) below it, built like a
+ * file's. A note set aside before the divider existed gets a pseudo entry "Set aside" in its place.
+ * Every entry says whether it is in the aside area; the views show either the text or the area.
  */
 
 export type ContentsEntryKind = 'file' | 'heading' | 'start' | 'orphans' | 'aside';
@@ -34,6 +38,8 @@ export type ContentsEntry = {
   /** Edits waiting on its own paragraphs (and its heading), and in its whole section. */
   pendingOwn: number;
   pendingAll: number;
+  /** The aside area's entry or one below it. */
+  aside: boolean;
 };
 
 export type Contents = {
@@ -41,7 +47,7 @@ export type Contents = {
   byKey: Map<string, ContentsEntry>;
   /** The entry each block belongs to (a heading or divider: its own entry). */
   ownerOf: Map<string, string>;
-  /** No headings and no files: one pane, the Start entry's paragraphs. */
+  /** The text has no headings and no files: one pane, the Start entry's paragraphs. */
   flat: boolean;
 };
 
@@ -86,14 +92,16 @@ export function buildContents(order: OutlineBlock[]): Contents {
       section: [],
       pendingOwn: 0,
       pendingAll: 0,
+      aside: key === ASIDE,
     });
 
-  const stack: ContentsEntry[] = [];
-  const aside: OutlineBlock[] = [];
+  let stack: ContentsEntry[] = [];
+  let inAside = false;
   for (const block of order) {
-    if (block.aside) {
-      aside.push(block);
-      continue;
+    if (block.aside && !inAside) {
+      // The aside area starts: a top entry of its own, never under the text's last heading.
+      inAside = true;
+      stack = block.kind === 'aside' ? [] : [pseudo(ASIDE, 0)];
     }
     if (block.kind === 'paragraph') {
       const owner =
@@ -114,7 +122,7 @@ export function buildContents(order: OutlineBlock[]): Contents {
     const parent = stack[stack.length - 1] ?? null;
     const entry = add({
       key: block.key,
-      kind: block.kind === 'file' ? 'file' : 'heading',
+      kind: block.kind === 'file' ? 'file' : block.kind === 'aside' ? 'aside' : 'heading',
       level,
       depth: parent ? parent.depth + 1 : 0,
       title: titleOf(block),
@@ -124,6 +132,7 @@ export function buildContents(order: OutlineBlock[]): Contents {
       section: [],
       pendingOwn: pending(block),
       pendingAll: 0,
+      aside: inAside,
     });
     parent?.children.push(entry.key);
     ownerOf.set(block.key, entry.key);
@@ -133,18 +142,26 @@ export function buildContents(order: OutlineBlock[]): Contents {
       open.pendingAll += pending(block);
     }
   }
-  if (aside.length > 0) {
-    const entry = pseudo(ASIDE, 0);
-    for (const block of aside) {
-      entry.own.push(block.key);
-      entry.section.push(block.key);
-      entry.pendingOwn += pending(block);
-      entry.pendingAll += pending(block);
-      ownerOf.set(block.key, ASIDE);
-    }
-  }
-  const flat = entries.every(entry => entry.kind === 'start' || entry.kind === 'aside');
+  const flat = entries.every(entry => entry.kind === 'start' || entry.aside);
   return {entries, byKey, ownerOf, flat};
+}
+
+/** The aside area's entry, if the note has one. */
+export function asideEntry(contents: Contents): ContentsEntry | null {
+  return contents.entries.find(entry => entry.kind === 'aside') ?? null;
+}
+
+/** Whether a view shows an entry: the text views the text, the aside view the aside area. */
+export function inView(entry: ContentsEntry, filter: OutlineFilter): boolean {
+  return entry.aside === (filter === 'aside');
+}
+
+/** One pane for this view: the text without headings and files, or the aside area without headings. */
+export function isFlat(contents: Contents, filter: OutlineFilter): boolean {
+  if (filter !== 'aside') {
+    return contents.flat;
+  }
+  return (asideEntry(contents)?.children.length ?? 0) === 0;
 }
 
 export type ContentsRow = {
@@ -157,13 +174,16 @@ export type ContentsRow = {
 
 /**
  * The Contents column for a filter: every top entry, dim when nothing in it matches; child entries
- * without matches folded into their parent. With All, everything shows.
+ * without matches folded into their parent. With All, everything of the text shows; with Set aside,
+ * everything of the aside area.
  */
 export function contentsRows(
   contents: Contents,
   blocks: Map<string, OutlineBlock>,
-  filter: OutlineFilter,
+  view: OutlineFilter,
 ): ContentsRow[] {
+  // In the aside area nothing is dimmed or folded: it shows whole, like All in the text.
+  const filter: OutlineFilter = view === 'aside' ? 'all' : view;
   const matches = (entry: ContentsEntry) =>
     entry.section.some(key => {
       const block = blocks.get(key);
@@ -171,7 +191,7 @@ export function contentsRows(
     });
   const shown = new Set<string>();
   const rows: ContentsRow[] = [];
-  for (const entry of contents.entries) {
+  for (const entry of contents.entries.filter(item => inView(item, view))) {
     const visible =
       filter === 'all' ||
       (entry.parent === null ? true : shown.has(entry.parent) && matches(entry));
@@ -215,10 +235,11 @@ export function followingEntries(
     .map(child => ({entry: child, paragraphs: child.own.length}));
 }
 
-/** The entry to open first: the first with edits waiting, else the first. */
-export function initialEntry(contents: Contents): string | null {
-  const withEdits = contents.entries.find(entry => entry.pendingOwn > 0);
-  return (withEdits ?? contents.entries[0])?.key ?? null;
+/** The entry to open first in a view: the first with edits waiting, else the first. */
+export function initialEntry(contents: Contents, view: OutlineFilter = 'all'): string | null {
+  const entries = contents.entries.filter(entry => inView(entry, view));
+  const withEdits = entries.find(entry => entry.pendingOwn > 0);
+  return (withEdits ?? entries[0])?.key ?? null;
 }
 
 /** The key after a block in the order, or 'end'. */
@@ -271,7 +292,8 @@ function afterSection(contents: Contents, order: OutlineBlock[], key: string): M
 /**
  * Move to…: where a paragraph lands in another entry — after that entry's own paragraphs, before
  * its first child heading. Null for the paragraph's own entry and for anything that changes
- * nothing. Set-aside blocks can be moved back into the text, not into "Set aside".
+ * nothing. Works the same within the text, within the aside area and from the aside area back
+ * into the text (Move back); which entries are offered is the view's choice.
  */
 export function moveToEntry(
   contents: Contents,
@@ -281,7 +303,7 @@ export function moveToEntry(
 ): MoveTarget | null {
   const entry = contents.byKey.get(entryKey);
   const block = order.find(item => item.key === key);
-  if (!entry || !block || block.kind !== 'paragraph' || entry.kind === 'aside') {
+  if (!entry || !block || block.kind !== 'paragraph') {
     return null;
   }
   if (contents.ownerOf.get(key) === entryKey) {
@@ -289,7 +311,12 @@ export function moveToEntry(
   }
   const own = entry.own.filter(item => item !== key);
   const lastOwn = own[own.length - 1];
-  const anchor = lastOwn ?? (entry.kind === 'heading' || entry.kind === 'file' ? entry.key : null);
+  const divider = entry.kind === 'heading' || entry.kind === 'file' || (entry.kind === 'aside' && entry.key !== ASIDE);
+  const anchor = lastOwn ?? (divider ? entry.key : null);
+  if (anchor === null && entry.kind === 'aside') {
+    // The pseudo entry of a note without divider: the start of the aside area.
+    return checked(order, key, order.find(item => item.aside && item.key !== key)?.key ?? 'end');
+  }
   if (anchor === null) {
     // An empty pseudo entry at the top: before the first block of the text.
     return checked(order, key, order.find(item => !item.aside)?.key ?? 'end');

@@ -1,6 +1,6 @@
 import type {Element, TextBox} from 'sn-plugin-lib';
 import {createOutlineBackupPayload} from '../domain/backupPayload';
-import {formatBlockTag, newBlockId, parseBlockTag, withAside, type BlockTag} from '../domain/blockTag';
+import {formatBlockTag, newBlockId, parseBlockTag, type BlockTag} from '../domain/blockTag';
 import {
   blocksInScope,
   cleanupRange,
@@ -42,6 +42,7 @@ import {
 import {measureTextboxHeight} from '../supernote/textboxMetrics';
 import type {RebuildBlocker, ReviewPages} from './outlineApply';
 import {syncTitles} from './titleSync';
+import {ASIDE_DIVIDER_KEY, asideDividerBlock, asideDividerInsert} from './asideArea';
 
 /**
  * Clean up layout (technical-design-settings-layout-files.md §2): the whole note or one linked
@@ -373,13 +374,20 @@ export async function applyCleanup(
       const at = original.get(block.key) ?? block;
       add(gone, at.page, (elementOf.get(block.key) as TextElement).numInPage);
     }
-    // Set-aside blocks go onto new pages at the end of the note.
+    // Set-aside blocks go onto new pages at the end of the note, under a new divider when the
+    // note has no aside area yet (technical-design-aside-area.md §3.4).
     const lastPage = pageCount + extra - 1;
+    const divider =
+      planned.aside.length > 0 && !blocks.some(block => block.aside) ? await asideDividerBlock(check.area) : null;
     const aside = layoutAside(
-      planned.aside.map(block => original.get(block.key) ?? block),
+      [...(divider ? [divider] : []), ...planned.aside.map(block => original.get(block.key) ?? block)],
       {top: check.area.top, bottom: check.area.bottom},
       lastPage,
     );
+    const dividerPlace = aside.get(ASIDE_DIVIDER_KEY);
+    if (dividerPlace) {
+      add(inserts, dividerPlace.page, asideDividerInsert(dividerPlace));
+    }
     for (const block of planned.aside) {
       const at = original.get(block.key) ?? block;
       const element = elementOf.get(block.key) as TextElement;
@@ -388,7 +396,7 @@ export async function applyCleanup(
       add(inserts, place.page, {
         text: element.textBox.textContentFull ?? '',
         rect: place.rect,
-        userData: withAside(typeof element.userData === 'string' ? element.userData : null, true),
+        userData: typeof element.userData === 'string' ? element.userData : null,
         style: textboxStyle(element.textBox as TextboxData),
       });
     }

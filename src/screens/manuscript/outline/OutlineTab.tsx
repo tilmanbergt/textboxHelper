@@ -3,12 +3,16 @@
  * "Textbox Tools – Outline with sections"): three panes. Top left the Contents — linked files and
  * headings; top right the open entry's own paragraphs; below, the panel for what was tapped last.
  * A note without headings and files shows its paragraphs in one pane. Above the panes: Show (All ·
- * With edits · Not final), or in Move to mode what is moving and Cancel. Planned changes are named
- * in a line above the panel, with Undo last; the card's button applies them.
+ * With edits · Not final │ Set aside), or in Move to mode what is moving and Cancel. Planned changes
+ * are named in a line above the panel, with Undo last; the card's button applies them. Set aside
+ * shows only the aside area (technical-design-aside-area.md §5), with a short explanation while it
+ * is empty.
  */
 import React, {useEffect} from 'react';
 import {StyleSheet, Text, View, useWindowDimensions} from 'react-native';
+import {NOTHING_SET_ASIDE} from '../../../domain/helpTexts';
 import {
+  asideEntry,
   followingEntries,
   moveFileBefore,
   moveToEntry,
@@ -17,6 +21,7 @@ import {
 import {OUTLINE_FILTERS, type OutlineFilter} from '../../../domain/outlineModel';
 import {plannedOrder, plannedSummary, type ChangeMark} from '../../../domain/outlinePlan';
 import {plural} from '../../../domain/plural';
+import EmptyState from '../../../ui/EmptyState';
 import TextChoices from '../../../ui/TextChoices';
 import TextLink from '../../../ui/TextLink';
 import {COLORS, FONT, SPACING} from '../../../ui/theme';
@@ -30,6 +35,7 @@ const FILTER_LABELS: Record<OutlineFilter, string> = {
   all: 'All',
   edits: 'With edits',
   notFinal: 'Not final',
+  aside: 'Set aside',
 };
 
 /** The panel's height: fixed, so nothing above it moves; lower while the planned line shows. */
@@ -81,6 +87,7 @@ export default function OutlineTab({outline, disabled, onReviewPage, onGoToPage}
     : null;
 
   const ownHeader = open ? entryHeader(open, view.own.rows.length + view.own.hidden) : 'Paragraphs';
+  const nothingAside = view.filter === 'aside' && !!contents && !asideEntry(contents) && !loading;
   const list = (
     <ParagraphList
       header={view.flat ? `${plural(open?.own.length ?? 0, 'paragraph')} · no headings` : ownHeader}
@@ -100,8 +107,11 @@ export default function OutlineTab({outline, disabled, onReviewPage, onGoToPage}
       {movingBlock ? (
         <View style={styles.topLine}>
           <Text style={styles.moving} numberOfLines={1}>
-            <Text style={styles.bold}>{movingBlock.kind === 'file' ? 'Move before: ' : 'Move to: '}</Text>
-            tap → {movingBlock.kind === 'file' ? 'on a file' : 'on a heading'} · “{movingBlock.firstLine}”
+            <Text style={styles.bold}>
+              {movingBlock.kind === 'file' ? 'Move before: ' : view.movingBack ? 'Move back: ' : 'Move to: '}
+            </Text>
+            tap → {movingBlock.kind === 'file' ? 'on a file' : view.movingBack ? 'on a file or heading' : 'on a heading'} · “
+            {movingBlock.firstLine}”
           </Text>
           <TextLink label="Cancel" onPress={() => view.setMoving(null)} />
         </View>
@@ -113,26 +123,40 @@ export default function OutlineTab({outline, disabled, onReviewPage, onGoToPage}
             choices={OUTLINE_FILTERS.map(key => ({key, label: FILTER_LABELS[key]}))}
             value={view.filter}
             onChange={view.setFilter}
+            ruleBefore="aside"
           />
         </View>
       )}
       <View style={styles.panes}>
-        {view.flat ? (
+        {nothingAside ? (
+          <EmptyState {...NOTHING_SET_ASIDE} />
+        ) : view.flat ? (
           list
         ) : (
           <>
             <View style={[styles.contents, {width: Math.min(CONTENTS_MAX_WIDTH, Math.round(width / 3))}]}>
               <ContentsColumn
-                header={movingBlock ? 'Contents · to the end of …' : planned ? 'Contents · as planned' : 'Contents'}
+                header={
+                  movingBlock
+                    ? 'Contents · to the end of …'
+                    : view.filter === 'aside'
+                    ? 'Set aside · in no file'
+                    : planned
+                    ? 'Contents · as planned'
+                    : 'Contents'
+                }
                 rows={view.rows}
                 openKey={open?.key ?? null}
                 planned={planned}
                 onOpen={view.openEntry}
                 moveTarget={moveTarget}
                 hereKey={hereKey}
-                onMoveTo={target => {
+                onMoveTo={(target, entryKey) => {
                   if (moving) {
                     outline.move(moving, target);
+                    if (view.movingBack) {
+                      view.showInText(entryKey, moving);
+                    }
                   }
                   view.setMoving(null);
                 }}

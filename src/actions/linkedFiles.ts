@@ -1,6 +1,6 @@
 import {parseBlockTag} from '../domain/blockTag';
 import type {ScannedTextBox} from '../domain/exportClassification';
-import {heldElsewhere, segmentByFile, type FileSegments} from '../domain/fileSegments';
+import {asideBlocks, heldElsewhere, segmentByFile, type FileSegments} from '../domain/fileSegments';
 import {fileState, isWritable, FILE_STATE_LABEL, type FileState} from '../domain/fileState';
 import {fingerprint} from '../domain/fingerprint';
 import {INDEX_FILE, withFolder, withoutSource, type LinkedFolder, type NoteLinks} from '../domain/noteLinks';
@@ -160,10 +160,11 @@ async function linkedFiles(
 ): Promise<LinkedFile[]> {
   const lookup = new Map(records.map(record => [record.sourceId, record]));
   const held = accept ? new Map<string, Set<number>>() : heldElsewhere(segments, new Map(records.map(record => [record.sourceId, record.adopted ?? []])));
+  const aside = asideBlocks(segments);
   const files: LinkedFile[] = [];
   for (const record of records) {
     const segment = segments.bySource.get(record.sourceId) ?? [];
-    const options: CrossingOptions = {accept, elsewhere: held.get(record.sourceId), lookup};
+    const options: CrossingOptions = {accept, elsewhere: held.get(record.sourceId), lookup, aside: aside.get(record.sourceId)};
     files.push(await linkedFile(record, segment, hasDivider.get(record.sourceId) ?? false, options));
   }
   return files;

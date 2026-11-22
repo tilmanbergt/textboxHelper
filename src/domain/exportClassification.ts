@@ -1,9 +1,12 @@
 import type {ExportClassificationConfig, RoleRuleConfig, StyleRequirement} from './exportConfig';
+import {parseBlockTag} from './blockTag';
+import {splitAtAside} from './noteRegions';
 import type {Rect} from './textboxModel';
 
 /**
  * Classifying scanned textboxes for the DOCX export: their role (title, heading, body, …) by the
- * rules in `exportConfig.ts`, style signatures, reading order, and what the export includes.
+ * rules in `exportConfig.ts`, style signatures, reading order, and what the export includes. The
+ * aside area (technical-design-aside-area.md §4) is never exported.
  */
 
 export type ExportScope = 'currentPage' | 'wholeNote' | 'pageRange';
@@ -147,11 +150,21 @@ export function compareByReadingOrder(a: ScannedTextBox, b: ScannedTextBox): num
   return aLeft - bLeft;
 }
 
+/** The scanned textboxes before the aside area: what the export may include. */
+export function textPartOf(items: ScannedTextBox[]): ScannedTextBox[] {
+  return splitAtAside(items, item => parseBlockTag(item.userData)).text;
+}
+
+/** How many textboxes of the scan are in the aside area (not exported). */
+export function asideCount(scan: ScanSummary): number {
+  return scan.items.length - textPartOf(scan.items).length;
+}
+
 export function getIncludedScanItems(
   scan: ScanSummary,
   includeComments: boolean,
 ): ScannedTextBox[] {
-  return scan.items.filter(item => {
+  return textPartOf(scan.items).filter(item => {
     if (item.role === 'heading' || item.role === 'paragraph') {
       return true;
     }
@@ -168,13 +181,13 @@ export function getIncludedRoleCounts(
   scan: ScanSummary,
   includeComments: boolean,
 ): Record<'heading' | 'paragraph' | 'comment', number> {
-  const included = {
-    heading: scan.counts.heading,
-    paragraph: scan.counts.paragraph,
-    comment: includeComments ? scan.counts.comment : 0,
+  const items = textPartOf(scan.items);
+  const count = (role: TextRole) => items.filter(item => item.role === role).length;
+  return {
+    heading: count('heading'),
+    paragraph: count('paragraph'),
+    comment: includeComments ? count('comment') : 0,
   };
-
-  return included;
 }
 
 export function summarizeExcludedStyles(
@@ -186,7 +199,7 @@ export function summarizeExcludedStyles(
 }> {
   const grouped = new Map<string, number>();
 
-  for (const item of scan.items) {
+  for (const item of textPartOf(scan.items)) {
     const isIncluded =
       item.role === 'heading' ||
       item.role === 'paragraph' ||

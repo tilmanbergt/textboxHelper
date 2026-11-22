@@ -1,5 +1,6 @@
 import {paginateTextboxBlocksIntoPages} from '../../src/domain/blockPagination';
-import {formatBlockTag, parseBlockTag, withAside, type BlockTag} from '../../src/domain/blockTag';
+import {asideDividerTag, asideTitleTag, formatBlockTag, parseBlockTag, type BlockTag} from '../../src/domain/blockTag';
+import {asideBlocks, segmentByFile} from '../../src/domain/fileSegments';
 import {fingerprint} from '../../src/domain/fingerprint';
 import {sourceImportBlocks} from '../../src/domain/importParsing';
 import {
@@ -291,14 +292,47 @@ describe('regenerating the file', () => {
     expect(regenerateSource(r, items, {accept: true}).text).toBe('A.\n\nOther file\n\nC.\n');
   });
 
-  it('leaves out blocks the Outline set aside, without calling them missing', () => {
+  /** The file as written from a whole note: its segment, its blocks in the aside area set aside. */
+  const fromNote = (r: ReturnType<typeof record>, items: SourceItem[]) => {
+    const segments = segmentByFile(items);
+    return regenerateSource(r, segments.bySource.get(SOURCE) ?? [], {aside: asideBlocks(segments).get(SOURCE)});
+  };
+  const asideDivider: SourceItem = {page: 1, text: 'Set aside', tag: {v: 1, id: 'd', k: 'a'}};
+
+  it('leaves out everything below the aside divider, without calling its blocks missing', () => {
     const r = record('A.\n\nB.\n\nC.\n');
-    const items: SourceItem[] = [
+    const result = fromNote(r, [
+      {page: 0, text: 'A.', tag: tag(0)},
+      {page: 0, text: 'C.', tag: tag(2)},
+      asideDivider,
+      {page: 1, text: 'B.', tag: tag(1)},
+      {page: 1, text: 'A note typed in the aside area', tag: null},
+    ]);
+    expect(result.text).toBe('A.\n\nC.\n');
+    expect(result.missing).toEqual([]);
+    expect(result.counts.setAside).toBe(1);
+    expect(result.counts.added).toBe(0);
+  });
+
+  it('writes a block moved back above the aside divider, by position alone', () => {
+    const r = record('A.\n\nB.\n\nC.\n');
+    const result = fromNote(r, [
+      {page: 0, text: 'A.', tag: tag(0)},
+      {page: 0, text: 'B.', tag: tag(1, {a: 1})},
+      {page: 0, text: 'C.', tag: tag(2)},
+      asideDivider,
+    ]);
+    expect(result.text).toBe('A.\n\nB.\n\nC.\n');
+    expect(result.counts.setAside).toBe(0);
+  });
+
+  it('reads a note set aside before the divider existed by its set-aside tags', () => {
+    const r = record('A.\n\nB.\n\nC.\n');
+    const result = fromNote(r, [
       {page: 0, text: 'A.', tag: tag(0)},
       {page: 0, text: 'C.', tag: tag(2)},
       {page: 1, text: 'B.', tag: tag(1, {a: 1})},
-    ];
-    const result = regenerateSource(r, items);
+    ]);
     expect(result.text).toBe('A.\n\nC.\n');
     expect(result.missing).toEqual([]);
     expect(result.counts.setAside).toBe(1);
@@ -348,14 +382,10 @@ describe('source record and tag', () => {
     expect(parseBlockTag('tbt:b:{"v":1,"id":"b","k":"y"}')).toEqual({v: 1, id: 'b'});
   });
 
-  it('marks a tag as set aside and back, and leaves other userData alone', () => {
-    const userData = formatBlockTag({v: 1, id: 'b-1', s: SOURCE, i: 3});
-    const aside = withAside(userData, true);
-    expect(parseBlockTag(aside)).toEqual({v: 1, id: 'b-1', s: SOURCE, i: 3, a: 1});
-    expect(parseBlockTag(withAside(aside, false))).toEqual({v: 1, id: 'b-1', s: SOURCE, i: 3});
-    expect(withAside(userData, false)).toBe(userData);
-    expect(withAside('gtdpara:mark:1', true)).toBe('gtdpara:mark:1');
-    expect(withAside(null, true)).toBeNull();
+  it('tags the aside divider and its title', () => {
+    const now = new Date(2026, 10, 22);
+    expect(parseBlockTag(formatBlockTag(asideDividerTag(now)))).toMatchObject({k: 'a'});
+    expect(parseBlockTag(formatBlockTag(asideTitleTag(now)))).toMatchObject({k: 't', a: 1});
   });
 
   it('fingerprints text', () => {

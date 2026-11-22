@@ -1,9 +1,10 @@
 /**
  * The NOTE titles the plugin keeps over textboxes, so they show in the note's table of contents
  * (technical-design-linked-files.md §1.5, technical-design-outline-sections.md §4): every linked
- * file's divider gets exactly one title of ours, and so does every heading whose level (from its
- * `#`s) is one of the titled levels. Titles of ours carry the block tag `k: 't'` — with the file's
- * source id over a divider, with the level over a heading. What a page should get is planned here
+ * file's divider and the aside divider (technical-design-aside-area.md §3.3) get exactly one title
+ * of ours, and so does every heading whose level (from its `#`s) is one of the titled levels.
+ * Titles of ours carry the block tag `k: 't'` — with the file's source id over a file's divider,
+ * with `a` over the aside divider, with the level over a heading. What a page should get is planned here
  * from its elements; `actions/titleSync.ts` carries it out after an import, an Outline apply or on
  * Restore titles. Titles made by the user or another plugin are never touched; a textbox under such
  * a title gets none of ours.
@@ -15,12 +16,13 @@
  * style follows the level). Pure.
  */
 import {parseBlockTag} from './blockTag';
+import {isAsideDivider} from './noteRegions';
 import {intersectionRect, rectHeight, rectWidth} from './geometry';
 import {headingLevelOf} from './headingText';
 import {ELEMENT_TYPE_TITLE, type PageElementData, type Rect} from './textboxModel';
 
-/** A textbox that needs a title: a file's divider (its source id, level 0) or a heading. */
-export type TitleWanted = {numInPage: number; rect: Rect; sourceId: string | null; level: number};
+/** A textbox that needs a title: a file's divider (its source id, level 0), the aside divider or a heading. */
+export type TitleWanted = {numInPage: number; rect: Rect; sourceId: string | null; level: number; aside: boolean};
 
 export type TitlePlan = {
   insert: TitleWanted[];
@@ -55,7 +57,16 @@ export function planTitles(elements: PageElementData[], titleLevels: number[] = 
     }
     const tag = parseBlockTag(element.userData);
     const own = tag?.k === 't';
-    return [{numInPage: element.numInPage, rect: titleRect(element.title), own, sourceId: tag?.s ?? null, level: tag?.h ?? 0}];
+    return [
+      {
+        numInPage: element.numInPage,
+        rect: titleRect(element.title),
+        own,
+        sourceId: tag?.s ?? null,
+        level: tag?.h ?? 0,
+        aside: tag?.a === 1,
+      },
+    ];
   });
   const wanted = elements.flatMap((element): TitleWanted[] => {
     if (!element.textBox) {
@@ -64,12 +75,15 @@ export function planTitles(elements: PageElementData[], titleLevels: number[] = 
     const rect = element.textBox.textRect;
     const tag = parseBlockTag(element.userData);
     if (tag?.k === 'f' && tag.s) {
-      return [{numInPage: element.numInPage, rect, sourceId: tag.s, level: 0}];
+      return [{numInPage: element.numInPage, rect, sourceId: tag.s, level: 0, aside: false}];
+    }
+    if (isAsideDivider(tag)) {
+      return [{numInPage: element.numInPage, rect, sourceId: null, level: 0, aside: true}];
     }
     const level = headingLevelOf(element.textBox.textContentFull ?? '');
     const foreign = titles.some(title => !title.own && covers(title.rect, rect));
     return level > 0 && titleLevels.includes(level) && !foreign
-      ? [{numInPage: element.numInPage, rect, sourceId: null, level}]
+      ? [{numInPage: element.numInPage, rect, sourceId: null, level, aside: false}]
       : [];
   });
   const kept = new Set<number>();
@@ -80,7 +94,8 @@ export function planTitles(elements: PageElementData[], titleLevels: number[] = 
         item.own &&
         !kept.has(item.numInPage) &&
         item.sourceId === want.sourceId &&
-        (want.sourceId !== null || item.level === want.level) &&
+        item.aside === want.aside &&
+        (want.sourceId !== null || want.aside || item.level === want.level) &&
         covers(item.rect, want.rect),
     );
     if (title) {

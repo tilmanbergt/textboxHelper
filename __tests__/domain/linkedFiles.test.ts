@@ -1,4 +1,4 @@
-import {dividerTag, formatBlockTag, headingTitleTag, parseBlockTag, titleTag, type BlockTag} from '../../src/domain/blockTag';
+import {asideDividerTag, asideTitleTag, dividerTag, formatBlockTag, headingTitleTag, parseBlockTag, titleTag, type BlockTag} from '../../src/domain/blockTag';
 import {heldElsewhere, segmentByFile} from '../../src/domain/fileSegments';
 import {fileState, isWritable} from '../../src/domain/fileState';
 import {covers, isOwnTitle, planTitles} from '../../src/domain/noteTitlesPlan';
@@ -154,7 +154,7 @@ describe('file titles', () => {
 
   it('covers a divider without a title, and keeps one that covers it', () => {
     const plan = planTitles([textbox(1, top, dividerTag('a', NOW))]);
-    expect(plan).toEqual({insert: [{sourceId: 'a', numInPage: 1, rect: top, level: 0}], remove: []});
+    expect(plan).toEqual({insert: [{sourceId: 'a', numInPage: 1, rect: top, level: 0, aside: false}], remove: []});
     const covered = planTitles([
       textbox(1, top, dividerTag('a', NOW)),
       title(2, top, formatBlockTag(titleTag('a', NOW))),
@@ -195,7 +195,7 @@ describe('file titles', () => {
       [textbox(2, second, null, '## Sampling'), title(4, second, formatBlockTag(headingTitleTag(1, NOW)))],
       [1, 2],
     );
-    expect(changed).toEqual({insert: [{numInPage: 2, rect: second, sourceId: null, level: 2}], remove: [4]});
+    expect(changed).toEqual({insert: [{numInPage: 2, rect: second, sourceId: null, level: 2, aside: false}], remove: [4]});
     // A heading turned into a paragraph loses our title; one under the user's own title gets none.
     expect(planTitles([textbox(2, second, null, 'Sampling'), title(4, second, formatBlockTag(headingTitleTag(2, NOW)))], [1, 2])).toEqual({
       insert: [],
@@ -203,6 +203,17 @@ describe('file titles', () => {
     });
     expect(planTitles([textbox(1, top, null, '# Mine'), title(5, top, null)], [1, 2])).toEqual({insert: [], remove: []});
     expect(isOwnTitle(title(4, second, formatBlockTag(headingTitleTag(2, NOW))))).toBe(true);
+  });
+
+  it('titles the aside divider like a file, and keeps its title apart from a heading title', () => {
+    const plan = planTitles([textbox(1, top, asideDividerTag(NOW), 'Set aside')], [1]);
+    expect(plan).toEqual({insert: [{numInPage: 1, rect: top, sourceId: null, level: 0, aside: true}], remove: []});
+    const kept = planTitles([textbox(1, top, asideDividerTag(NOW), 'Set aside'), title(2, top, formatBlockTag(asideTitleTag(NOW)))], [1]);
+    expect(kept).toEqual({insert: [], remove: []});
+    // A heading title over it is not its title: replaced.
+    const wrong = planTitles([textbox(1, top, asideDividerTag(NOW), 'Set aside'), title(2, top, formatBlockTag(headingTitleTag(1, NOW)))], [1]);
+    expect(wrong.remove).toEqual([2]);
+    expect(wrong.insert.map(want => want.aside)).toEqual([true]);
   });
 
   it('counts a title as covering when it overlaps half of the smaller rectangle', () => {

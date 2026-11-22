@@ -3,12 +3,18 @@
  * open on the right, what the panel shows (the entry or a paragraph — whichever was tapped last),
  * and the Move to mode. Everything structural comes from `domain/outlineContents.ts` over the
  * blocks as planned; set-aside and deleted blocks stay visible at their old place, marked.
+ *
+ * Show › Set aside shows only the aside area, the other choices only the text
+ * (technical-design-aside-area.md §5.2). Move back is Move to with the text's entries as targets;
+ * once planned, the view jumps to the text at the entry it went to.
  */
 import {useCallback, useMemo, useState} from 'react';
 import {
   buildContents,
   contentsRows,
   initialEntry,
+  inView,
+  isFlat,
   ownRows,
   type Contents,
   type ContentsEntry,
@@ -31,7 +37,7 @@ export interface OutlineView {
   order: OutlineBlock[];
   /** The Contents of `order`, for moves. */
   moveContents: Contents;
-  /** One pane: no headings and no files. */
+  /** One pane: the view has no headings and no files. */
   flat: boolean;
   rows: ContentsRow[];
   open: ContentsEntry | null;
@@ -41,7 +47,11 @@ export interface OutlineView {
   selectBlock: (key: string) => void;
   /** Move to mode: the paragraph or file being moved; the Contents column shows → targets. */
   moving: string | null;
-  setMoving: (key: string | null) => void;
+  /** Move back: the moving block goes from the aside area into the text (its entries are the targets). */
+  movingBack: boolean;
+  setMoving: (key: string | null, back?: boolean) => void;
+  /** After a Move back: the text, the entry it went to, the block selected. */
+  showInText: (entryKey: string, blockKey: string) => void;
 }
 
 /** The planned order, with set-aside and deleted blocks put back after the block before them. */
@@ -66,7 +76,7 @@ export function useOutlineView(outline: Outline): OutlineView {
   const [filter, setFilter] = useState<OutlineFilter>('all');
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [subjectKind, setSubjectKind] = useState<'entry' | 'block'>('entry');
-  const [moving, setMoving] = useState<string | null>(null);
+  const [moving, setMovingState] = useState<{key: string; back: boolean} | null>(null);
 
   const all = useMemo(() => blocks ?? [], [blocks]);
   const display = useMemo(() => shownOrder(all, planned), [all, planned]);
@@ -74,15 +84,18 @@ export function useOutlineView(outline: Outline): OutlineView {
   const contents = useMemo(() => (blocks ? buildContents(display) : null), [blocks, display]);
   const moveContents = useMemo(() => buildContents(order), [order]);
   const shown = useMemo(() => new Map(display.map(block => [block.key, block])), [display]);
-  const flat = !!contents && contents.entries.every(entry => entry.kind === 'start');
+  // Moving back, the Contents shows the text whatever the view.
+  const rowsView: OutlineFilter = moving?.back ? 'all' : filter;
+  const flat = !!contents && isFlat(contents, rowsView);
 
+  const chosen = contents && openKey ? contents.byKey.get(openKey) : undefined;
   const open =
-    (contents && openKey ? contents.byKey.get(openKey) : undefined) ??
-    (contents ? contents.byKey.get(initialEntry(contents) ?? '') : undefined) ??
+    (chosen && inView(chosen, filter) ? chosen : undefined) ??
+    (contents ? contents.byKey.get(initialEntry(contents, filter) ?? '') : undefined) ??
     null;
   const rows = useMemo(
-    () => (contents ? contentsRows(contents, shown, filter) : []),
-    [contents, filter, shown],
+    () => (contents ? contentsRows(contents, shown, rowsView) : []),
+    [contents, rowsView, shown],
   );
   const own = useMemo(
     () => (open ? ownRows(open, shown, filter) : {rows: [], hidden: 0}),
@@ -107,6 +120,19 @@ export function useOutlineView(outline: Outline): OutlineView {
     },
     [select],
   );
+  const setMoving = useCallback(
+    (key: string | null, back = false) => setMovingState(key ? {key, back} : null),
+    [],
+  );
+  const showInText = useCallback(
+    (entryKey: string, blockKey: string) => {
+      setFilter('all');
+      setOpenKey(entryKey);
+      select(blockKey);
+      setSubjectKind('block');
+    },
+    [select],
+  );
 
   return {
     filter,
@@ -122,7 +148,9 @@ export function useOutlineView(outline: Outline): OutlineView {
     openEntry,
     subject,
     selectBlock,
-    moving: moving && order.some(block => block.key === moving) ? moving : null,
+    moving: moving && order.some(block => block.key === moving.key) ? moving.key : null,
+    movingBack: !!moving?.back,
     setMoving,
+    showInText,
   };
 }
