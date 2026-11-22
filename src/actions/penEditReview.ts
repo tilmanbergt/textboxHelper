@@ -225,6 +225,7 @@ async function syncPenEditsWithPage(
       next = updatePenEdit(next, entry.id, item => ({
         ...item,
         state: 'dropped',
+        doneAt: new Date().toISOString(),
       }));
     });
     moved.forEach(entry => {
@@ -622,7 +623,7 @@ export async function markPenEditsApplied(ids: string[]): Promise<void> {
   await setPenEditsState(ids, 'applied');
 }
 
-/** Removed from the page without applying; the stored handwriting and picture stay on disk. */
+/** Removed from the page without applying; housekeeping removes the stored handwriting later. */
 export async function markPenEditsDropped(ids: string[]): Promise<void> {
   await setPenEditsState(ids, 'dropped');
 }
@@ -634,10 +635,11 @@ async function setPenEditsState(
   if (ids.length === 0) {
     return;
   }
+  const doneAt = new Date().toISOString();
   await changePenEditIndex(current => {
     let next = current;
     for (const id of ids) {
-      next = updatePenEdit(next, id, entry => ({...entry, state}));
+      next = updatePenEdit(next, id, entry => ({...entry, state, doneAt}));
     }
     return next;
   });

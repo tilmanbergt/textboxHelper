@@ -18,7 +18,9 @@ import {firstWords, lastWords} from '../../domain/markerHunks';
 import type {ChangeHunk, PenTextState} from '../../domain/markerTypes';
 import {plural} from '../../domain/plural';
 import {estimateLines, segmentsText} from '../../domain/textPages';
+import {NO_MARKS} from '../../domain/helpTexts';
 import ChipRow from '../../ui/ChipRow';
+import EmptyState from '../../ui/EmptyState';
 import PagedSection from '../../ui/PagedSection';
 import PillButton from '../../ui/PillButton';
 import {renderSegments} from '../../ui/Segments';
@@ -216,7 +218,7 @@ export default function ReviewTab({
               rowHeight={rowHeight}
               resetKey={`${pageFilter}|${changeKey}`}
               emptyHint={loading ? 'Reading the marks…' : undefined}
-              viewportContent={!loading && entries.length === 0 ? <EmptyState /> : undefined}
+              viewportContent={!loading && entries.length === 0 ? <EmptyState {...NO_MARKS} /> : undefined}
               renderRow={entry => {
                 const dropItem = !applied ? dropItemOfOperation(entry.operation) : null;
                 return (
@@ -424,18 +426,6 @@ function AttentionLine({
   );
 }
 
-function EmptyState(): React.JSX.Element {
-  return (
-    <View style={styles.empty}>
-      <Text style={styles.emptyText}>No edit marks on this page.</Text>
-      <Text style={styles.meta}>
-        Delete: draw a line through the words. Replace: add a small loop at its end, write the new
-        words right after it, lasso them and tap the pen-text button. ? shows every mark.
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   tab: {
     flex: 1,
@@ -541,13 +531,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.xs,
-  },
-  empty: {
-    gap: SPACING.sm,
-    paddingTop: SPACING.base,
-  },
-  emptyText: {
-    fontSize: FONT.medium,
-    color: COLORS.text,
   },
 });

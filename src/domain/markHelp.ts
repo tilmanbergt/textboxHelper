@@ -145,11 +145,15 @@ export const REVIEW_HELP: HelpBlock[] = [
     text: 'Applies every change that is ready, after writing a backup of the page. Tagged text still being recognized stays on the page for another pass. Used marks, numbers and tagged handwriting are removed.',
   },
   {
-    title: 'A linked text file',
-    text: 'A note imported with "Link to file" names its file in the header. Apply also updates the file ("Also update …", untick it for one Apply). With no marks waiting but the note changed - typed in a textbox, joined, moved - the button is "Update …". A file changed outside since the last write is not overwritten: Details → Save as copy. Deleting a framed "kept as is" block asks before it leaves the file.',
+    title: 'Linked text files',
+    text: 'A note imported with "Link to file" names its file (or "3 files") in the header; each file starts with its name as a title. Apply also updates the files that changed ("Also update …", untick it for one Apply). With no marks waiting but the note changed - typed in a textbox, joined, moved - the button is "Update …". A file changed outside since the last write is not overwritten: Files → Save as copy. Deleting a framed "kept as is" block asks before it leaves the file.',
+  },
+  {
+    title: 'Set aside',
+    text: 'In the Outline, Set aside moves a paragraph or a section to the end of the note, under the heading “Set aside”: it stays in the note and is never written to a file or exported. Show › Set aside lists it, under your own headings typed there; Move back puts it into the text again. Everything below “Set aside” is aside, also what you move there with the lasso.',
   },
   {
     title: 'Wrong words picked?',
-    text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/TextboxHelper/fonts and open Manuscript again. Details has the calibration and Save Diagnostics for a bug report.',
+    text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/TextboxHelper/fonts and open Manuscript again. Settings has the calibration and, under Diagnostics, Save Diagnostics for a bug report.',
   },
 ];

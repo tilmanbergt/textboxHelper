@@ -1,6 +1,8 @@
 /**
- * Settings of the text import: the chosen file, layout, paragraph separator, heading styles,
- * margins, insert mode, whether the import is linked to its file, and their defaults.
+ * Settings of the text import: the chosen file, layout, paragraph separator, the styles of
+ * paragraphs and headings, insert mode, whether the import is linked to its file, and their
+ * defaults. The styles are also what the Outline's level changes and Clean up layout give a block;
+ * the margins are the page layout's (`domain/pageLayout.ts`).
  *
  * A text file can come from any folder on the device (technical-design-source-link.md §3). It is
  * chosen with the Supernote file selector, which opens in the folder of the last file, else INBOX;
@@ -43,18 +45,20 @@ export type TextboxImportSettings = {
    * (technical-design-source-link.md §3).
    */
   linkToFile: boolean;
+  /**
+   * The NOTE title style over a linked file's name (technical-design-linked-files.md §1.5):
+   * 1 black, 2 light grey, 3 dark grey, 4 shadow.
+   */
+  fileTitleStyle: number;
   fontSize: number;
   structure: TextboxImportStructureSettings;
-  marginLeft: number;
-  marginTop: number;
-  marginRight: number;
-  marginBottom: number;
   insertMode: TextboxImportInsertMode;
 };
 
 export const DEFAULT_TEXTBOX_IMPORT_SETTINGS: TextboxImportSettings = {
   filePath: '',
   linkToFile: true,
+  fileTitleStyle: 1,
   fontSize: 36,
   structure: {
     layoutMode: 'continuous',
@@ -77,10 +81,6 @@ export const DEFAULT_TEXTBOX_IMPORT_SETTINGS: TextboxImportSettings = {
       bold: true,
     },
   },
-  marginLeft: 100,
-  marginTop: 100,
-  marginRight: 200,
-  marginBottom: 200,
   insertMode: 'auto',
 };
 
@@ -160,14 +160,18 @@ export function withHeadingsBold(settings: TextboxImportSettings, bold: boolean)
   };
 }
 
-/** The layout values reset by "Reset to defaults" on the Layout screen. */
-export function withDefaultLayout(settings: TextboxImportSettings): TextboxImportSettings {
+/** The styles reset by "Reset to defaults" in Settings → Layout. */
+export function withDefaultStyles(settings: TextboxImportSettings): TextboxImportSettings {
   const d = DEFAULT_TEXTBOX_IMPORT_SETTINGS;
+  const reset = withParagraphFontSize(settings, d.fontSize);
   return {
-    ...withParagraphFontSize(settings, d.fontSize),
-    marginLeft: d.marginLeft,
-    marginTop: d.marginTop,
-    marginRight: d.marginRight,
-    marginBottom: d.marginBottom,
+    ...reset,
+    structure: {
+      ...reset.structure,
+      paragraph: d.structure.paragraph,
+      heading1: d.structure.heading1,
+      heading2: d.structure.heading2,
+      heading3: d.structure.heading3,
+    },
   };
 }

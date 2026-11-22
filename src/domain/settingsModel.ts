@@ -1,6 +1,8 @@
 /**
  * What the plugin remembers between sessions (technical-design-calmer-screens.md §3.9): the import
- * settings, the export scope and rules, and the edit-marker calibration. Stored as JSON in the
+ * settings, the page layout (technical-design-settings-layout-files.md §1), the export scope and
+ * rules, the edit-marker calibration, and how the Outline treats headings
+ * (technical-design-outline-sections.md §8). Stored as JSON in the
  * plugin folder by storage/settingsFile.ts.
  *
  * Reading is field by field: a missing or invalid value takes its default, the rest of the file
@@ -21,6 +23,8 @@ import {
   type TextboxImportRoleStyle,
   type TextboxImportSettings,
 } from './importSettings';
+import {HEADING_LEVELS, type HeadingLevel} from './headingText';
+import {DEFAULT_PAGE_LAYOUT, type PageLayout} from './pageLayout';
 import {DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION, type TextboxMeasurementCalibration} from './textboxLayout';
 
 export type ExportSettings = {
@@ -29,22 +33,42 @@ export type ExportSettings = {
   rules: ExportClassificationConfig;
 };
 
+/** How the Outline treats headings. */
+export type OutlineSettings = {
+  /** The level of a textbox under a NOTE title without #s. */
+  defaultHeadingLevel: HeadingLevel;
+  /** Heading levels that get a NOTE title, so they show in the note's table of contents. */
+  titleLevels: HeadingLevel[];
+  /** NOTE title style per heading level: 1 black, 2 light grey, 3 dark grey, 4 shadow. */
+  titleStyles: Record<HeadingLevel, number>;
+};
+
 export type PluginSettings = {
   version: 1;
   import: TextboxImportSettings;
+  layout: PageLayout;
   export: ExportSettings;
   markers: {calibration: TextboxMeasurementCalibration};
+  outline: OutlineSettings;
+};
+
+export const DEFAULT_OUTLINE_SETTINGS: OutlineSettings = {
+  defaultHeadingLevel: 1,
+  titleLevels: [1, 2],
+  titleStyles: {1: 1, 2: 3, 3: 2},
 };
 
 export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   version: 1,
   import: DEFAULT_TEXTBOX_IMPORT_SETTINGS,
+  layout: DEFAULT_PAGE_LAYOUT,
   export: {
     scope: 'currentPage',
     includeComments: false,
     rules: DEFAULT_EXPORT_CLASSIFICATION_CONFIG,
   },
   markers: {calibration: DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION},
+  outline: DEFAULT_OUTLINE_SETTINGS,
 };
 
 /** Calibration values beyond this are a mistake, not a correction. */
@@ -96,6 +120,7 @@ function parseImport(value: unknown): TextboxImportSettings {
   return {
     filePath,
     linkToFile: bool(raw.linkToFile, d.linkToFile),
+    fileTitleStyle: [1, 2, 3, 4].includes(raw.fileTitleStyle as number) ? (raw.fileTitleStyle as number) : d.fileTitleStyle,
     fontSize: num(raw.fontSize, d.fontSize, MIN_FONT_SIZE, MAX_FONT_SIZE),
     structure: {
       layoutMode: oneOf(structure.layoutMode, ['continuous', 'paragraphTextboxes'] as const, d.structure.layoutMode),
@@ -110,11 +135,26 @@ function parseImport(value: unknown): TextboxImportSettings {
       heading2: roleStyle(structure.heading2, d.structure.heading2),
       heading3: roleStyle(structure.heading3, d.structure.heading3),
     },
-    marginLeft: num(raw.marginLeft, d.marginLeft, 0, MAX_MARGIN),
-    marginTop: num(raw.marginTop, d.marginTop, 0, MAX_MARGIN),
-    marginRight: num(raw.marginRight, d.marginRight, 0, MAX_MARGIN),
-    marginBottom: num(raw.marginBottom, d.marginBottom, 0, MAX_MARGIN),
     insertMode: oneOf(raw.insertMode, ['auto', 'currentPage', 'afterCurrentPage'] as const, d.insertMode),
+  };
+}
+
+/** The page layout; margins an older version kept with the import are not taken over. */
+function parseLayout(value: unknown): PageLayout {
+  const raw = asObject(value);
+  const margins = asObject(raw.margins);
+  const d = DEFAULT_PAGE_LAYOUT;
+  return {
+    margins: {
+      left: num(margins.left, d.margins.left, 0, MAX_MARGIN),
+      top: num(margins.top, d.margins.top, 0, MAX_MARGIN),
+      right: num(margins.right, d.margins.right, 0, MAX_MARGIN),
+      bottom: num(margins.bottom, d.margins.bottom, 0, MAX_MARGIN),
+    },
+    breakBefore: Array.isArray(raw.breakBefore)
+      ? HEADING_LEVELS.filter(item => (raw.breakBefore as unknown[]).includes(item))
+      : d.breakBefore,
+    blockGap: num(raw.blockGap, d.blockGap, 0, MAX_MARGIN),
   };
 }
 
@@ -163,6 +203,24 @@ function parseCalibration(value: unknown): TextboxMeasurementCalibration {
   };
 }
 
+function parseOutline(value: unknown): OutlineSettings {
+  const raw = asObject(value);
+  const d = DEFAULT_OUTLINE_SETTINGS;
+  const level = (item: unknown, fallback: HeadingLevel) => num(item, fallback, 1, 3) as HeadingLevel;
+  const styles = asObject(raw.titleStyles);
+  return {
+    defaultHeadingLevel: level(raw.defaultHeadingLevel, d.defaultHeadingLevel),
+    titleLevels: Array.isArray(raw.titleLevels)
+      ? HEADING_LEVELS.filter(item => (raw.titleLevels as unknown[]).includes(item))
+      : d.titleLevels,
+    titleStyles: {
+      1: num(styles[1], d.titleStyles[1], 1, 4),
+      2: num(styles[2], d.titleStyles[2], 1, 4),
+      3: num(styles[3], d.titleStyles[3], 1, 4),
+    },
+  };
+}
+
 /** The settings from the file's text; null or unreadable JSON gives the defaults. */
 export function parseSettings(json: string | null): PluginSettings {
   let raw: Raw = {};
@@ -176,8 +234,10 @@ export function parseSettings(json: string | null): PluginSettings {
   return {
     version: 1,
     import: parseImport(raw.import),
+    layout: parseLayout(raw.layout),
     export: parseExport(raw.export),
     markers: {calibration: parseCalibration(raw.markers)},
+    outline: parseOutline(raw.outline),
   };
 }
 

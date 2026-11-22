@@ -28,12 +28,12 @@ Library: `sn-plugin-lib` 0.2.3.
   file selector: `suffixList` limits the file types, `needSelectFolder` + `limitPath` open it in
   a folder and keep the user there. It answers with an array of absolute paths, or null/empty
   when cancelled. `limitPath` is optional. Import uses it for `.txt` files from any folder,
-  opening in the last file's folder (`supernote/fileSelector.ts`); the returned path is checked
+  opening in the current note's folder (`supernote/fileSelector.ts`); the returned path is checked
   again (`chosenTextFilePath`). Opening in INBOX, `.txt` only, is confirmed on the device; which
   folders it offers without `limitPath` is not.
 - **Linked files** keep their record in `<pluginDir>/sources/`. Whether a plugin may write next to
   a linked file outside its own folder (INBOX, Document, a synced folder) is checked on the device
-  with Manuscript → Details → Check write access, which tries the host's `FileUtils.copyFile`
+  with Manuscript → Files → Check write access, which tries the host's `FileUtils.copyFile`
   first and a direct write second.
 
 ## 2. Permissions
@@ -49,6 +49,16 @@ Library: `sn-plugin-lib` 0.2.3.
   element live on `element.title` (`style`, `controlTrailNums`, plus `X`, `Y`, `width`, `height`,
   `page`), not on the element itself. Title style 0 removes a heading; 1-4 are the heading
   styles.
+- **Plugins can write titles** the way Kept GTD does: an element of type 100 from
+  `createElement`, its `title` set to the covered textbox's rectangle, its number in
+  `controlTrailNums` and a style, inserted with `PluginFileAPI.insertElements`
+  (`supernote/noteTitles.ts`). The titles over linked files' names carry the plugin's tag in
+  `userData`. `controlTrailNums` from `getTitles` don't always name the page's element numbers, so
+  the plugin matches a title to its textbox by their rectangles. Whether NOTE keeps a title's
+  `userData` through saves and edits is checked on the device.
+- **Folder listing:** a bound folder is listed with `RNFS.readDir` (`storage/folderFiles.ts`);
+  whether that works in every folder the file selector offers (Document, the sync folder) is
+  checked on the device.
 
 - **Element uuids are not identities.** The same untouched textbox comes back with a different
   `uuid` from one read to the next, and the lasso's elements have other uuids than the page's.

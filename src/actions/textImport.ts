@@ -1,6 +1,4 @@
 import {paginateTextboxBlocksIntoPages, type TextboxBlockPage} from '../domain/blockPagination';
-import {formatBlockTag, newBlockId} from '../domain/blockTag';
-import {fingerprint} from '../domain/fingerprint';
 import {appendFontWarning, NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
 import {
   parseTextboxImportBlocks,
@@ -10,7 +8,6 @@ import {
   type TextboxImportBlockSummary,
 } from '../domain/importParsing';
 import {
-  buildImportMaxRect,
   buildInsertPages,
   buildPreviewText,
   countCreatedPages,
@@ -32,18 +29,33 @@ import {
   type TextboxImportParagraphSeparator,
   type TextboxImportSettings,
 } from '../domain/importSettings';
-import {parseSourceBlocks, type ParsedSource, type SourceSummary} from '../domain/sourceBlocks';
-import {newSourceId, sourceFileName, type SourceRecord} from '../domain/sourceRecord';
+import {addSummaries, parseSourceBlocks, type SourceSummary} from '../domain/sourceBlocks';
+import type {NoteLinks} from '../domain/noteLinks';
+import {dividerText} from '../domain/sourceRecord';
 import {countWords} from '../domain/textSplitting';
 import {paginateTextIntoTextboxPages} from '../domain/textPagination';
 import {readUtf8TextFile} from '../storage/importFile';
-import {writeSourceRecord} from '../storage/sourceStore';
+import {readNoteLinks} from '../storage/sourceStore';
 import {
   getCurrentNoteContext,
+  readNoteInfo,
   recycleElements,
   type CurrentNoteContext,
 } from '../supernote/noteElements';
 import {insertTextboxPages} from '../supernote/noteTextInsertion';
+import {getSettings} from '../storage/settingsFile';
+import {startsPage, textArea, type PageLayout} from '../domain/pageLayout';
+import {
+  addTitles,
+  checkNotLinkedYet,
+  linkedName,
+  linkImport,
+  writeFirstIndex,
+  type FolderImport,
+  type ImportFile,
+} from './importLinking';
+import {folderName} from './folderLink';
+import {textEndPage} from './asideArea';
 import {getFontWarning, measureTextboxHeight, resetFontWarnings} from '../supernote/textboxMetrics';
 
 /**
@@ -53,7 +65,9 @@ import {getFontWarning, measureTextboxHeight, resetFontWarnings} from '../supern
  *
  * A linked import (technical-design-source-link.md §3) places one textbox per block of the file
  * (`domain/sourceBlocks.ts`), tags each with its block and writes the file's record before the
- * textboxes, so changes can be written back to the file later.
+ * textboxes, so changes can be written back to the file later. Each linked file starts with a
+ * divider (its name under a NOTE title, technical-design-linked-files.md §2); a note that has
+ * linked files gets more files only linked and after its last page.
  */
 
 export type TextboxImportProgressUpdate = {
@@ -74,6 +88,8 @@ export type TextboxImportResult = {
   effectiveInsertMode: Exclude<TextboxImportInsertMode, 'auto'>;
   /** The linked file's record id, when the import was linked. */
   sourceId: string | null;
+  /** Every linked file of the import (a folder: all of them). */
+  sourceIds: string[];
 };
 
 export type TextboxImportPreview = {
@@ -104,6 +120,10 @@ export type TextboxImportPreview = {
   plannedPageCount: number;
   /** A linked import: what the file contains (technical-design-source-link.md §3). */
   source: SourceSummary | null;
+  /** Adding to a note with linked files: how many it has and the page the file goes after. */
+  addingTo: {fileCount: number; afterPage: number} | null;
+  /** How many files are imported (a folder: its chosen files). */
+  fileCount: number;
 };
 
 /** How many planned pages the preview carries; the counts cover all of them. */
@@ -117,7 +137,8 @@ async function buildImportPlan(params: {
   /** A linked import's blocks, used instead of parsing the text again. */
   linkedBlocks?: TextboxImportBlock[];
 }): Promise<TextboxImportPlan> {
-  const maxRect = buildImportMaxRect(params.context.pageSize, params.settings);
+  const layout = getSettings().layout;
+  const maxRect = textArea(params.context.pageSize, layout);
   const currentPageHasImportAreaContent = pageHasContentInImportArea(
     params.context.pageElements,
     maxRect,
@@ -151,6 +172,8 @@ async function buildImportPlan(params: {
       blocks,
       maxRect,
       fontPath: NOTE_SYSTEM_FONT_PATH,
+      blockGap: layout.blockGap,
+      breakBefore: block => blockStartsPage(block, layout),
       addExplicitEmptyLineHeight: false,
       measureHeight: measureTextboxHeight,
     });
@@ -195,40 +218,144 @@ async function buildImportPlan(params: {
   };
 }
 
+
+/** A linked file's divider starts a page, a heading by its level. */
+function blockStartsPage(block: TextboxImportBlock, layout: PageLayout): boolean {
+  const level = block.role === 'heading1' ? 1 : block.role === 'heading2' ? 2 : block.role === 'heading3' ? 3 : null;
+  return startsPage({kind: block.divider ? 'file' : level ? 'heading' : 'paragraph', level}, layout);
+}
+
 type ImportText = {
-  /** The file as read (a linked import's record keeps it exactly). */
-  raw: string;
   /** Cleaned up for the counts, the preview text and an unlinked import. */
   text: string;
-  linked: ParsedSource | null;
+  /** A linked import's files with their blocks; empty for an unlinked import. */
+  files: ImportFile[];
   linkedBlocks?: TextboxImportBlock[];
 };
 
-async function readImportText(settings: TextboxImportSettings, sourcePath: string): Promise<ImportText> {
-  const raw = await readUtf8TextFile(sourcePath);
-  const text = normalizeImportedText(raw);
-  if (!text) {
-    throw new Error('The file is empty.');
+/**
+ * Where an import goes (technical-design-linked-files.md §2.2): a note with linked files gets more
+ * files only linked and only after its last page; otherwise the settings decide.
+ */
+
+/**
+ * What is imported: the settings' file, a folder's files, or files added to a note's links from
+ * the Manuscript card (`adding`: the new files of its folder, or one more file).
+ */
+type ImportRequest = {
+  settings: TextboxImportSettings;
+  folder?: FolderImport;
+  addPaths?: string[];
+};
+
+function requestPaths(request: ImportRequest): string[] {
+  if (request.addPaths) {
+    return request.addPaths;
   }
-  if (!isLinkedImport(settings)) {
-    return {raw, text, linked: null};
+  if (request.folder) {
+    const {path, names} = request.folder;
+    return names.map(name => `${path}/${name}`);
   }
-  const linked = parseSourceBlocks(raw);
-  if (linked.blocks.length === 0) {
-    throw new Error('The file has no text outside its frontmatter.');
+  return [resolveTextboxImportPath(request.settings)];
+}
+
+type ImportTarget = {
+  links: NoteLinks | null;
+  linked: boolean;
+  /** Set when adding to a linked note: the last page of its text (before the aside area), the import goes after it. */
+  lastPage: number | null;
+};
+
+async function importTarget(request: ImportRequest, notePath: string): Promise<ImportTarget> {
+  const links = await readNoteLinks(notePath);
+  if (!links) {
+    if (request.folder && request.folder.names.length === 0) {
+      throw new Error('Choose at least one file of the folder.');
+    }
+    return {links: null, linked: !!request.folder || isLinkedImport(request.settings), lastPage: null};
   }
-  return {raw, text, linked, linkedBlocks: sourceImportBlocks(linked.blocks, settings.structure)};
+  if (request.folder) {
+    throw new Error('This note has linked files already: bind a folder to a note without them.');
+  }
+  if (links.mode === 'folder' && !request.addPaths) {
+    throw new Error(
+      `This note is bound to the folder ${folderName(links.folder?.path ?? '')}: add its new files from Manuscript → Files.`,
+    );
+  }
+  const {pageCount} = await readNoteInfo();
+  return {links, linked: true, lastPage: await textEndPage(notePath, pageCount)};
+}
+
+/**
+ * The settings a linked import uses: linked, in paragraph boxes; into a note that has linked files
+ * already, after the last page of its text.
+ */
+function effectiveSettings(settings: TextboxImportSettings, target: ImportTarget): TextboxImportSettings {
+  if (!target.linked) {
+    return settings;
+  }
+  const linked = {
+    ...settings,
+    linkToFile: true,
+    structure: {...settings.structure, layoutMode: 'paragraphTextboxes' as const},
+  };
+  return target.lastPage === null ? linked : {...linked, insertMode: 'afterCurrentPage'};
+}
+
+/** The note context with the last page as the current one, when adding to a linked note. */
+function targetContext(context: CurrentNoteContext, target: ImportTarget): CurrentNoteContext {
+  return target.lastPage === null ? context : {...context, currentPage: target.lastPage};
+}
+
+async function readImportText(
+  settings: TextboxImportSettings,
+  paths: string[],
+  linked: boolean,
+): Promise<ImportText> {
+  const files: ImportFile[] = [];
+  const texts: string[] = [];
+  for (const path of paths) {
+    const raw = await readUtf8TextFile(path);
+    const text = normalizeImportedText(raw);
+    if (!text) {
+      throw new Error(`${fileNameOf(path)} is empty.`);
+    }
+    texts.push(text);
+    if (linked) {
+      const parsed = parseSourceBlocks(raw);
+      if (parsed.blocks.length === 0) {
+        throw new Error(`${fileNameOf(path)} has no text outside its frontmatter.`);
+      }
+      files.push({path, raw, parsed});
+    }
+  }
+  if (!linked) {
+    return {text: texts.join('\n\n'), files};
+  }
+  const linkedBlocks = files.flatMap((file, index) =>
+    sourceImportBlocks(file.parsed.blocks, settings.structure, {index, divider: dividerText(file.path)}),
+  );
+  return {text: texts.join('\n\n'), files, linkedBlocks};
+}
+
+function fileNameOf(path: string): string {
+  return path.split('/').slice(-1)[0] || path;
 }
 
 export async function getTextboxImportPreview(
-  settings: TextboxImportSettings,
+  chosen: TextboxImportSettings,
+  folder?: FolderImport,
 ): Promise<TextboxImportPreview> {
-  const sourcePath = resolveTextboxImportPath(settings);
-  const {text, linked, linkedBlocks} = await readImportText(settings, sourcePath);
-
-  const context = await getCurrentNoteContext();
+  const request: ImportRequest = {settings: chosen, folder};
+  const paths = requestPaths(request);
+  const sourcePath = paths[0] ?? '';
+  const noteContext = await getCurrentNoteContext();
 
   try {
+    const target = await importTarget(request, noteContext.notePath);
+    const settings = effectiveSettings(chosen, target);
+    const context = targetContext(noteContext, target);
+    const {text, files, linkedBlocks} = await readImportText(settings, paths, target.linked);
     const plan = await buildImportPlan({
       text,
       settings,
@@ -260,10 +387,12 @@ export async function getTextboxImportPreview(
       pageSize: {width: context.pageSize.width, height: context.pageSize.height},
       pages: plan.pages.slice(0, PREVIEW_PAGE_LIMIT),
       plannedPageCount: plan.pages.length,
-      source: linked?.summary ?? null,
+      source: files.length > 0 ? addSummaries(files.map(file => file.parsed.summary)) : null,
+      addingTo: target.links ? {fileCount: target.links.sources.length, afterPage: context.currentPage} : null,
+      fileCount: paths.length,
     };
   } finally {
-    await recycleElements(context.pageElements);
+    await recycleElements(noteContext.pageElements);
   }
 }
 
@@ -274,25 +403,45 @@ export async function getTextboxImportPreview(
 export async function performTextboxImport(
   settings: TextboxImportSettings,
   options?: TextboxImportExecutionOptions,
+  folder?: FolderImport,
 ): Promise<TextboxImportResult> {
   resetFontWarnings();
-  const result = await runTextboxImport(settings, options);
+  const result = await runTextboxImport({settings, folder}, options);
+  return {...result, message: appendFontWarning(result.message, getFontWarning())};
+}
+
+/**
+ * Adds files to a note with linked files, after its last page (Manuscript → Files: a folder's new
+ * files, or files left out before). Returns the result with the new files' source ids.
+ */
+export async function addLinkedFiles(
+  paths: string[],
+  options?: TextboxImportExecutionOptions,
+): Promise<TextboxImportResult> {
+  resetFontWarnings();
+  const result = await runTextboxImport({settings: getSettings().import, addPaths: paths}, options);
   return {...result, message: appendFontWarning(result.message, getFontWarning())};
 }
 
 async function runTextboxImport(
-  settings: TextboxImportSettings,
+  request: ImportRequest,
   options?: TextboxImportExecutionOptions,
 ): Promise<TextboxImportResult> {
-  const sourcePath = resolveTextboxImportPath(settings);
-
-  options?.onProgress?.({message: 'Reading import file...'});
-  const {raw, text, linked, linkedBlocks} = await readImportText(settings, sourcePath);
+  const paths = requestPaths(request);
+  const sourcePath = paths[0] ?? '';
 
   options?.onProgress?.({message: 'Reading current note context...'});
-  const context = await getCurrentNoteContext();
+  const noteContext = await getCurrentNoteContext();
 
   try {
+    const target = await importTarget(request, noteContext.notePath);
+    const settings = effectiveSettings(request.settings, target);
+    const context = targetContext(noteContext, target);
+    await checkNotLinkedYet(target.links, paths);
+
+    options?.onProgress?.({message: paths.length > 1 ? `Reading ${paths.length} files...` : 'Reading import file...'});
+    const {text, files, linkedBlocks} = await readImportText(settings, paths, target.linked);
+
     options?.onProgress?.({message: 'Planning import pages...'});
     const plan = await buildImportPlan({
       text,
@@ -301,10 +450,11 @@ async function runTextboxImport(
       linkedBlocks,
     });
 
-    // The record goes first: an import that stops halfway still leaves a usable link.
-    const record = linked
-      ? await linkImport({raw, linked, plan, sourcePath, notePath: context.notePath})
+    // The records go first: an import that stops halfway still leaves a usable link.
+    const linked = target.linked
+      ? await linkImport({files, plan, notePath: context.notePath, links: target.links, folder: request.folder})
       : null;
+    const records = linked?.records ?? [];
 
     const pages = buildInsertPages({
       pages: plan.pages,
@@ -329,12 +479,21 @@ async function runTextboxImport(
       },
     });
 
-    const linkedNote = record
-      ? ` ${linked?.summary.protectedCount ? `${linked.summary.protectedCount} kept as is · ` : ''}Linked to ${sourceFileName(record)}.`
-      : '';
+    options?.onProgress?.({message: 'Adding the titles...'});
+    let titleNote = await addTitles(context.notePath, pages);
+    if (linked?.links.folder?.ordered && request.folder) {
+      titleNote += await writeFirstIndex(linked.links, records.map(record => record.filePath));
+    }
+
+    const protectedCount = files.reduce((sum, file) => sum + file.parsed.summary.protectedCount, 0);
+    const linkedNote =
+      records.length > 0
+        ? ` ${protectedCount ? `${protectedCount} kept as is · ` : ''}Linked to ${linkedName(records, request.folder)}.${titleNote}`
+        : '';
     return {
-      message: `Imported ${insertResult.insertedTextboxCount} textbox(es) and created ${insertResult.createdPageCount} new page(s).${linkedNote}`,
-      sourceId: record?.sourceId ?? null,
+      message: `Imported ${insertResult.insertedTextboxCount} textbox(es) and created ${insertResult.createdPageCount} new page(s).${linkedNote || titleNote}`,
+      sourceId: records[0]?.sourceId ?? null,
+      sourceIds: records.map(record => record.sourceId),
       sourcePath,
       createdPageCount: insertResult.createdPageCount,
       insertedTextboxCount: insertResult.insertedTextboxCount,
@@ -343,56 +502,8 @@ async function runTextboxImport(
       effectiveInsertMode: plan.effectiveInsertMode,
     };
   } finally {
-    await recycleElements(context.pageElements);
+    await recycleElements(noteContext.pageElements);
   }
 }
 
-/**
- * Writes the record of a linked import and gives every planned textbox its block tag (the block,
- * the piece of a block cut to fit the pages, and the placeholder kind).
- */
-async function linkImport(params: {
-  raw: string;
-  linked: ParsedSource;
-  plan: TextboxImportPlan;
-  sourcePath: string;
-  notePath: string;
-}): Promise<SourceRecord> {
-  const now = new Date();
-  const record: SourceRecord = {
-    version: 1,
-    sourceId: newSourceId(now),
-    filePath: params.sourcePath,
-    notePath: params.notePath,
-    importedAt: now.toISOString(),
-    original: params.raw,
-    eol: params.linked.eol,
-    frontmatterEnd: params.linked.frontmatterEnd,
-    blocks: params.linked.blocks,
-    removedProtected: [],
-    lastWrittenAt: null,
-    lastWrittenText: null,
-    fileFingerprint: fingerprint(params.raw),
-  };
-  for (const page of params.plan.pages) {
-    for (const chunk of page.chunks) {
-      if (chunk.sourceIndex === undefined) {
-        continue;
-      }
-      chunk.userData = formatBlockTag({
-        v: 1,
-        id: newBlockId(now),
-        s: record.sourceId,
-        i: chunk.sourceIndex,
-        ...(chunk.piece ? {p: chunk.piece} : {}),
-        ...(chunk.placeholder ? {k: 'x' as const} : {}),
-      });
-    }
-  }
-  await writeSourceRecord(record);
-  console.log(
-    '[TextImport] linked',
-    JSON.stringify({sourceId: record.sourceId, blocks: record.blocks.length, chars: params.raw.length}),
-  );
-  return record;
-}
+export type {FolderImport};

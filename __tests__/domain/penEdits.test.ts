@@ -154,6 +154,7 @@ const entry = (overrides: Partial<PenEditEntry> = {}): PenEditEntry => ({
   recognition: WAITING_RECOGNITION,
   correctedText: null,
   state: 'active',
+  doneAt: null,
   awaitingMark: null,
   edges: null,
   ...overrides,
@@ -163,6 +164,11 @@ describe('pen edit index', () => {
   it('round-trips', () => {
     const index = upsertPenEdit({version: 1, entries: []}, entry());
     expect(parsePenEditIndex(serializePenEditIndex(index))).toEqual({index, broken: false, dropped: 0});
+  });
+
+  it('keeps when an entry was applied or dropped', () => {
+    const index = upsertPenEdit({version: 1, entries: []}, entry({state: 'applied', doneAt: '2026-11-20T10:00:00.000Z'}));
+    expect(parsePenEditIndex(serializePenEditIndex(index)).index.entries[0].doneAt).toBe('2026-11-20T10:00:00.000Z');
   });
 
   it('treats a missing file as empty and junk as broken', () => {

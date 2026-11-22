@@ -47,7 +47,7 @@ An action that doesn't fit the lasso selection is greyed, with the reason next t
 A backup of the textboxes is written first; the status line names it.`;
 
 export const IMPORT_HELP = `## The file
-A plain UTF-8 .txt file from any folder, for example INBOX. Choose › opens the Supernote file selector in the folder of the last file. Windows and Unix line endings both work.
+A plain UTF-8 .txt file from any folder, for example INBOX. Choose › opens the Supernote file selector in the folder the note sits in. Windows and Unix line endings both work.
 
 ## Layout
 Continuous text: the text flows through textboxes that fill each page from top to bottom.
@@ -58,23 +58,43 @@ Blank lines: paragraphs are separated by an empty line.
 Every line: each non-empty line becomes its own paragraph.
 
 ## Headings
-With "Recognize #, ##, ###", a line starting with "# ", "## " or "### " becomes a heading in its own size. Example:
+With "Recognize #, ##, ###", a line starting with "# ", "## " or "### " becomes a heading in its own size (Layout ›, the Manuscript card's Settings → Layout). Example:
 # My Topic
 This is the first paragraph.
 ## A section
 
 ## Link to file
-In the Paragraph boxes layout, "Link to file" places one textbox per heading, paragraph or list of the file and remembers where each came from, so changes can be written back to the file. Blank lines separate the blocks, and headings of every level are recognized. Frontmatter stays out of the note and is kept. Code, formulas, tables, quotes and callouts, HTML, comments, embeds and horizontal lines are kept exactly as they are: a framed placeholder stands for each, which can be moved but isn't edited. Links and formatting stay as text.
+In the Paragraph boxes layout, "Link to file" places one textbox per heading, paragraph or list of the file and remembers where each came from, so changes can be written back to the file. Blank lines separate the blocks, and headings of every level are recognized. Frontmatter stays out of the note and is kept. Code, formulas, tables, quotes and callouts, HTML, comments, embeds and horizontal lines are kept exactly as they are: a framed placeholder stands for each, which can be moved but isn't edited. Links and formatting stay as text. The file starts with its name as a NOTE title, so it shows in the note's table of contents.
+
+## Adding a file
+On a note with linked files, Import adds the file: always linked, on a new page after the last one, with its title. Everything below a file's title up to the next title belongs to that file.
+
+## Whole folder
+"Whole folder" binds the chosen file's folder to the note: under "Files and order" choose its files and whether the folder is ordered. An ordered folder keeps the note's order of the files in its index.txt (index.md in Obsidian, a list of [[links]] the plugin writes); a folder with an index.txt is ordered by it. New files of the folder are added later from Manuscript → Files. A note is bound to one folder; it can't get files from elsewhere.
 
 ## Where it goes
-Into the current page when its writing area is empty, otherwise onto new pages after it. The preview shows the first pages to scale. Font size and margins are under Layout.`;
+Into the current page when its writing area is empty, otherwise onto new pages after it. The preview shows the first pages to scale. Font sizes, margins and which headings start a new page are set under Layout › (Settings → Layout); the default margins leave room for handwriting on the right and at the bottom.`;
 
 export const EXPORT_HELP = `## What is exported
 The text of the note's textboxes, in reading order, as a Word file (DOCX) in the Supernote's EXPORT folder. The note doesn't change.
 
 ## Headings, paragraphs, comments
-Each textbox gets a class from its font size and style: heading, paragraph, comment or meta. Headings and paragraphs are always exported, comments only with "Include comments", meta never. Textboxes in a Supernote title area count as headings. The rules are under Rules.
+Each textbox gets a class from its font size and style: heading, paragraph, comment or meta. Headings and paragraphs are always exported, comments only with "Include comments", meta never. Textboxes in a Supernote title area count as headings. The rules are under Classification rules › (Settings → Export).
 
 ## Pages
 This page, the whole note, or a page range. The list on the right updates by itself after every change.`;
 
+
+/** A short "nothing here" with what the place is for (ui/EmptyState.tsx). */
+export type EmptyText = {title: string; text: string};
+
+export const NO_MARKS: EmptyText = {
+  title: 'No edit marks on this page.',
+  text: 'Delete: draw a line through the words. Replace: add a small loop at its end, write the new words right after it, lasso them and tap the pen-text button. ? shows every mark.',
+};
+
+/** The Outline's Set aside view with nothing set aside (technical-design-aside-area.md §5.3). */
+export const NOTHING_SET_ASIDE: EmptyText = {
+  title: 'Nothing set aside yet.',
+  text: 'Material you set aside stays in this note and is never written to your files. Set aside a paragraph or a section from Show › All: it moves to pages at the end of the note, under the heading “Set aside”. Add your own headings there on the page to sort it. Bring something back with Move back, or move it with the lasso above the “Set aside” heading.',
+};

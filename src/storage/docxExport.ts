@@ -2,6 +2,7 @@ import {Document, HeadingLevel, Packer, Paragraph, TextRun} from 'docx';
 import RNFS from 'react-native-fs';
 import {FileUtils} from 'sn-plugin-lib';
 import {getIncludedScanItems, type ScanSummary} from '../domain/exportClassification';
+import {headingLevelOf, headingTitleOf} from '../domain/headingText';
 
 export const MAX_EXPORT_ITEM_COUNT = 999;
 
@@ -28,7 +29,6 @@ export async function exportScannedDocx(params: {
   onProgress?: (message: string) => void;
 }): Promise<{
   exportPath: string;
-  tempPath: string;
   exportedItemCount: number;
   base64Length: number;
 }> {
@@ -70,9 +70,12 @@ export async function exportScannedDocx(params: {
   onProgress?.('Building DOCX document...');
   const children = includedItems.map(item => {
     if (item.role === 'heading') {
+      // A heading's #s say its level and aren't written (technical-design-outline-sections.md §5);
+      // one recognized by its style is a level-1 heading.
+      const level = headingLevelOf(item.text);
       return new Paragraph({
-        text: item.text,
-        heading: HeadingLevel.HEADING_1,
+        text: headingTitleOf(item.text),
+        heading: level === 3 ? HeadingLevel.HEADING_3 : level === 2 ? HeadingLevel.HEADING_2 : HeadingLevel.HEADING_1,
       });
     }
 
@@ -117,7 +120,9 @@ export async function exportScannedDocx(params: {
 
   onProgress?.('Copying DOCX into EXPORT...');
   logExport('filesystem:copyToExport:start', {tempPath, exportPath});
-  const copied = await FileUtils.copyFile(tempPath, exportPath);
+  const copied = await FileUtils.copyFile(tempPath, exportPath).finally(() =>
+    RNFS.unlink(tempPath).catch(() => undefined),
+  );
   if (!copied) {
     logExport('filesystem:copyToExport:failed', {tempPath, exportPath});
     throw new Error('Could not copy the DOCX file into EXPORT.');
@@ -126,7 +131,6 @@ export async function exportScannedDocx(params: {
 
   return {
     exportPath,
-    tempPath,
     exportedItemCount: includedItems.length,
     base64Length,
   };

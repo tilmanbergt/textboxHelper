@@ -66,7 +66,7 @@ export function perfEvent(stage: string, detail?: Detail): void {
   perfLog.add(entry(stage, null, detail));
 }
 
-/** "124 timings since 16:40" for Details. */
+/** "124 timings since 16:40" for Settings → Diagnostics. */
 export function perfSummaryLine(): string {
   const count = perfLog.entries().length;
   const since = new Date(recordingSince);

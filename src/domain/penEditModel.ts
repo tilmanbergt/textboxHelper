@@ -83,6 +83,8 @@ export type PenEditEntry = {
   recognition: PenEditRecognition;
   correctedText: string | null;
   state: PenEditState;
+  /** ISO time the entry was applied or dropped; housekeeping removes it some days after. */
+  doneAt?: string | null;
   /**
    * Set while the user is asked to draw or lasso this snippet's mark (Select mark,
    * technical-design-pen-edits-2.md §4): the next tap on a few strokes becomes its mark.
@@ -195,6 +197,7 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     recognition: parseRecognition(value.recognition),
     correctedText: isString(value.correctedText) ? value.correctedText : null,
     state: states.includes(value.state as PenEditState) ? (value.state as PenEditState) : 'active',
+    doneAt: isString(value.doneAt) ? value.doneAt : null,
     awaitingMark: parseAwaitingMark(value.awaitingMark),
     edges: parseEdges(value.edges),
   };

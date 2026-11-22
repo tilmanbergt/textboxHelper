@@ -1,18 +1,23 @@
 /**
  * The Manuscript card (technical-design-manuscript.md §6; canvas row "Manuscript"): one card for
- * the whole note, with two tabs. Review: the pen marks, shaping the text. Outline: the order of
- * the textboxes, shaping the document. Edits first, then structure: a page with edits waiting can't
- * be rebuilt, and the Outline's button leads to the Review of that page. Details (the linked file,
- * calibration, diagnostics) is a sub-screen with the Review's state.
+ * the whole note, with three tabs. Review: the pen marks, shaping the text. Outline: the order of
+ * the textboxes, shaping the document. Files (technical-design-settings-layout-files.md §4): the
+ * linked files, Import and Export DOCX as sub-screens; an empty note opens here. Edits first, then
+ * structure: a page with edits waiting can't be rebuilt, and the Outline's button leads to the
+ * Review of that page. Settings (Outline, layout, export rules, calibration, diagnostics) is a
+ * sub-screen with the card's state. After an import the card starts over, so everything is read
+ * from the changed note.
  *
- * A note imported linked to its text file (technical-design-source-link.md §4) names the file in
- * the header. Apply also updates the file ("Also update <file>", on every time the card opens);
- * with no edits waiting but the note differing from the file, the button is "Update <file>". A
- * protected block deleted on the page is asked about above the tabs before it leaves the file.
+ * A note with linked text files (technical-design-linked-files.md §3) names them in the header.
+ * Apply also updates the files that changed ("Also update …", on every time the card opens); with
+ * no edits waiting but files differing from the note, the button is "Update …". Protected blocks
+ * deleted on the page are asked about above the tabs before they leave their files.
  */
-import React, {useCallback, useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
 import {plural} from '../../domain/plural';
+import {filesHeldBack, type LinkedFile} from '../../actions/linkedFiles';
+import {FILE_STATE_LABEL} from '../../domain/fileState';
 import {blockName} from '../../domain/sourceBlocks';
 import {sourceFileName} from '../../domain/sourceRecord';
 import Checkbox from '../../ui/Checkbox';
@@ -21,14 +26,19 @@ import PillButton from '../../ui/PillButton';
 import {jumpToNotePage} from '../../supernote/noteElements';
 import ScreenFrame, {type FramePrimary, type FrameStatus} from '../../ui/ScreenFrame';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
-import ManuscriptDetailsScreen from './ManuscriptDetailsScreen';
-import OutlineTab from './OutlineTab';
+import {noteHasTextboxes} from '../../actions/noteContent';
+import {runHousekeepingOnce} from '../../actions/housekeeping';
+import ExportScreen from '../export/ExportScreen';
+import ImportScreen from '../import/ImportScreen';
+import FilesTab from './files/FilesTab';
+import SettingsScreen, {type SettingsTab} from './settings/SettingsScreen';
+import OutlineTab from './outline/OutlineTab';
 import ReviewTab, {reviewContext} from './ReviewTab';
 import {useManuscriptReview} from './useManuscriptReview';
-import {useOutline, type Outline} from './useOutline';
-import {useSourceLink, type SourceLink} from './useSourceLink';
+import {useOutline, type Outline} from './outline/useOutline';
+import {useLinkedFiles, type LinkedFiles} from './useLinkedFiles';
 
-type Tab = 'review' | 'outline';
+type Tab = 'review' | 'outline' | 'files';
 
 interface Props {
   onClose: () => void;
@@ -36,15 +46,88 @@ interface Props {
   focusPenEditId?: string | null;
 }
 
-export default function ManuscriptScreen({
+/** The card; after an import it starts over on the Files tab with the import's message. */
+const HOUSEKEEPING_DELAY_MS = 3000;
+
+export default function ManuscriptScreen(props: Props): React.JSX.Element {
+  const [round, setRound] = useState(0);
+  const [notice, setNotice] = useState<string | null>(null);
+  return (
+    <ManuscriptCard
+      key={round}
+      {...props}
+      focusPenEditId={round === 0 ? props.focusPenEditId : null}
+      initialTab={round === 0 ? undefined : 'files'}
+      notice={notice}
+      onImported={message => {
+        setNotice(message);
+        setRound(current => current + 1);
+      }}
+    />
+  );
+}
+
+interface CardProps extends Props {
+  initialTab?: Tab;
+  /** Shown in the status line until something else is (an import's result). */
+  notice: string | null;
+  onImported: (message: string | null) => void;
+}
+
+function ManuscriptCard({
   onClose,
   focusPenEditId = null,
-}: Props): React.JSX.Element {
+  initialTab,
+  notice,
+  onImported,
+}: CardProps): React.JSX.Element {
   const review = useManuscriptReview();
-  const outline = useOutline(review.note, review.pages);
-  const source = useSourceLink(review.note, !review.loading);
-  const [view, setView] = useState<'card' | 'details'>('card');
-  const [tab, setTab] = useState<Tab>('review');
+  const source = useLinkedFiles(review.note, !review.loading);
+  const records = useMemo(
+    () => source.note?.files.map(file => file.record) ?? [],
+    [source.note],
+  );
+  const outline = useOutline(review.note, review.pages, records);
+  const [view, setView] = useState<'card' | 'settings' | 'import' | 'export'>('card');
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('outline');
+  const [importFolder, setImportFolder] = useState(false);
+  const [tab, setTabState] = useState<Tab>(initialTab ?? 'review');
+  // An empty note opens on Files, unless a tab was chosen meanwhile.
+  const tabChosen = useRef(!!initialTab || !!focusPenEditId);
+  const setTab = useCallback((next: Tab) => {
+    tabChosen.current = true;
+    setTabState(next);
+  }, []);
+  const notePath = review.note?.notePath ?? null;
+  const pageCount = review.note?.pageCount ?? 0;
+  useEffect(() => {
+    if (!notePath || tabChosen.current) {
+      return;
+    }
+    noteHasTextboxes(notePath, pageCount)
+      .then(has => {
+        if (!has && !tabChosen.current) {
+          setTabState('files');
+        }
+      })
+      .catch(error => console.warn('[Manuscript] note content not read', String(error)));
+  }, [notePath, pageCount]);
+  // Housekeeping (technical-design-housekeeping.md) waits until the first list is shown, so it
+  // never competes with the first page read; it runs once per JS context.
+  const firstListShown = !review.loading;
+  useEffect(() => {
+    if (!firstListShown) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      runHousekeepingOnce().catch(error => console.warn('[Housekeeping] not run', String(error)));
+    }, HOUSEKEEPING_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [firstListShown]);
+  const openSettings = useCallback((at: SettingsTab) => {
+    setSettingsTab(at);
+    setView('settings');
+  }, []);
   const [reviewBlocked, setReviewBlocked] = useState(false);
   const [showPage, setShowPage] = useState<number | null>(null);
   const [jumpError, setJumpError] = useState<string | null>(null);
@@ -75,9 +158,9 @@ export default function ManuscriptScreen({
     if (review.applied) {
       clearOutline();
       const link = sourceAfterApply.current;
-      if (link.linked && link.alsoUpdate) {
-        link.write('file');
-      } else if (link.linked) {
+      if (link.note && link.alsoUpdate) {
+        link.write();
+      } else if (link.note) {
         link.refind();
       }
     }
@@ -93,11 +176,32 @@ export default function ManuscriptScreen({
     }
   }, [outline.applied]);
 
-  if (view === 'details') {
+  if (view === 'import') {
     return (
-      <ManuscriptDetailsScreen
+      <ImportScreen
+        wholeFolder={importFolder}
+        onClose={onClose}
+        onOpenLayout={() => openSettings('layout')}
+        onBack={(imported, message) => (imported ? onImported(message) : setView('card'))}
+      />
+    );
+  }
+
+  if (view === 'export') {
+    return <ExportScreen onClose={onClose} onBack={() => setView('card')} onOpenRules={() => openSettings('export')} />;
+  }
+
+  if (view === 'settings') {
+    return (
+      <SettingsScreen
+        initialTab={settingsTab}
         review={review}
         source={source}
+        outline={outline}
+        onCleanUpPlanned={() => {
+          setTab('outline');
+          setView('card');
+        }}
         onBack={() => setView('card')}
         onClose={onClose}
       />
@@ -109,20 +213,22 @@ export default function ManuscriptScreen({
     setShowPage(page);
     setTab('review');
   };
-  const fileName = source.linked ? sourceFileName(source.linked.record) : null;
-  const fileDiffers = !!source.linked?.diff.differs;
+  const files = filesLabel(source);
+  const toWrite = source.toWrite;
   const primary: FramePrimary =
-    tab === 'outline'
+    tab === 'files'
+      ? filesPrimary(source, onClose)
+      : tab === 'outline'
       ? outlinePrimary(outline, onClose, reviewPage)
-      : applied
-      ? {label: 'Close', onPress: onClose, busy: source.busy, busyLabel: `Writing ${fileName}…`}
-      : changes.readyCount === 0 && fileName && fileDiffers
+      : applied || source.added
+      ? {label: 'Close', onPress: onClose, busy: source.busy, busyLabel: 'Writing the files…'}
+      : changes.readyCount === 0 && (toWrite.length > 0 || source.indexStale)
       ? {
-          label: `Update ${fileName} · ${plural(source.linked?.diff.changedBlocks ?? 1, 'changed block')}`,
-          onPress: () => source.write('file'),
+          label: updateLabel(toWrite),
+          onPress: source.write,
           disabled: loading || source.finding || !!source.confirm,
           busy: source.busy,
-          busyLabel: `Writing ${fileName}…`,
+          busyLabel: 'Writing the files…',
         }
       : {
           label:
@@ -135,9 +241,9 @@ export default function ManuscriptScreen({
           busyLabel: 'Applying…',
         };
   const accessory =
-    tab === 'review' && !applied && fileName && changes.readyCount > 0 ? (
+    tab === 'review' && !applied && source.note && changes.readyCount > 0 ? (
       <Checkbox
-        label={`Also update ${fileName}`}
+        label={source.note.files.length === 1 ? `Also update ${files}` : 'Also update changed files'}
         checked={source.alsoUpdate}
         disabled={busy}
         onChange={source.setAlsoUpdate}
@@ -157,31 +263,44 @@ export default function ManuscriptScreen({
     ? {kind: 'error' as const, text: jumpError}
     : tab === 'outline'
     ? outline.status ?? review.status
+    : tab === 'files'
+    ? source.status ?? (notice ? {text: notice} : null)
     : reviewStatus(review.status, source, focusNote, changes.readyCount, loading);
 
   return (
     <ScreenFrame
       title="Manuscript"
-      context={[reviewContext(review), fileName].filter(Boolean).join(' · ')}
-      actions={[{label: 'Details', onPress: () => setView('details')}]}
+      context={[reviewContext(review), files].filter(Boolean).join(' · ')}
+      actions={[{label: 'Settings', onPress: () => openSettings('outline')}]}
       help={{title: 'Edit marks', marks: true}}
       onClose={onClose}
       status={status}
       primary={primary}
       accessory={accessory}
       screenKey={`manuscript-${tab}`}>
-      {source.confirm && <ProtectedQuestion source={source} fileName={fileName ?? 'the file'} />}
+      <WriteQuestion source={source} />
       <View style={styles.tabs}>
         <CountTabs<Tab>
           tabs={[
             {key: 'review', label: 'Review', count: changes.entries.length},
             {key: 'outline', label: 'Outline', count: outline.blocks?.length},
+            {key: 'files', label: 'Files', count: source.note?.files.length || undefined},
           ]}
           activeKey={tab}
           onChange={setTab}
         />
       </View>
-      {tab === 'review' ? (
+      {tab === 'files' ? (
+        <FilesTab
+          source={source}
+          disabled={busy || source.busy}
+          onImport={folder => {
+            setImportFolder(folder);
+            setView('import');
+          }}
+          onExport={() => setView('export')}
+        />
+      ) : tab === 'review' ? (
         <ReviewTab
           review={review}
           onClose={onClose}
@@ -202,13 +321,43 @@ export default function ManuscriptScreen({
   );
 }
 
+/** The header's name for the linked files: the file's name, or how many there are. */
+function filesLabel(source: LinkedFiles): string | null {
+  const files = source.note?.files ?? [];
+  const folder = source.note?.folder;
+  if (folder) {
+    return `${folder.name} · ${plural(files.length, 'file')}`;
+  }
+  if (files.length === 0) {
+    return null;
+  }
+  return files.length === 1 ? sourceFileName(files[0].record) : plural(files.length, 'file');
+}
+
+/** "Update Essay.txt · 3 changed blocks", "Update 2 files" or "Update index.txt". */
+function updateLabel(toWrite: LinkedFile[]): string {
+  if (toWrite.length === 0) {
+    return 'Update index.txt';
+  }
+  if (toWrite.length > 1) {
+    return `Update ${plural(toWrite.length, 'file')}`;
+  }
+  const file = toWrite[0];
+  if (file.diff.changedBlocks === 0) {
+    return `Update ${sourceFileName(file.record)}`;
+  }
+  return file.state === 'new'
+    ? `Create ${sourceFileName(file.record)}`
+    : `Update ${sourceFileName(file.record)} · ${plural(file.diff.changedBlocks, 'changed block')}`;
+}
+
 /**
- * The Review's status line: the review's own (an apply, an error) with the file's after it, or the
- * file's alone; with nothing else to say, that the file is up to date.
+ * The Review's status line: the review's own (an apply, an error) with the files' after it, or the
+ * files' alone; with nothing else to say, whether the files are up to date.
  */
 function reviewStatus(
   own: FrameStatus | null,
-  source: SourceLink,
+  source: LinkedFiles,
   focusNote: string | null,
   readyCount: number,
   loading: boolean,
@@ -219,39 +368,88 @@ function reviewStatus(
       text: `${own.text} ${source.status.text}`,
     };
   }
-  const shown = own ?? source.status ?? (focusNote ? {text: focusNote} : null);
-  if (shown || !source.linked || loading || readyCount > 0) {
+  const shown =
+    own ??
+    source.status ??
+    (focusNote ? {text: focusNote} : null) ??
+    (source.note && source.note.crossings > 0 && !loading
+      ? {text: `${plural(source.note.crossings, 'block')} under another file's title: Update asks whether to move them.`}
+      : null);
+  if (shown || !source.note || loading || readyCount > 0 || source.toWrite.length > 0 || source.indexStale) {
     return shown;
   }
-  return source.linked.diff.differs ? null : {text: `${sourceFileName(source.linked.record)} is up to date.`};
+  const folder = source.note.folder;
+  if (folder && folder.newFiles.length > 0) {
+    return {text: `${plural(folder.newFiles.length, 'new file')} in ${folder.name}: Files → Add.`};
+  }
+  if (folder?.index === 'changedOutside') {
+    return {text: 'index.txt was changed in Obsidian: Files → Rewrite index.txt.'};
+  }
+  const held = filesHeldBack(source.note);
+  if (held.length > 0) {
+    return {text: `${plural(held.length, 'file')} changed here but can't be written (${FILE_STATE_LABEL[held[0].state].toLowerCase()}): see Files.`};
+  }
+  return {text: source.note.files.length === 1 ? `${filesLabel(source)} is up to date.` : 'All files are up to date.'};
 }
 
-/** Protected blocks deleted on the page: remove them from the file too, or keep them. */
-function ProtectedQuestion({source, fileName}: {source: SourceLink; fileName: string}): React.JSX.Element {
-  const blocks = source.confirm ?? [];
-  const several = blocks.length > 1;
-  const names = blocks.map(block => blockName(block)).join(', ');
+/**
+ * The write's question above the tabs: textboxes moved under another file's title (Move them /
+ * Keep apart), or protected blocks deleted on the page (Remove / Keep).
+ */
+function WriteQuestion({source}: {source: LinkedFiles}): React.JSX.Element | null {
+  const question = source.confirm;
+  if (!question) {
+    return null;
+  }
+  let text: string;
+  let yes: string;
+  let no: string;
+  if (question.kind === 'moves') {
+    const count = question.moves.reduce((sum, move) => sum + move.count, 0);
+    const move = question.moves[0];
+    const gone = question.moves.find(item => item.titleGone);
+    text = gone
+      ? `The title of ${gone.from} was deleted, so its text now belongs to ${gone.to}. Move it into ${gone.to}? (${gone.from} stays as it is.)`
+      : question.moves.length === 1
+      ? `${move.count === 1 ? `"${move.names[0]}"` : plural(move.count, 'block')} of ${move.from} is now under ${move.to}. Move it to ${move.to} in the files too?`
+      : `${plural(count, 'block')} are now under another file's title (${question.moves
+          .map(item => `${item.from} → ${item.to}`)
+          .join(', ')}). Move them in the files too?`;
+    yes = count > 1 ? 'Move them' : 'Move it';
+    no = 'Keep apart';
+  } else {
+    const pending = question.pending;
+    const count = pending.reduce((sum, file) => sum + file.blocks.length, 0);
+    const names = pending.flatMap(file => file.blocks.map(block => blockName(block))).join(', ');
+    const files = pending.map(file => file.fileName).join(', ');
+    text =
+      count > 1
+        ? `${count} protected blocks were deleted on the page: ${names}. Remove them from ${files} too?`
+        : `${names} was deleted on the page. Remove it from ${files} too?`;
+    yes = count > 1 ? 'Remove all' : 'Remove';
+    no = count > 1 ? 'Keep all' : 'Keep it';
+  }
   return (
     <View style={styles.question}>
-      <Text style={styles.questionText}>
-        {several
-          ? `${blocks.length} protected blocks were deleted on the page: ${names}. Remove them from ${fileName} too?`
-          : `${names} was deleted on the page. Remove it from ${fileName} too?`}
-      </Text>
-      <PillButton
-        size="small"
-        label={several ? 'Remove all' : 'Remove'}
-        disabled={source.busy}
-        onPress={() => source.answer(true)}
-      />
-      <PillButton
-        size="small"
-        label={several ? 'Keep all' : 'Keep it'}
-        disabled={source.busy}
-        onPress={() => source.answer(false)}
-      />
+      <Text style={styles.questionText}>{text}</Text>
+      <PillButton size="small" label={yes} disabled={source.busy} onPress={() => source.answer(true)} />
+      <PillButton size="small" label={no} disabled={source.busy} onPress={() => source.answer(false)} />
     </View>
   );
+}
+
+/** The Files tab's button: write the files that changed here, else Close. */
+function filesPrimary(source: LinkedFiles, onClose: () => void): FramePrimary {
+  if (source.toWrite.length > 0 || source.indexStale) {
+    return {
+      label: updateLabel(source.toWrite),
+      onPress: source.write,
+      disabled: source.finding || !!source.confirm,
+      busy: source.busy,
+      busyLabel: 'Writing the files…',
+    };
+  }
+  return {label: 'Close', onPress: onClose, busy: source.busy, busyLabel: 'Writing the files…'};
 }
 
 /**
@@ -278,7 +476,7 @@ function outlinePrimary(
     };
   }
   return {
-    label: `Apply ${plural(count, 'change')}`,
+    label: count === 1 && outline.planned?.cleanup ? 'Apply clean up' : `Apply ${plural(count, 'change')}`,
     onPress: outline.apply,
     disabled: outline.checking || !outline.check || blockers.length > 0,
     busy: outline.busy,

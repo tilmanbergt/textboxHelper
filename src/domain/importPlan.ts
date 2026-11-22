@@ -1,11 +1,10 @@
-import {intersectionRect, rectHeight, rectWidth} from './geometry';
+import {intersectionRect} from './geometry';
 import type {TextboxImportBlockSummary} from './importParsing';
-import type {TextboxImportInsertMode, TextboxImportSettings} from './importSettings';
+import type {TextboxImportInsertMode} from './importSettings';
 import {MAIN_LAYER, TEXT_TYPE_NORMAL, type PageElementData, type Rect} from './textboxModel';
 
 /**
- * Planning a text import without the device: the cleaned-up text and its preview, the area the
- * textboxes go into, whether the current page is free there, the insert mode, and how the
+ * Planning a text import without the device: the cleaned-up text and its preview, whether the current page is free there, the insert mode, and how the
  * paginated chunks become pages.
  */
 
@@ -25,6 +24,9 @@ export type PlannedTextboxChunk = {
   piece?: number;
   /** A protected block's placeholder: italic and framed. */
   placeholder?: boolean;
+  /** Linked import of several files: which file, and whether this is its divider. */
+  sourceFile?: number;
+  divider?: boolean;
   /** The block tag the textbox carries. */
   userData?: string;
 };
@@ -90,24 +92,6 @@ export function buildPreviewText(text: string, fromStart: boolean): string {
 
   const shortened = fromStart ? `${selectedText}\n…` : `…\n${selectedText}`;
   return trimToPreviewCharacterLimit(shortened, fromStart);
-}
-
-export function buildImportMaxRect(
-  pageSize: Size,
-  settings: TextboxImportSettings,
-): Rect {
-  const rect: Rect = {
-    left: settings.marginLeft,
-    top: settings.marginTop,
-    right: pageSize.width - settings.marginRight,
-    bottom: pageSize.height - settings.marginBottom,
-  };
-
-  if (rectWidth(rect) <= 0 || rectHeight(rect) <= 0) {
-    throw new Error('Import margins leave no usable textbox area.');
-  }
-
-  return rect;
 }
 
 function getElementObstacleRect(element: PageElementData): Rect | null {

@@ -4,7 +4,7 @@ import {writeJsonExportFile} from '../storage/exportFile';
 import {logEditMarker, markerDiagnostics} from '../utils/editMarkerLog';
 
 /**
- * The edit-marker calibration (where NOTE draws a textbox's text, tuned in the review's Details)
+ * The edit-marker calibration (where NOTE draws a textbox's text, tuned in Settings → Calibration)
  * and the diagnostics of the last marker preview. The calibration is kept for the session here and
  * stored by the review in `settings.json`.
  */

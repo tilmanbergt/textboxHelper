@@ -1,5 +1,6 @@
 import {paginateTextboxBlocksIntoPages} from '../../src/domain/blockPagination';
-import {formatBlockTag, parseBlockTag, withAside, type BlockTag} from '../../src/domain/blockTag';
+import {asideDividerTag, asideTitleTag, formatBlockTag, parseBlockTag, type BlockTag} from '../../src/domain/blockTag';
+import {asideBlocks, segmentByFile} from '../../src/domain/fileSegments';
 import {fingerprint} from '../../src/domain/fingerprint';
 import {sourceImportBlocks} from '../../src/domain/importParsing';
 import {
@@ -98,9 +99,9 @@ describe('source blocks', () => {
     expect(parsed.eol).toBe('\n');
     expect(ESSAY.slice(0, parsed.frontmatterEnd)).toBe('---\ntitle: Essay\ntags: [draft]\n---');
     expect(parsed.blocks.map(block => [block.role, block.protectedKind ?? block.level, block.text])).toEqual([
-      ['heading', 1, 'Essay'],
+      ['heading', 1, '# Essay'],
       ['paragraph', 0, 'First paragraph,\nwith a second line.'],
-      ['heading', 2, 'Methods'],
+      ['heading', 2, '## Methods'],
       ['paragraph', 0, 'Directly after the heading.'],
       ['list', 0, '- one\n\t- nested\n- [ ] task'],
       ['protected', 'code', '⟦Code · 5 lines · kept as is⟧'],
@@ -128,7 +129,7 @@ describe('source blocks', () => {
       'html',
       'paragraph',
     ]);
-    expect(parsed.blocks[0].text).toBe('Title #');
+    expect(parsed.blocks[0].text).toBe('# Title #');
     expect(outside(text, parsed.blocks, 0).trim()).toBe('');
     expect(text.slice(parsed.blocks[2].start, parsed.blocks[2].end)).toBe('$$\r\nx = 1\r\n\r\n$$');
   });
@@ -172,15 +173,30 @@ describe('regenerating the file', () => {
     }
   });
 
-  it('writes an edited paragraph and keeps a heading level', () => {
+  it('writes an edited paragraph and a heading with the #s its textbox shows', () => {
     const r = record(ESSAY);
     const items = imported(r);
     items[1] = {...items[1], text: 'First paragraph, changed.'};
-    items[2] = {...items[2], text: 'Method'};
+    items[2] = {...items[2], text: '## Method'};
     const result = regenerateSource(r, items);
     expect(result.text).toContain('\n# Essay\n\nFirst paragraph, changed.\n\n## Method\n');
     expect(result.counts).toMatchObject({unchanged: 4, edited: 2, added: 0, missing: 0, protectedKept: 3});
     expect(result.text.startsWith('---\ntitle: Essay')).toBe(true);
+    // The level follows the text: one # more, or none (a paragraph now).
+    items[2] = {...items[2], text: '### Method'};
+    expect(regenerateSource(r, items).text).toContain('\n### Method\n');
+    items[2] = {...items[2], text: 'Method'};
+    expect(regenerateSource(r, items).text).toContain('changed.\n\nMethod\n');
+  });
+
+  it('gives an edited heading of an older record its level back', () => {
+    const r = record(ESSAY);
+    // Records made before headings kept their #s on the page: the heading's text without them.
+    const legacy = {...r, blocks: r.blocks.map(block => (block.role === 'heading' ? {...block, text: block.text.replace(/^#+ /, '')} : block))};
+    const items = imported(legacy);
+    expect(regenerateSource(legacy, items).identical).toBe(true);
+    items[2] = {...items[2], text: 'Method'};
+    expect(regenerateSource(legacy, items).text).toContain('\n## Method\n');
   });
 
   it('writes a split tail as new text after its shortened head', () => {
@@ -198,8 +214,9 @@ describe('regenerating the file', () => {
     const result = regenerateSource(r, [{page: 0, text: 'A. B.', tag: tag(0)}]);
     expect(result.text).toBe('A. B.\n');
     expect(result.missing).toEqual(['B.']);
-    // With no tag of the file left on the pages there is nothing to link: the range is null.
-    expect(regenerateSource(r, [{page: 0, text: 'A. B.', tag: null}]).range).toBeNull();
+    expect(result.present).toBe(true);
+    // With no tag of the file left in its segment, nothing of it is on the note.
+    expect(regenerateSource(r, [{page: 0, text: 'A. B.', tag: null}]).present).toBe(false);
   });
 
   it('writes typed markdown as typed, and follows the page order', () => {
@@ -260,33 +277,65 @@ describe('regenerating the file', () => {
     ]);
   });
 
-  it('counts a deleted paragraph as missing and leaves other files and pages alone', () => {
+  it('counts a deleted paragraph as missing and holds back a textbox of another file', () => {
     const r = record('A.\n\nB.\n\nC.\n');
     const items: SourceItem[] = [
-      {page: 0, text: 'Before the import', tag: null},
       {page: 1, text: 'A.', tag: tag(0)},
       {page: 1, text: 'Other file', tag: {v: 1, id: 'x', s: 's-2', i: 0}},
       {page: 2, text: 'C.', tag: tag(2)},
-      {page: 3, text: 'After the import', tag: null},
     ];
     const result = regenerateSource(r, items);
-    expect(result.range).toEqual({first: 1, last: 2});
     expect(result.text).toBe('A.\n\nC.\n');
     expect(result.missing).toEqual(['B.']);
+    expect(result.crossings).toEqual([{from: 's-2', id: 'x', name: 'Other file'}]);
+    // Confirmed, it is written here as it is.
+    expect(regenerateSource(r, items, {accept: true}).text).toBe('A.\n\nOther file\n\nC.\n');
   });
 
-  it('leaves out blocks the Outline set aside, without calling them missing', () => {
+  /** The file as written from a whole note: its segment, its blocks in the aside area set aside. */
+  const fromNote = (r: ReturnType<typeof record>, items: SourceItem[]) => {
+    const segments = segmentByFile(items);
+    return regenerateSource(r, segments.bySource.get(SOURCE) ?? [], {aside: asideBlocks(segments).get(SOURCE)});
+  };
+  const asideDivider: SourceItem = {page: 1, text: 'Set aside', tag: {v: 1, id: 'd', k: 'a'}};
+
+  it('leaves out everything below the aside divider, without calling its blocks missing', () => {
     const r = record('A.\n\nB.\n\nC.\n');
-    const items: SourceItem[] = [
+    const result = fromNote(r, [
       {page: 0, text: 'A.', tag: tag(0)},
       {page: 0, text: 'C.', tag: tag(2)},
-      {page: 1, text: 'B.', tag: tag(1, {a: 1})},
-    ];
-    const result = regenerateSource(r, items);
+      asideDivider,
+      {page: 1, text: 'B.', tag: tag(1)},
+      {page: 1, text: 'A note typed in the aside area', tag: null},
+    ]);
     expect(result.text).toBe('A.\n\nC.\n');
     expect(result.missing).toEqual([]);
     expect(result.counts.setAside).toBe(1);
-    expect(result.range).toEqual({first: 0, last: 0});
+    expect(result.counts.added).toBe(0);
+  });
+
+  it('writes a block moved back above the aside divider, by position alone', () => {
+    const r = record('A.\n\nB.\n\nC.\n');
+    const result = fromNote(r, [
+      {page: 0, text: 'A.', tag: tag(0)},
+      {page: 0, text: 'B.', tag: tag(1, {a: 1})},
+      {page: 0, text: 'C.', tag: tag(2)},
+      asideDivider,
+    ]);
+    expect(result.text).toBe('A.\n\nB.\n\nC.\n');
+    expect(result.counts.setAside).toBe(0);
+  });
+
+  it('reads a note set aside before the divider existed by its set-aside tags', () => {
+    const r = record('A.\n\nB.\n\nC.\n');
+    const result = fromNote(r, [
+      {page: 0, text: 'A.', tag: tag(0)},
+      {page: 0, text: 'C.', tag: tag(2)},
+      {page: 1, text: 'B.', tag: tag(1, {a: 1})},
+    ]);
+    expect(result.text).toBe('A.\n\nC.\n');
+    expect(result.missing).toEqual([]);
+    expect(result.counts.setAside).toBe(1);
   });
 
   it('writes CRLF for edited text in a CRLF file', () => {
@@ -333,14 +382,10 @@ describe('source record and tag', () => {
     expect(parseBlockTag('tbt:b:{"v":1,"id":"b","k":"y"}')).toEqual({v: 1, id: 'b'});
   });
 
-  it('marks a tag as set aside and back, and leaves other userData alone', () => {
-    const userData = formatBlockTag({v: 1, id: 'b-1', s: SOURCE, i: 3});
-    const aside = withAside(userData, true);
-    expect(parseBlockTag(aside)).toEqual({v: 1, id: 'b-1', s: SOURCE, i: 3, a: 1});
-    expect(parseBlockTag(withAside(aside, false))).toEqual({v: 1, id: 'b-1', s: SOURCE, i: 3});
-    expect(withAside(userData, false)).toBe(userData);
-    expect(withAside('gtdpara:mark:1', true)).toBe('gtdpara:mark:1');
-    expect(withAside(null, true)).toBeNull();
+  it('tags the aside divider and its title', () => {
+    const now = new Date(2026, 10, 22);
+    expect(parseBlockTag(formatBlockTag(asideDividerTag(now)))).toMatchObject({k: 'a'});
+    expect(parseBlockTag(formatBlockTag(asideTitleTag(now)))).toMatchObject({k: 't', a: 1});
   });
 
   it('fingerprints text', () => {
@@ -364,8 +409,8 @@ describe('linked import', () => {
   it('places one block per textbox with its source index, headings always recognized', () => {
     const {blocks} = parseSourceBlocks('# A\n\n#### Deep\n\ntext\n\n```\nx\n```\n');
     expect(sourceImportBlocks(blocks, structure)).toEqual([
-      {role: 'heading1', text: 'A', fontSize: 60, bold: true, sourceIndex: 0},
-      {role: 'heading3', text: 'Deep', fontSize: 40, bold: true, sourceIndex: 1},
+      {role: 'heading1', text: '# A', fontSize: 60, bold: true, sourceIndex: 0},
+      {role: 'heading3', text: '#### Deep', fontSize: 40, bold: true, sourceIndex: 1},
       {role: 'paragraph', text: 'text', fontSize: 36, bold: false, sourceIndex: 2},
       {role: 'paragraph', text: '⟦Code · 3 lines · kept as is⟧', fontSize: 36, bold: false, sourceIndex: 3, placeholder: true},
     ]);

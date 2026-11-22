@@ -71,7 +71,7 @@ export interface ManuscriptReview {
   calibration: EditMarkerCalibration;
   changeCalibration: (next: Partial<EditMarkerCalibration>) => void;
   resetCalibration: () => void;
-  /** Reads every page read so far again, from scratch (Details: Refresh preview). */
+  /** Reads every page read so far again, from scratch (Settings → Calibration: Refresh preview). */
   refresh: () => void;
   /** Checks every page read so far again; unchanged pages keep their analysis (after an Outline apply). */
   recheck: () => void;

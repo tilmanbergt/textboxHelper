@@ -7,36 +7,41 @@
  * checked for what is in the way.
  */
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {setBlockStatus} from '../../actions/blockStatus';
-import {cachedOutline, forgetOutline, rememberOutline} from '../../actions/manuscriptCache';
+import {setBlockStatus} from '../../../actions/blockStatus';
+import {cachedOutline, forgetOutline, rememberOutline} from '../../../actions/manuscriptCache';
+import {applyCleanup, checkCleanup, type CleanupCheck} from '../../../actions/cleanupApply';
 import {
   applyOutlinePlan,
   checkRebuild,
   type RebuildCheck,
-} from '../../actions/outlineApply';
-import {scanTextBoxes} from '../../actions/textboxScan';
-import {formatBlockTag} from '../../domain/blockTag';
-import type {ScannedTextBox} from '../../domain/exportClassification';
-import {unreadPages, type PageReview} from '../../domain/manuscriptPages';
+} from '../../../actions/outlineApply';
+import type {CleanupScope} from '../../../domain/cleanupLayout';
+import {scanTextBoxes} from '../../../actions/textboxScan';
+import {formatBlockTag} from '../../../domain/blockTag';
+import type {ScannedTextBox} from '../../../domain/exportClassification';
+import {unreadPages, type PageReview} from '../../../domain/manuscriptPages';
 import {
   buildOutline,
   type BlockStatus,
   type OutlineBlock,
-} from '../../domain/outlineModel';
+} from '../../../domain/outlineModel';
 import {
+  CLEANUP_KEY,
   plannedOrder,
   undoFor,
   undoLast,
   type MoveTarget,
   type PlannedChange,
   type PlannedOrder,
-} from '../../domain/outlinePlan';
-import {fileNameOf, userMessage} from '../../domain/userMessage';
-import {readBlockStatuses} from '../../storage/blockStatusStore';
-import {getSettings} from '../../storage/settingsFile';
-import type {NoteInfo} from '../../supernote/noteElements';
-import type {FrameStatus} from '../../ui/ScreenFrame';
-import {perfEvent, timed} from '../../utils/perf';
+} from '../../../domain/outlinePlan';
+import {headingLevelOf, type HeadingLevel} from '../../../domain/headingText';
+import type {SourceRecord} from '../../../domain/sourceRecord';
+import {fileNameOf, userMessage} from '../../../domain/userMessage';
+import {readBlockStatuses} from '../../../storage/blockStatusStore';
+import {getSettings} from '../../../storage/settingsFile';
+import type {NoteInfo} from '../../../supernote/noteElements';
+import type {FrameStatus} from '../../../ui/ScreenFrame';
+import {perfEvent, timed} from '../../../utils/perf';
 
 export interface Outline {
   blocks: OutlineBlock[] | null;
@@ -52,11 +57,15 @@ export interface Outline {
   plan: PlannedChange[];
   planned: PlannedOrder | null;
   /** What the touched pages hold in the way of the plan; null while it is checked or there's no plan. */
-  check: RebuildCheck | null;
+  check: RebuildCheck | CleanupCheck | null;
   checking: boolean;
   move: (key: string, before: MoveTarget) => void;
+  /** Plans a heading level (0: a paragraph); with its subheadings shifting along, or alone. */
+  setLevel: (key: string, level: 0 | HeadingLevel, withSubheadings: boolean) => void;
   setAside: (key: string) => void;
   remove: (key: string) => void;
+  /** Plans Clean up layout of the whole note or one file (technical-design-settings-layout-files.md §2). */
+  cleanUp: (scope: CleanupScope) => void;
   undo: (key: string) => void;
   undoLastChange: () => void;
   apply: () => void;
@@ -67,6 +76,8 @@ export interface Outline {
 export function useOutline(
   note: NoteInfo | null,
   pages: Record<number, PageReview>,
+  /** The linked files' records: headings of notes linked before keep their level by them. */
+  records: SourceRecord[] = [],
 ): Outline {
   const notePath = note?.notePath ?? null;
   const [items, setItems] = useState<ScannedTextBox[] | null>(null);
@@ -76,7 +87,7 @@ export function useOutline(
   const [status, setFrameStatus] = useState<FrameStatus | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [plan, setPlan] = useState<PlannedChange[]>([]);
-  const [check, setCheck] = useState<RebuildCheck | null>(null);
+  const [check, setCheck] = useState<RebuildCheck | CleanupCheck | null>(null);
   const [checking, setChecking] = useState(false);
   const [applied, setApplied] = useState(false);
 
@@ -139,10 +150,20 @@ export function useOutline(
       });
   }, [loading, notePath, pageCount]);
 
-  const blocks = useMemo(
-    () => (items ? buildOutline(items, statuses, pages) : null),
-    [items, pages, statuses],
-  );
+  const blocks = useMemo(() => {
+    if (!items) {
+      return null;
+    }
+    const bySource = new Map(records.map(record => [record.sourceId, record]));
+    return buildOutline(items, statuses, pages, {
+      defaultLevel: getSettings().outline.defaultHeadingLevel,
+      // Records made before headings kept their #s hold a heading's text without them.
+      recordLevel: tag => {
+        const block = tag.s && Number.isInteger(tag.i) ? bySource.get(tag.s)?.blocks[tag.i as number] : undefined;
+        return block?.role === 'heading' && headingLevelOf(block.text) === 0 ? block.level : null;
+      },
+    });
+  }, [items, pages, records, statuses]);
   const planned = useMemo(
     () => (blocks && plan.length > 0 ? plannedOrder(blocks, plan) : null),
     [blocks, plan],
@@ -183,7 +204,11 @@ export function useOutline(
     }
     let alive = true;
     setChecking(true);
-    timed('outline.check', () => checkRebuild(notePath, pageCount, current, currentPlan, currentPages))
+    timed<RebuildCheck | CleanupCheck>('outline.check', () =>
+      currentPlan.cleanup
+        ? checkCleanup(notePath, pageCount, current, currentPlan, currentPages)
+        : checkRebuild(notePath, pageCount, current, currentPlan, currentPages),
+    )
       .then(result => alive && setCheck(result))
       .catch(error => {
         console.warn('[Outline] check failed', String(error));
@@ -204,8 +229,10 @@ export function useOutline(
     };
   }, [checkKey, notePath, pageCount]);
 
+  // A block's new change replaces its earlier one of the same sort: a level and a move go together.
   const change = useCallback((next: PlannedChange) => {
-    setPlan(current => [...undoFor(current, next.key), next]);
+    const sameSort = (item: PlannedChange) => (item.kind === 'level') === (next.kind === 'level');
+    setPlan(current => [...current.filter(item => item.key !== next.key || !sameSort(item)), next]);
   }, []);
 
   const apply = useCallback(() => {
@@ -222,10 +249,12 @@ export function useOutline(
     setBusy(true);
     timed(
       'outline.apply',
-      () =>
-        applyOutlinePlan(notePath, pageCount, blocks, planned, check, message =>
-          setFrameStatus({text: message}),
-        ),
+      () => {
+        const progress = (message: string) => setFrameStatus({text: message});
+        return 'kind' in check
+          ? applyCleanup(notePath, pageCount, blocks, planned, check, progress)
+          : applyOutlinePlan(notePath, pageCount, blocks, planned, check, progress);
+      },
       {changes: plan.length},
     )
       .then(result => {
@@ -303,12 +332,21 @@ export function useOutline(
       (key: string, before: MoveTarget) => change({kind: 'move', key, before}),
       [change],
     ),
+    setLevel: useCallback(
+      (key: string, level: 0 | HeadingLevel, withSubheadings: boolean) =>
+        change({kind: 'level', key, level, withSubheadings}),
+      [change],
+    ),
     setAside: useCallback(
       (key: string) => change({kind: 'aside', key}),
       [change],
     ),
     remove: useCallback(
       (key: string) => change({kind: 'delete', key}),
+      [change],
+    ),
+    cleanUp: useCallback(
+      (scope: CleanupScope) => change({kind: 'cleanup', key: CLEANUP_KEY, scope}),
       [change],
     ),
     undo: useCallback(

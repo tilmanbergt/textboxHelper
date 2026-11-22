@@ -1,20 +1,21 @@
 /**
- * Export DOCX (technical-design-calmer-screens.md §3.8, canvas "Export DOCX"). Left: which pages
+ * Export DOCX (technical-design-calmer-screens.md §3.8, canvas "Export DOCX"), opened from the
+ * Manuscript card's Files tab (technical-design-settings-layout-files.md §4). Left: which pages
  * and options. Right: the textboxes that will be exported, paged, updated by itself after every
- * change. The classification rules are the Rules sub-screen.
+ * change. The classification rules are set in the card's Settings → Export.
  */
-import React, {useState} from 'react';
+import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import type {ExportScope, ScannedTextBox} from '../../domain/exportClassification';
 import {noteNameOf} from '../../domain/exportRulesCheck';
 import {EXPORT_HELP} from '../../domain/helpTexts';
 import Checkbox from '../../ui/Checkbox';
+import {GLYPH} from '../../ui/glyphs';
 import NumberField from '../../ui/NumberField';
 import PagedSection from '../../ui/PagedSection';
 import ScreenFrame from '../../ui/ScreenFrame';
 import Segmented from '../../ui/Segmented';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
-import ExportRulesScreen from './ExportRulesScreen';
 import {useExportScan} from './useExportScan';
 
 const ROW_HEIGHT = 48;
@@ -29,24 +30,14 @@ const ROLE_LABELS: Record<ScannedTextBox['role'], string> = {
 
 interface Props {
   onClose: () => void;
+  onBack: () => void;
+  /** Opens Settings → Export. */
+  onOpenRules: () => void;
 }
 
-export default function ExportScreen({onClose}: Props): React.JSX.Element {
+export default function ExportScreen({onClose, onBack, onOpenRules}: Props): React.JSX.Element {
   const flow = useExportScan();
-  const [view, setView] = useState<'export' | 'rules'>('export');
   const {note, scan} = flow;
-
-  if (view === 'rules') {
-    return (
-      <ExportRulesScreen
-        rules={flow.rules}
-        problem={flow.rulesProblem}
-        onChange={flow.setRules}
-        onBack={() => setView('export')}
-        onClose={onClose}
-      />
-    );
-  }
 
   const totalPages = note?.totalPages ?? null;
   const context = note
@@ -65,8 +56,8 @@ export default function ExportScreen({onClose}: Props): React.JSX.Element {
   return (
     <ScreenFrame
       title="Export DOCX"
+      back={{label: 'Manuscript', onPress: onBack}}
       context={context}
-      actions={[{label: 'Rules', onPress: () => setView('rules')}]}
       help={{title: 'Export DOCX', text: EXPORT_HELP}}
       onClose={onClose}
       status={flow.status ?? {text: 'Saved to the EXPORT folder. The note is not changed.'}}
@@ -112,12 +103,12 @@ export default function ExportScreen({onClose}: Props): React.JSX.Element {
           <Text style={styles.label}>Options</Text>
           <Checkbox label="Include comments" checked={flow.includeComments} onChange={flow.setIncludeComments} />
 
-          <Pressable accessibilityRole="button" onPress={() => setView('rules')} style={styles.link}>
+          <Pressable accessibilityRole="button" onPress={onOpenRules} style={styles.link}>
             <View style={styles.linkText}>
               <Text style={styles.linkTitle}>Classification rules</Text>
               <Text style={styles.hint}>what counts as heading, paragraph, comment</Text>
             </View>
-            <Text style={styles.linkTitle}>›</Text>
+            <Text style={styles.linkTitle}>{GLYPH.next}</Text>
           </Pressable>
         </View>
 

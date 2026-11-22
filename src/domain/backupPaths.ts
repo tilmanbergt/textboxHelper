@@ -68,3 +68,8 @@ export function buildSourcePreviousPath(pluginDir: string, sourceId: string): st
 export function buildSourceOriginalPath(pluginDir: string, sourceId: string): string {
   return `${pluginDir.replace(/\/+$/, '')}/${SOURCE_DIR_NAME}/${sourceId}-original.txt`;
 }
+
+/** The linked files of one note (technical-design-linked-files.md §1.3), by a key of its path. */
+export function buildNoteLinksPath(pluginDir: string, noteKey: string): string {
+  return `${pluginDir.replace(/\/+$/, '')}/${SOURCE_DIR_NAME}/note-${noteKey}.json`;
+}

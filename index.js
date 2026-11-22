@@ -16,8 +16,6 @@ import {PluginManager} from 'sn-plugin-lib';
 import App from './App';
 import {name as appName} from './app.json';
 import {
-  BUTTON_ID_EXPORT_DOCX,
-  BUTTON_ID_IMPORT_TEXT_FILE,
   BUTTON_ID_NOTE_MANUSCRIPT,
   BUTTON_ID_TEXTBOX_TOOLS,
   BUTTON_ID_TOOLBAR_PEN_EDIT,
@@ -75,29 +73,6 @@ PluginManager.registerButton(2, ['NOTE'], {
   icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
   showType: 1,
   editDataTypes: [3],
-});
-
-PluginManager.registerButton(1, ['NOTE'], {
-  id: BUTTON_ID_IMPORT_TEXT_FILE,
-  name: JSON.stringify({
-    en: 'Import Text File',
-    zh_CN: 'Import Text File',
-    zh_TW: 'Import Text File',
-    ja: 'Import Text File',
-  }),
-  icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
-  showType: 1,
-});
-PluginManager.registerButton(1, ['NOTE'], {
-  id: BUTTON_ID_EXPORT_DOCX,
-  name: JSON.stringify({
-    en: 'Export DOCX',
-    zh_CN: 'Export DOCX',
-    zh_TW: 'Export DOCX',
-    ja: 'Export DOCX',
-  }),
-  icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
-  showType: 1,
 });
 
 PluginManager.registerButton(1, ['NOTE'], {
