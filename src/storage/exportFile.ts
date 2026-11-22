@@ -13,7 +13,10 @@ export async function writeJsonExportFile(fileName: string, payload: unknown): P
   const exportPath = `${exportDir}/${fileName}`;
 
   await RNFS.writeFile(tempPath, JSON.stringify(payload, null, 2), 'utf8');
-  const copied = await FileUtils.copyFile(tempPath, exportPath);
+  // The temporary file goes either way: only the copy in EXPORT is kept.
+  const copied = await FileUtils.copyFile(tempPath, exportPath).finally(() =>
+    RNFS.unlink(tempPath).catch(() => undefined),
+  );
   if (!copied) {
     throw new Error('Could not copy the JSON export into EXPORT.');
   }

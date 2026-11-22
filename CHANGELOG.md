@@ -41,6 +41,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Changed
 
+- The plugin cleans up after itself: pen edits applied or dropped more than 3 days ago are removed with their handwriting and picture, only the 3 newest backups of the last 14 days are kept, unlinking a file removes the copies of its text, and exports no longer leave a temporary file behind. Manuscript → Settings → Diagnostics → Storage shows how much the plugin keeps and has Clean up now.
 - The NOTE toolbar buttons "Import Text File" and "Export DOCX" are gone: both are in Manuscript → Files.
 - Manuscript: Details is now Settings, with tabs Outline · Layout · Export · Calibration · Diagnostics. Layout holds the page margins, the paragraph and heading sizes, Bold headings and which heading levels start a new page; they are used by every import (the Import screen's Layout sub-screen is gone, it shows a summary). Export holds the classification rules of Export DOCX (the Rules sub-screen is gone).
 - Every linked file starts on a new page, so moving a file changes only its own pages and those it passes. Headings can start a new page too: Settings → Layout → "New page before" # / ## / ### (off by default). The import and the Outline's Apply follow both; the Outline now lays pages out within the margins from Settings → Layout instead of guessing them from the textboxes. Pages a change doesn't touch keep their layout.
