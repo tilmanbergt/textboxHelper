@@ -12,7 +12,10 @@ import {
 const KEYS = [MARK_HELP_KEYS.text, MARK_HELP_KEYS.numbers];
 // Pictures as on an A5 X: 480 dp wide, heights in the pictures' proportions.
 const PICTURES = Object.fromEntries(
-  MARK_HELP.map((entry, index) => [entry.id, {width: 480, height: [168, 212, 212, 183, 168, 220, 352, 371][index]}]),
+  MARK_HELP.map((entry, index) => [
+    entry.id,
+    {width: 480, height: [168, 212, 212, 183, 212, 212, 195, 171, 197, 168, 220, 352, 371][index]},
+  ]),
 );
 
 function pageHeight(page: MarkHelpPage, width: number): number {
@@ -53,7 +56,7 @@ describe('markHelpPages', () => {
     const pages = markHelpPages(MARK_HELP, REVIEW_HELP, KEYS, PICTURES, 654, 760);
     expect(pages[0]).toEqual({kind: 'overview', ids: MARK_HELP.map(e => e.id), first: true});
     const markPages = pages.filter(p => p.kind === 'marks');
-    expect(markPages.length).toBeLessThanOrEqual(6);
+    expect(markPages.length).toBeLessThanOrEqual(10);
     expect(markPages.some(p => p.kind === 'marks' && p.entries.length === 2)).toBe(true);
     expect(pages[pages.length - 1].kind).toBe('text');
   });

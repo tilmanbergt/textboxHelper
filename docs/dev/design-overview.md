@@ -98,7 +98,13 @@ Handwritten edit markers on textboxes: a delete marker is a line through words; 
 is a delete line plus a small loop (or two crossing lines); a < or >, or a step mark with a second
 upright (_||‾), breaks a paragraph; a ∧ or V with a cross inserts a space; the swap mark (a line
 above one part and below the next, joined by a vertical, in one stroke or in three pieces across
-lines) swaps two parts. Freehand strokes and the Supernote straight-line tool are both recognized.
+lines) swaps two parts. The fine marks work letter by letter: a strike with two verticals marks
+exact places (`domain/exactBounds.ts`), a slash one letter (`domain/slashMark.ts`), an arc under
+or over a gap closes it, two arcs close a gap at a line end or join two paragraphs
+(`domain/closeUpMark.ts`, `domain/paragraphJoin.ts`), and a ∧ or V with a filled circle between its
+legs puts in the punctuation drawn in it (`domain/punctMark.ts` reads it, `domain/punctText.ts`
+places it by its type; the handwriting recognizer is asked only when the plugin can't read it).
+Freehand strokes and the Supernote straight-line tool are both recognized.
 `supernote/markerStrokeRead.ts` reads the strokes; `actions/markerMeasure.ts` measures each
 textbox once per review and locks textboxes whose font can't be read (their marks are ignored);
 `actions/shapeMarks.ts` reads the marks known by their shape first (`domain/paragraphMarks.ts`,
@@ -121,8 +127,9 @@ ranges the apply step uses, so the review shows exactly what will change.
 **Pen edits** (`actions/penEditTag.ts`, `actions/penEditReview.ts`, `storage/penEditStore.ts`,
 `domain/penEdit*.ts`): the "Insertion or Replacement" lasso button tags handwritten new text. The
 mark written just before it (a replace mark or a caret) decides what it is; badges with a number
-on the page show which text belongs to which mark. A snippet without a mark can be given one later
-(Select mark). The tagged strokes and a picture are stored in the plugin folder (`pen-edits/`);
+on the page show which text belongs to which mark (a circle the user drew at the mark holds the
+number). A snippet without a mark can be given one later (Select mark), or go in as a new paragraph
+where its handwriting starts (Insert right here, `domain/insertHere.ts`). The tagged strokes and a picture are stored in the plugin folder (`pen-edits/`);
 the review recognizes them while it is open and the user can edit the text in place.
 
 **Housekeeping** (`domain/housekeeping.ts`, `storage/housekeepingStore.ts`,

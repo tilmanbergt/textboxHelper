@@ -18,6 +18,22 @@ import {
   type ShortStroke,
 } from '../domain/spaceMark';
 import {pairSwapPieces, placeSwapPiece, type PlacedPiece} from '../domain/swapMark';
+import {
+  analyzeArc,
+  closeUpSnippet,
+  gapBetween,
+  placeArc,
+  punctuationAtGap,
+  type ArcPlace,
+} from '../domain/closeUpMark';
+import {bracketSnippet} from '../domain/exactBounds';
+import {isReplaceLoopRect, MAX_MARKER_HEIGHT_RATIO, MIN_MARKER_WIDTH} from '../domain/markerStrokes';
+import {formatOperationSnippet} from '../domain/markerText';
+import type {PenEditEntry} from '../domain/penEditModel';
+import {acceptRecognized, findCaretCircle, readCircle, type PlainStroke} from '../domain/punctMark';
+import {trailingDash} from '../domain/paragraphJoin';
+import {breakCommaTie} from '../domain/punctText';
+import {analyzeSlash, placeSlash} from '../domain/slashMark';
 import {swapSummary} from '../domain/swapText';
 import type {Rect} from '../domain/textboxModel';
 import {pointInRect} from '../domain/geometry';
@@ -29,11 +45,15 @@ import {locateMarkOnPage} from './penEditReview';
 
 /**
  * The marks the review reads from their shape before any delete analysis
- * (technical-design-paragraph-marks.md, technical-design-swap-space-marks.md §6.1), in this order:
+ * (technical-design-paragraph-marks.md, technical-design-swap-space-marks.md §6.1,
+ * technical-design-fine-marks.md §2.4), in this order:
  *
  * 1. Paragraph marks: a < or > between two lines; a step with a second upright next to its own.
- * 2. Insert space: a ∧ or V with a cross near its tip.
+ * 2. A ∧ or V with a filled circle between its legs (punctuation), or with a cross near its tip
+ *    (insert space).
  * 3. Swap: the one-line mark, or its three pieces across lines.
+ * 4. Close-up: an arc under or over one word gap; two arcs across a line wrap.
+ * 5. Slash: a short steep stroke through one letter (deleted, or replaced by tagged text).
  *
  * A stroke used by one is used by no other and never reaches the delete analysis. A step alone
  * (no second upright, not part of a swap) is ignored with how to make it either.
@@ -54,7 +74,22 @@ export type ShapeMarkResult = {
   consumedNums: Set<number>;
   /** The textboxes the drafts change. */
   textboxes: Map<string, TextElement>;
+  /** Tagged replacements whose mark (a slash) was found here. */
+  pairedPenEditIds: Set<string>;
 };
+
+export type ShapeMarkOptions = {
+  /** The tagged replacement whose mark this stroke is, if any (a slash with text after it). */
+  strikeOwner?: (element: Element) => PenEditEntry | undefined;
+  /** Asks the handwriting recognizer about a circle the plugin couldn't read; null when it fails. */
+  recognizeCircle?: (strokes: Point[][]) => Promise<string | null>;
+};
+
+/** A strike-like stroke (long and flat), which a vertical crossing it belongs to. */
+function isStrikeLike(rect: Rect): boolean {
+  const width = rect.right - rect.left;
+  return width >= MIN_MARKER_WIDTH && rect.bottom - rect.top <= width * MAX_MARKER_HEIGHT_RATIO;
+}
 
 function inflate(rect: Rect, by: number): Rect {
   return {left: rect.left - by, top: rect.top - by, right: rect.right + by, bottom: rect.bottom + by};
@@ -76,7 +111,9 @@ export async function findShapeMarks(
   strokeStatsByUuid: Map<string, StrokeStats>,
   pageTextboxes: TextElement[],
   measurer: TextboxMeasurer,
+  options: ShapeMarkOptions = {},
 ): Promise<ShapeMarkResult> {
+  const pairedPenEditIds = new Set<string>();
   const drafts: OperationDraft[] = [];
   const ignored: IgnoredEditMarker[] = [];
   const consumed = new Set<string>();
@@ -96,6 +133,80 @@ export async function findShapeMarks(
   }
   const free = () => strokes.filter(stroke => !consumed.has(stroke.marker.uuid));
   const use = (items: Stroke[]) => items.forEach(item => consumed.add(item.marker.uuid));
+
+  const measuredNear = async (rect: Rect): Promise<CaretTextbox[]> => {
+    const boxes: CaretTextbox[] = [];
+    for (const textbox of pageTextboxes) {
+      const box = textbox.textBox.textRect;
+      if (rect.right < box.left - 40 || rect.left > box.right + 40 || rect.bottom < box.top - 60 || rect.top > box.bottom + 60) {
+        continue;
+      }
+      const measured = await measurer.measure(textbox);
+      // Marks on an unreadable font are reported by the delete analysis.
+      if (measured && measured.fontReadable) {
+        boxes.push(measured.box);
+      }
+    }
+    return boxes;
+  };
+
+  const addPunctuation = async (
+    caret: {strokes: Stroke[]; shape: CaretShape},
+    circle: NonNullable<ReturnType<typeof findCaretCircle>>,
+  ) => {
+    const inCircle = new Set([circle.circle.uuid, ...circle.contents.map(item => item.uuid)]);
+    const parts = [...caret.strokes, ...free().filter(stroke => inCircle.has(stroke.marker.uuid))];
+    use(parts);
+    const {near: nearBoxes, target} = await locateMarkOnPage(caret.shape.tip, caret.shape.direction, pageTextboxes, measurer);
+    const textbox = target?.kind === 'text' ? nearBoxes.find(item => item.uuid === target.uuid) : undefined;
+    if (target?.kind !== 'text' || !textbox) {
+      ignored.push(
+        ignoredFor(
+          parts.map(part => part.marker),
+          target?.kind === 'unclear' ? target.reason : 'The punctuation mark must point into a line of text.',
+        ),
+      );
+      return;
+    }
+    const reading = readCircle(circle.shape, circle.contents);
+    let char = reading.tie ? breakCommaTie(target.mode) : reading.char;
+    let source: 'own' | 'recognizer' | 'none' = char ? 'own' : 'none';
+    if (!char && options.recognizeCircle) {
+      const recognized = await options.recognizeCircle(circle.contents.map(item => item.points));
+      char = acceptRecognized(recognized ?? '');
+      source = char ? 'recognizer' : 'none';
+    }
+    logEditMarker('punctuationMark', {
+      markerNums: parts.map(part => part.marker.numInPage),
+      tip: caret.shape.tip,
+      circle: circle.shape,
+      contents: circle.contents.map(item => item.rect),
+      reading,
+      char,
+      source,
+      target,
+    });
+    textboxes.set(textbox.uuid, textbox);
+    drafts.push({
+      range: {kind: 'replace', start: target.offset, end: target.offset},
+      operation: {
+        id: `punct:${caret.strokes[0].marker.uuid}`,
+        kind: 'punct',
+        markerUuid: caret.strokes[0].marker.uuid,
+        markerNumInPage: caret.strokes[0].marker.numInPage,
+        consumedMarkerNums: parts.map(part => part.marker.numInPage),
+        targetTextboxUuid: textbox.uuid,
+        targetTextboxNumInPage: textbox.numInPage,
+        lineIndex: 0,
+        summary: 'Insert punctuation',
+        detail: `Textbox ${textbox.numInPage}`,
+        words: [],
+        textStart: target.offset,
+        punct: {offset: target.offset, mode: target.mode, char, source, tie: reading.tie},
+        ...(target.uncertain ? {uncertain: target.uncertain} : {}),
+      },
+    });
+  };
 
   // 1. Paragraph marks.
   const bareSteps: Stroke[] = [];
@@ -190,6 +301,25 @@ export async function findShapeMarks(
       continue;
     }
     const reach = 160;
+    // A circle between the legs: filled, a punctuation mark to put in (§9); empty, the caret's
+    // number place - an ordinary caret, which needs tagged text.
+    const around: PlainStroke[] = free()
+      .filter(
+        stroke =>
+          !caret.strokes.includes(stroke) &&
+          stroke.rect.left <= tip.x + reach &&
+          stroke.rect.right >= tip.x - reach &&
+          stroke.rect.top <= tip.y + reach &&
+          stroke.rect.bottom >= tip.y - reach,
+      )
+      .map(stroke => ({uuid: stroke.marker.uuid, rect: stroke.rect, points: stroke.points}));
+    const circle = findCaretCircle(caret.shape, around);
+    if (circle) {
+      if (circle.contents.length > 0) {
+        await addPunctuation(caret, circle);
+      }
+      continue;
+    }
     const legs: ShortStroke[] = free()
       .filter(
         stroke =>
@@ -259,26 +389,10 @@ export async function findShapeMarks(
   const placed: PlacedPiece[] = [];
   const boxes = new Map<string, CaretTextbox>();
   for (const stroke of free()) {
-    const near: CaretTextbox[] = [];
-    for (const textbox of pageTextboxes) {
-      const rect = textbox.textBox.textRect;
-      if (
-        stroke.rect.right < rect.left - 40 ||
-        stroke.rect.left > rect.right + 40 ||
-        stroke.rect.bottom < rect.top - 60 ||
-        stroke.rect.top > rect.bottom + 60
-      ) {
-        continue;
-      }
-      const measured = await measurer.measure(textbox);
-      // Marks on an unreadable font are reported by the delete analysis.
-      if (measured && measured.fontReadable) {
-        near.push(measured.box);
-      }
-    }
-    const item = placeSwapPiece(stroke.marker.uuid, stroke.points, stroke.rect, near);
+    const nearBoxes = await measuredNear(stroke.rect);
+    const item = placeSwapPiece(stroke.marker.uuid, stroke.points, stroke.rect, nearBoxes);
     if (item) {
-      const box = near.find(candidate => candidate.uuid === item.boxUuid);
+      const box = nearBoxes.find(candidate => candidate.uuid === item.boxUuid);
       if (box) {
         boxes.set(box.uuid, box);
       }
@@ -352,8 +466,239 @@ export async function findShapeMarks(
     }
   }
 
+  // 4. Close-up: an arc under or over one gap; at a line wrap, an end piece and a start piece.
+  const pieces: Array<{stroke: Stroke; place: Extract<ArcPlace, {kind: 'end' | 'start'}>; box: CaretTextbox}> = [];
+  for (const stroke of free()) {
+    const arc = analyzeArc(stroke.points);
+    if (!arc) {
+      continue;
+    }
+    let place: ArcPlace | null = null;
+    let placedOn: CaretTextbox | null = null;
+    for (const box of await measuredNear(stroke.rect)) {
+      place = placeArc(arc, box);
+      if (place) {
+        placedOn = box;
+        break;
+      }
+    }
+    logEditMarker('closeUpArc', {markerNumInPage: stroke.marker.numInPage, arc, place});
+    if (!place) {
+      continue;
+    }
+    use([stroke]);
+    if (place.kind === 'refused') {
+      ignored.push(ignoredFor([stroke.marker], place.reason));
+    } else if (place.kind === 'gap') {
+      addCloseUp([stroke], place.uuid, place.start, place.end, `line ${place.lineIndex + 1}`);
+    } else if (placedOn) {
+      pieces.push({stroke, place, box: placedOn});
+    }
+  }
+  const pairedPieces = new Set<Stroke>();
+  for (const end of pieces.filter(piece => piece.place.kind === 'end')) {
+    const start = pieces.find(
+      piece =>
+        piece.place.kind === 'start' &&
+        !pairedPieces.has(piece.stroke) &&
+        piece.place.uuid === end.place.uuid &&
+        piece.place.lineIndex === end.place.lineIndex + 1,
+    );
+    const text = textboxByUuid.get(end.place.uuid)?.textBox.textContentFull || '';
+    const gap = start ? gapBetween(text, end.place.offset, start.place.offset) : null;
+    if (start && gap) {
+      pairedPieces.add(end.stroke);
+      pairedPieces.add(start.stroke);
+      addCloseUp(
+        [end.stroke, start.stroke],
+        end.place.uuid,
+        gap.start,
+        gap.end,
+        `lines ${end.place.lineIndex + 1}–${start.place.lineIndex + 1} (line wrap)`,
+      );
+    }
+  }
+  // Two paragraphs directly above each other: the end piece after the upper one's last word, the
+  // start piece before the lower one's first (fine-marks §7).
+  for (const end of pieces.filter(piece => piece.place.kind === 'end' && !pairedPieces.has(piece.stroke))) {
+    if (end.place.lineIndex !== end.box.lines.length - 1) {
+      continue;
+    }
+    const start = pieces.find(
+      piece =>
+        piece.place.kind === 'start' &&
+        !pairedPieces.has(piece.stroke) &&
+        piece.place.lineIndex === 0 &&
+        piece.box.uuid !== end.box.uuid &&
+        directlyBelow(end.box.rect, piece.box.rect, pageTextboxes),
+    );
+    const upper = textboxByUuid.get(end.box.uuid);
+    const lower = start ? textboxByUuid.get(start.box.uuid) : undefined;
+    if (!start || !upper || !lower) {
+      continue;
+    }
+    pairedPieces.add(end.stroke);
+    pairedPieces.add(start.stroke);
+    use([end.stroke, start.stroke]);
+    textboxes.set(upper.uuid, upper);
+    textboxes.set(lower.uuid, lower);
+    const upperText = upper.textBox.textContentFull || '';
+    const lowerText = lower.textBox.textContentFull || '';
+    drafts.push({
+      range: {kind: 'replace', start: upperText.length, end: upperText.length},
+      operation: {
+        id: `join:${end.stroke.marker.uuid}`,
+        kind: 'join',
+        markerUuid: end.stroke.marker.uuid,
+        markerNumInPage: end.stroke.marker.numInPage,
+        consumedMarkerNums: [end.stroke.marker.numInPage, start.stroke.marker.numInPage],
+        targetTextboxUuid: upper.uuid,
+        targetTextboxNumInPage: upper.numInPage,
+        lineIndex: end.place.lineIndex,
+        summary: `Join · "…${upperText.trimEnd().slice(-16)}" + "${lowerText.trimStart().slice(0, 16)}…"`,
+        detail: `Textboxes ${upper.numInPage} + ${lower.numInPage}`,
+        words: [],
+        textStart: upperText.length,
+        join: {
+          belowUuid: lower.uuid,
+          belowNumInPage: lower.numInPage,
+          hyphen: trailingDash(upperText),
+          removeHyphen: false,
+        },
+      },
+    });
+  }
+  for (const piece of pieces.filter(item => !pairedPieces.has(item.stroke))) {
+    ignored.push(
+      ignoredFor(
+        [piece.stroke.marker],
+        'A close-up at a line end needs two arcs: one after the last word of the line, one before the first word of the next. Two paragraphs join only when one is directly above the other.',
+      ),
+    );
+  }
+
+  // 5. Slash through one letter. A leg of a caret drawn in two strokes is never a slash.
+  const caretLegs = new Set(carets.filter(caret => caret.strokes.length === 2).flatMap(caret => caret.strokes));
+  for (const stroke of free()) {
+    if (caretLegs.has(stroke)) {
+      continue;
+    }
+    const height = stroke.rect.bottom - stroke.rect.top;
+    if (height < 10 || height > 160 || stroke.rect.right - stroke.rect.left > height) {
+      continue;
+    }
+    const slash = analyzeSlash(stroke.points);
+    // A vertical crossing a strike is that strike's (a replace mark's verticals).
+    if (!slash || free().some(other => other !== stroke && isStrikeLike(other.rect) && intersects(other.rect, stroke.rect))) {
+      continue;
+    }
+    let place: ReturnType<typeof placeSlash> = null;
+    for (const box of await measuredNear(stroke.rect)) {
+      place = placeSlash(slash, box);
+      if (place) {
+        break;
+      }
+    }
+    logEditMarker('slash', {markerNumInPage: stroke.marker.numInPage, rect: slash.rect, place});
+    if (!place) {
+      continue;
+    }
+    use([stroke]);
+    if (place.kind === 'refused') {
+      ignored.push(ignoredFor([stroke.marker], place.reason));
+      continue;
+    }
+    const textbox = textboxByUuid.get(place.uuid);
+    if (!textbox) {
+      continue;
+    }
+    const owner = options.strikeOwner?.(stroke.marker);
+    if (owner) {
+      pairedPenEditIds.add(owner.id);
+    }
+    // The user's own circle for the number at the slash's top goes with it (fine-marks §2.2).
+    const topX = (slash.rect.left + slash.rect.right) / 2;
+    const circle = free().find(
+      other =>
+        other !== stroke &&
+        isReplaceLoopRect({left: topX, right: topX, top: slash.rect.top, bottom: slash.rect.top}, other.rect),
+    );
+    const parts = circle ? [stroke, circle] : [stroke];
+    use(parts);
+    const text = textbox.textBox.textContentFull || '';
+    const shown = bracketSnippet(text, place.offset, place.offset + 1);
+    const kind = owner ? 'replace' : 'delete';
+    textboxes.set(textbox.uuid, textbox);
+    drafts.push({
+      range: {kind, start: place.offset, end: place.offset + 1},
+      operation: {
+        id: `${stroke.marker.uuid}:${textbox.uuid}`,
+        kind,
+        markerUuid: stroke.marker.uuid,
+        markerNumInPage: stroke.marker.numInPage,
+        consumedMarkerNums: parts.map(part => part.marker.numInPage),
+        targetTextboxUuid: textbox.uuid,
+        targetTextboxNumInPage: textbox.numInPage,
+        lineIndex: place.lineIndex,
+        summary: formatOperationSnippet(kind, [shown]),
+        detail: `Textbox ${textbox.numInPage}, line ${place.lineIndex + 1} - 1 letter`,
+        words: [shown],
+        textStart: place.offset,
+        ...(owner ? {penEditId: owner.id, penEditNumber: owner.number} : {}),
+      },
+    });
+  }
+
   const consumedNums = new Set(
     strokes.filter(stroke => consumed.has(stroke.marker.uuid)).map(stroke => stroke.marker.numInPage),
   );
-  return {drafts, ignored, consumedNums, textboxes};
+  return {drafts, ignored, consumedNums, textboxes, pairedPenEditIds};
+
+  function addCloseUp(parts: Stroke[], uuid: string, start: number, end: number, where: string): void {
+    const textbox = textboxByUuid.get(uuid);
+    if (!textbox) {
+      return;
+    }
+    const text = textbox.textBox.textContentFull || '';
+    textboxes.set(uuid, textbox);
+    drafts.push({
+      range: {kind: 'replace', start, end, replacementText: '', joins: true},
+      operation: {
+        id: `closeUp:${parts[0].marker.uuid}`,
+        kind: 'closeUp',
+        markerUuid: parts[0].marker.uuid,
+        markerNumInPage: parts[0].marker.numInPage,
+        consumedMarkerNums: parts.map(part => part.marker.numInPage),
+        targetTextboxUuid: uuid,
+        targetTextboxNumInPage: textbox.numInPage,
+        lineIndex: 0,
+        summary: `Close up · ${closeUpSnippet(text, start, end)}`,
+        detail: `Textbox ${textbox.numInPage} · ${where}`,
+        words: [],
+        textStart: start,
+        closeUp: {gapStart: start, gapEnd: end, punct: punctuationAtGap(text, start, end), removePunct: false},
+      },
+    });
+  }
+}
+
+/**
+ * Whether `lower` is the paragraph directly below `upper`: they overlap by half the narrower one's
+ * width, it starts below the upper one, and no other textbox lies between them.
+ */
+function directlyBelow(upper: Rect, lower: Rect, textboxes: TextElement[]): boolean {
+  const overlap = Math.min(upper.right, lower.right) - Math.max(upper.left, lower.left);
+  const narrower = Math.min(upper.right - upper.left, lower.right - lower.left);
+  if (overlap < narrower * 0.5 || lower.top < upper.bottom - 4) {
+    return false;
+  }
+  return !textboxes.some(textbox => {
+    const rect = textbox.textBox.textRect;
+    return (
+      rect.top > upper.bottom - 4 &&
+      rect.bottom < lower.top + 4 &&
+      Math.min(rect.right, upper.right) > Math.max(rect.left, upper.left) &&
+      !(rect.top === lower.top && rect.left === lower.left)
+    );
+  });
 }

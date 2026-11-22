@@ -12,6 +12,9 @@ const MARK_FIELDS = {
   sideways: ['dir', 'after'],
   step: ['gap'],
   swap: ['a', 'b'],
+  slash: ['word', 'char'],
+  exact: ['from', 'to'],
+  arc: [],
   write: ['text'],
 };
 

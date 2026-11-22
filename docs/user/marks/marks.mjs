@@ -13,6 +13,12 @@
 //   step      {line, gap, second?}                the step mark _|‾ before word `gap`; second: the
 //                                                 short line beside its upright (_||‾)
 //   swap      {line, a: [from, to], b: [from, to]}  the transpose mark
+//   slash     {line, word, char, number?}         a slash through one character of a word
+//   exact     {line, from, to, number?}           a strike with verticals at exact places; from/to:
+//                                                 {word, char} or {word, edge: 'start'|'end'}
+//   arc       {line, gap?, piece?: 'end'|'start', dir?: 'down'}  the close-up arc under a gap, or a
+//                                                 piece after a line's last / before its first word
+//   caret ... circle: ',' | '.'                   the punctuation circle between the caret's legs
 //   write     {text, number?}                     tagged handwriting below the textbox
 // after:  the textbox lines after Apply, **bold** for new text ('' between lines = two textboxes).
 
@@ -47,6 +53,45 @@ export const MARKS = [
     before: ['the redcar is fast'],
     marks: [{type: 'caret', dir: 'up', at: {word: 1, char: 3}, cross: true, size: 48}],
     after: ['the red car is fast'],
+  },
+  {
+    id: 'replace-letters',
+    before: ['the bigger car'],
+    marks: [
+      {type: 'exact', from: {word: 1, char: 4}, to: {word: 1, edge: 'end'}, number: 1},
+      {type: 'write', text: 'est', number: 1},
+    ],
+    after: ['the bigg**est** car'],
+  },
+  {
+    id: 'slash',
+    before: ['two word here'],
+    marks: [
+      {type: 'slash', word: 1, char: 3, number: 1},
+      {type: 'write', text: 'ds', number: 1},
+    ],
+    after: ['two wor**ds** here'],
+  },
+  {
+    id: 'punctuation',
+    before: ['Yes I know it'],
+    marks: [{type: 'caret', dir: 'up', at: {gap: 1}, circle: ',', size: 64}],
+    after: ['Yes**,** I know it'],
+  },
+  {
+    id: 'close-up',
+    before: ['a note book here'],
+    marks: [{type: 'arc', gap: 2}],
+    after: ['a notebook here'],
+  },
+  {
+    id: 'close-up-wrap',
+    before: ['it is a note', 'book on paper'],
+    marks: [
+      {type: 'arc', line: 0, piece: 'end'},
+      {type: 'arc', line: 1, piece: 'start'},
+    ],
+    after: ['it is a notebook on paper'],
   },
   {
     id: 'swap',

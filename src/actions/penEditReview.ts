@@ -18,6 +18,7 @@ import {
   updatePenEdit,
   type PenEditEntry,
   setAwaitingMark,
+  setPlaceHere,
   type PenEditStrokeData,
 } from '../domain/penEditModel';
 import {
@@ -34,7 +35,9 @@ import {
 } from '../domain/penEditTags';
 import {isNoShift, type EdgeShift} from '../domain/edgeShift';
 import {normalizeRecognizedText} from '../domain/penEditText';
-import type {Rect, TextElementData} from '../domain/textboxModel';
+import {DEFAULT_FONT_SIZE, type Rect, type TextboxData, type TextElementData} from '../domain/textboxModel';
+import {locateHere, type HereTextbox} from '../domain/insertHere';
+import {NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
 import {
   changePenEditIndex,
   penEditPictureUri,
@@ -390,6 +393,7 @@ export async function placeCaretInsertions<T extends TextElementData>(
   carets: PenEditContext['carets'],
   pageTextboxes: T[],
   measurer: TextboxMeasurer,
+  here: {snippetRects: Map<string, Rect>; pageWidth: number} = {snippetRects: new Map(), pageWidth: 0},
 ): Promise<{
   inline: Array<CaretInline & {textbox: T}>;
   gaps: InsertionDraft[];
@@ -400,6 +404,15 @@ export async function placeCaretInsertions<T extends TextElementData>(
   const ignored: Array<{entry: PenEditEntry; reason: string}> = [];
   for (const entry of entries) {
     if (entry.kind !== 'insertion') {
+      continue;
+    }
+    if (entry.placement === 'here') {
+      const placed = await placeHere(entry, here.snippetRects.get(entry.id) ?? entry.rect, pageTextboxes, measurer, here.pageWidth);
+      if ('reason' in placed) {
+        ignored.push({entry, reason: placed.reason});
+      } else {
+        gaps.push(placed);
+      }
       continue;
     }
     const caret = carets.get(entry.id);
@@ -466,6 +479,86 @@ export async function placeCaretInsertions<T extends TextElementData>(
     });
   }
   return {inline, gaps, ignored};
+}
+
+/** The style of a new textbox when no paragraph on the page gives one: system font, 36. */
+const DEFAULT_NEW_BOX_STYLE: Omit<TextboxData, 'textRect'> = {
+  fontSize: 36,
+  fontPath: NOTE_SYSTEM_FONT_PATH,
+  textContentFull: null,
+  textAlign: 0,
+  textBold: 0,
+  textItalics: 0,
+  textFrameWidthType: 0,
+  textFrameStyle: 0,
+  textEditable: 0,
+};
+
+/**
+ * "Insert right here" (technical-design-fine-marks.md §8): the new paragraph's place from where
+ * the handwriting starts. Between paragraphs it goes in like a caret in the gap; with no paragraph
+ * near, it is a new textbox at the handwriting's top left (kept there by a gap of no height below
+ * it, so anything it reaches is pushed down).
+ */
+async function placeHere<T extends TextElementData>(
+  entry: PenEditEntry,
+  snippet: Rect,
+  pageTextboxes: T[],
+  measurer: TextboxMeasurer,
+  pageWidth: number,
+): Promise<InsertionDraft | {reason: string}> {
+  const boxes: HereTextbox[] = [];
+  for (const textbox of pageTextboxes) {
+    const measured = await measurer.measure(textbox);
+    const first = measured?.box.lines[0];
+    const fontSize = textbox.textBox.fontSize || DEFAULT_FONT_SIZE;
+    boxes.push({
+      uuid: textbox.uuid,
+      numInPage: textbox.numInPage,
+      rect: {...textbox.textBox.textRect},
+      lineHeight: first ? first.bottom - first.top : fontSize * 1.4,
+    });
+  }
+  const place = locateHere(snippet, boxes, pageWidth, entry.number);
+  if (place.kind === 'unclear') {
+    return {reason: place.reason};
+  }
+  const byUuid = (uuid: string | null) => (uuid ? pageTextboxes.find(textbox => textbox.uuid === uuid) ?? null : null);
+  if (place.kind === 'gap') {
+    const above = byUuid(place.above);
+    const below = byUuid(place.below);
+    const styleSource = above ?? below;
+    if (!styleSource) {
+      return {reason: `Text ${entry.number}: no paragraph to put it next to.`};
+    }
+    const rect = styleSource.textBox.textRect;
+    return {
+      penEditId: entry.id,
+      number: entry.number,
+      left: rect.left,
+      width: rect.right - rect.left,
+      style: {...styleSource.textBox},
+      aboveNumInPage: above?.numInPage ?? null,
+      belowNumInPage: below?.numInPage ?? null,
+      aboveRect: above ? {...above.textBox.textRect} : null,
+      belowRect: below ? {...below.textBox.textRect} : null,
+      here: 'gap',
+    };
+  }
+  const styleSource = byUuid(place.styleFrom);
+  const top = {left: place.left, top: place.top, right: place.left + place.width, bottom: place.top};
+  return {
+    penEditId: entry.id,
+    number: entry.number,
+    left: place.left,
+    width: place.width,
+    style: styleSource ? {...styleSource.textBox} : {...DEFAULT_NEW_BOX_STYLE, textRect: top},
+    aboveNumInPage: null,
+    belowNumInPage: null,
+    aboveRect: null,
+    belowRect: top,
+    here: 'newBox',
+  };
 }
 
 /**
@@ -591,6 +684,14 @@ export async function startSelectMark(
   await changePenEditIndex(current =>
     setAwaitingMark(current, id, from, new Date()),
   );
+}
+
+/**
+ * "Insert right here" (technical-design-fine-marks.md §8): the text goes in as a new paragraph
+ * where its handwriting starts. Stored with the entry; the review reads the page again.
+ */
+export async function placePenEditHere(id: string): Promise<void> {
+  await changePenEditIndex(current => setPlaceHere(current, id));
 }
 
 export async function setPenEditCorrection(

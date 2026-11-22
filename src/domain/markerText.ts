@@ -189,6 +189,44 @@ function normalizeTextAfterEdit(text: string): string {
     .trim();
 }
 
+const WORD_CHAR = /[\p{L}\p{N}]/u;
+
+/**
+ * A deletion or replacement never glues the words around it together (technical-design-fine-
+ * marks.md §2.1): when the removed text started or ended with a space and the characters that now
+ * meet are both letters or digits, one space is put back on that side. Word-level marks never
+ * remove a space, so this only acts on exact ranges (verticals around "big "). A range that joins
+ * words on purpose (`joins`) is left as it is.
+ */
+export function withSpacesKept(
+  text: string,
+  start: number,
+  end: number,
+  replacement: string,
+  joins: boolean,
+): string {
+  if (joins || end <= start) {
+    return replacement;
+  }
+  const removed = text.slice(start, end);
+  const left = text.charAt(start - 1);
+  const right = text.charAt(end);
+  const startsWithSpace = /^\s/.test(removed);
+  const endsWithSpace = /\s$/.test(removed);
+  if (!startsWithSpace && !endsWithSpace) {
+    return replacement;
+  }
+  if (replacement === '') {
+    return WORD_CHAR.test(left) && WORD_CHAR.test(right) ? ' ' : '';
+  }
+  const before = startsWithSpace && WORD_CHAR.test(left) && WORD_CHAR.test(replacement.charAt(0)) ? ' ' : '';
+  const after =
+    endsWithSpace && WORD_CHAR.test(right) && WORD_CHAR.test(replacement.charAt(replacement.length - 1))
+      ? ' '
+      : '';
+  return `${before}${replacement}${after}`;
+}
+
 export function getUniqueTextMutationRanges(ranges: TextMutationRange[]): TextMutationRange[] {
   return [...ranges]
     .sort((left, right) => {
@@ -218,9 +256,15 @@ export function applyTextMutationRangesDetailed(
   const insertedRanges: EditMarkerHighlightRange[] = [];
 
   for (const range of uniqueRanges) {
-    const replacementText = range.kind === 'replace' ? range.replacementText || '' : '';
     const currentStart = range.start + offset;
     const currentEnd = range.end + offset;
+    const replacementText = withSpacesKept(
+      nextText,
+      currentStart,
+      currentEnd,
+      range.kind === 'replace' ? range.replacementText || '' : '',
+      range.joins === true,
+    );
     nextText = `${nextText.slice(0, currentStart)}${replacementText}${nextText.slice(currentEnd)}`;
     if (range.kind === 'replace' && replacementText.length > 0) {
       insertedRanges.push({

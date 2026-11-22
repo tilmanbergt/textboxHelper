@@ -10,6 +10,7 @@ import React, {useEffect, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
 import {loadPenEditStrokePoints} from '../../actions/penEditReview';
 import {firstWords, lastWords} from '../../domain/markerHunks';
+import {PUNCTUATION_CHARS, type PunctuationChar} from '../../domain/punctMark';
 import type {
   ChangeHunk,
   EdgePoint,
@@ -46,6 +47,10 @@ interface Props {
   onNudge: (edge: number, delta: number) => void;
   /** A swap's "Fix capitals" switched on or off. */
   onFixCase: (fixCase: boolean) => void;
+  /** A close-up's "Also remove" switched on or off. */
+  onRemovePunct: (removePunct: boolean) => void;
+  /** A punctuation circle's mark picked. */
+  onPunctChar: (char: PunctuationChar) => void;
   /** Null when the change can't be dropped (nothing of it may be removed from the page). */
   onDrop: (() => void) | null;
   /** Drop's question, shown in place of the actions while it is asked. */
@@ -63,6 +68,8 @@ export default function ChangeSide({
   onRecognizeAgain,
   onNudge,
   onFixCase,
+  onRemovePunct,
+  onPunctChar,
   onDrop,
   dropConfirm,
 }: Props): React.JSX.Element {
@@ -97,6 +104,28 @@ export default function ChangeSide({
         />
       </View>
       {operation.swap ? <SwapDetail operation={operation} disabled={busy} onFixCase={onFixCase} /> : null}
+      {operation.join?.hyphen ? (
+        <Checkbox
+          label={`Also remove "${operation.join.hyphen}" (no space between)`}
+          checked={operation.join.removeHyphen}
+          onChange={onRemovePunct}
+          disabled={busy}
+        />
+      ) : null}
+      {operation.closeUp?.punct.text ? (
+        <Checkbox
+          label={`Also remove "${operation.closeUp.punct.text}"`}
+          checked={operation.closeUp.removePunct}
+          onChange={onRemovePunct}
+          disabled={busy}
+        />
+      ) : null}
+      {operation.punct ? (
+        <QuickPicks chosen={operation.punct.char} disabled={busy} onPick={onPunctChar} />
+      ) : pen && !editing && pen.text.trim().length > 0 && pen.text.trim().length <= 2 ? (
+        // Short recognized text is often punctuation misread: one tap sets it (fine-marks §9.7).
+        <QuickPicks chosen={null} disabled={busy} onPick={onSaveText} />
+      ) : null}
       {operation.edgeView ? <EdgeControl view={operation.edgeView} disabled={busy} onNudge={onNudge} /> : null}
       {dropConfirm ?? (
         <View style={styles.buttons}>
@@ -221,6 +250,33 @@ function Handwriting({view}: {view: PenEditView}): React.JSX.Element {
   return (
     <View style={[styles.picture, styles.noPicture]}>
       <Text style={styles.hint}>{strokes === undefined ? 'Reading…' : 'No picture kept.'}</Text>
+    </View>
+  );
+}
+
+/** One button per punctuation mark: a tap sets it (technical-design-fine-marks.md §9.7). */
+function QuickPicks({
+  chosen,
+  disabled,
+  onPick,
+}: {
+  chosen: PunctuationChar | null;
+  disabled: boolean;
+  onPick: (char: PunctuationChar) => void;
+}): React.JSX.Element {
+  return (
+    <View style={styles.buttons}>
+      {PUNCTUATION_CHARS.map(char => (
+        <PillButton
+          key={char}
+          size="small"
+          label={char}
+          accessibilityLabel={`Use ${char}`}
+          primary={char === chosen}
+          onPress={() => onPick(char)}
+          disabled={disabled}
+        />
+      ))}
     </View>
   );
 }

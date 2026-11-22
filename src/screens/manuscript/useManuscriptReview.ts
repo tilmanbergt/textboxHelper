@@ -19,6 +19,7 @@ import {
 import {forgetPages, openCachedNote} from '../../actions/manuscriptCache';
 import {currentPenStates, readMarkerPage, type MarkerPageRead} from '../../actions/markerPageAnalysis';
 import {
+  placePenEditHere,
   resetRecognition,
   setPenEditCorrection,
   setPenEditEdges,
@@ -33,7 +34,8 @@ import {
   type ManuscriptView,
   type PageReview,
 } from '../../domain/manuscriptPages';
-import {assembleMarkerPreview, type SwapOptions} from '../../domain/markerAssembly';
+import {assembleMarkerPreview, type RowOptions} from '../../domain/markerAssembly';
+import type {PunctuationChar} from '../../domain/punctMark';
 import type {EditMarkerCalibration, PenTextState, RecognizedEditOperation} from '../../domain/markerTypes';
 import {fileNameOf, userMessage} from '../../domain/userMessage';
 import {updateSettings} from '../../storage/settingsFile';
@@ -64,6 +66,12 @@ export interface ManuscriptReview {
   nudge: (operation: RecognizedEditOperation, edge: number, delta: number) => void;
   /** A swap's "Fix capitals" on or off (kept while the review is open). */
   setFixCase: (operationId: string, fixCase: boolean) => void;
+  /** A close-up's "Also remove" punctuation on or off (kept while the review is open). */
+  setRemovePunct: (operationId: string, removePunct: boolean) => void;
+  /** A punctuation circle's mark, picked by the user (kept while the review is open). */
+  setPunctChar: (operationId: string, char: PunctuationChar) => void;
+  /** "Insert right here": tagged text without a usable mark goes in where its handwriting starts. */
+  placeHere: (page: number, id: string) => void;
   loading: boolean;
   busy: boolean;
   applied: boolean;
@@ -103,7 +111,7 @@ export function useManuscriptReview(): ManuscriptReview {
   const [calibration, setCalibration] = useState<EditMarkerCalibration>(getEditMarkerCalibration);
   // Edge nudges of plain marks: kept while the review is open (a pen edit's go with it).
   const [plainShifts, setPlainShifts] = useState<Record<string, EdgeShift>>({});
-  const [swapOptions, setSwapOptions] = useState<SwapOptions>({});
+  const [swapOptions, setSwapOptions] = useState<RowOptions>({});
   const noteRef = useRef<NoteInfo | null>(null);
 
   /** Reads pages one after the other; each shows in the list as soon as it is read. */
@@ -495,13 +503,46 @@ export function useManuscriptReview(): ManuscriptReview {
     [busy, loading, pages, read, stop],
   );
 
-  const setFixCase = useCallback(
-    (operationId: string, fixCase: boolean) => {
+  const setRowOption = useCallback(
+    (operationId: string, change: RowOptions[string]) => {
       if (!busy && !applied) {
-        setSwapOptions(current => ({...current, [operationId]: {fixCase}}));
+        setSwapOptions(current => ({...current, [operationId]: {...current[operationId], ...change}}));
       }
     },
     [applied, busy],
+  );
+  const setFixCase = useCallback(
+    (operationId: string, fixCase: boolean) => setRowOption(operationId, {fixCase}),
+    [setRowOption],
+  );
+  const setRemovePunct = useCallback(
+    (operationId: string, removePunct: boolean) => setRowOption(operationId, {removePunct}),
+    [setRowOption],
+  );
+  const setPunctChar = useCallback(
+    (operationId: string, char: PunctuationChar) => setRowOption(operationId, {char}),
+    [setRowOption],
+  );
+
+  const placeHere = useCallback(
+    (page: number, id: string) => {
+      if (loading || busy || applied) {
+        return;
+      }
+      setBusy(true);
+      stop()
+        .then(() => placePenEditHere(id))
+        .then(async () => {
+          forgetPages(noteRef.current?.notePath ?? '', [page]);
+          await read([page], true);
+        })
+        .catch(error => {
+          console.warn('[Manuscript] insert here not stored', String(error));
+          setStatus({kind: 'error', text: 'Could not store "Insert right here". Please try again.'});
+        })
+        .finally(() => setBusy(false));
+    },
+    [applied, busy, loading, read, stop],
   );
 
   return {
@@ -514,6 +555,9 @@ export function useManuscriptReview(): ManuscriptReview {
     drop,
     nudge,
     setFixCase,
+    setRemovePunct,
+    setPunctChar,
+    placeHere,
     loading,
     busy,
     applied,

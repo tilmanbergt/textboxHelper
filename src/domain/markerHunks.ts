@@ -26,6 +26,12 @@ export function changeLabel(operation: RecognizedEditOperation): string {
       return 'Space';
     case 'swap':
       return 'Swap';
+    case 'closeUp':
+      return 'Close up';
+    case 'join':
+      return 'Join paragraphs';
+    case 'punct':
+      return operation.punct?.char ? `Insert "${operation.punct.char}"` : 'Insert punctuation';
     case 'replace':
       return number !== undefined ? `Replace ${number}` : 'Replace';
     default:
@@ -35,12 +41,17 @@ export function changeLabel(operation: RecognizedEditOperation): string {
 
 export function changeMeta(operation: RecognizedEditOperation): string {
   const place =
-    operation.kind === 'insert' || operation.kind === 'split' || operation.kind === 'space'
+    operation.kind === 'insert' ||
+    operation.kind === 'split' ||
+    operation.kind === 'space' ||
+    operation.kind === 'closeUp' ||
+    operation.kind === 'punct' ||
+    operation.kind === 'join'
       ? operation.detail
       : `Textbox ${operation.targetTextboxNumInPage} · line ${operation.lineIndex + 1}`;
   return [
     place,
-    operation.uncertain ? 'Check place' : null,
+    operation.uncertain ? (operation.kind === 'punct' ? 'Check' : 'Check place') : null,
     operation.insideSwap ? 'inside a swap' : null,
     operation.swap?.waitingFor?.length ? 'waiting' : null,
   ]

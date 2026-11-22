@@ -33,7 +33,7 @@ import {requestEinkRefresh} from '../utils/screenRefresh';
 const PICTURE_DP_PER_PX = 0.5;
 const PICTURE_MAX_WIDTH = 480;
 /** The overview's icon box; icons are scaled into it. */
-const ICON_BOX = {width: 150, height: 52};
+const ICON_BOX = {width: 150, height: 42};
 
 const ENTRIES_BY_ID = new Map(MARK_HELP.map(entry => [entry.id, entry]));
 
