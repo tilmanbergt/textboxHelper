@@ -103,7 +103,7 @@ exact places (`domain/exactBounds.ts`), a slash one letter (`domain/slashMark.ts
 or over a gap closes it, two arcs close a gap at a line end or join two paragraphs
 (`domain/closeUpMark.ts`, `domain/paragraphJoin.ts`), and a ∧ or V with a filled circle between its
 legs puts in the punctuation drawn in it (`domain/punctMark.ts` reads it, `domain/punctText.ts`
-places it by its type; the handwriting recognizer is asked only when the plugin can't read it).
+places it by its type; what the plugin can't read waits for the user's pick in the review).
 Freehand strokes and the Supernote straight-line tool are both recognized.
 `supernote/markerStrokeRead.ts` reads the strokes; `actions/markerMeasure.ts` measures each
 textbox once per review and locks textboxes whose font can't be read (their marks are ignored);

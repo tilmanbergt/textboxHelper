@@ -30,7 +30,6 @@ import type {
 import {coveredSpan} from '../domain/edgeShift';
 import {bracketSnippet, exactSpan} from '../domain/exactBounds';
 import {isReplaceLoopRect} from '../domain/markerStrokes';
-import {recognizeStrokes} from '../supernote/strokeRecognition';
 import {readPageSizeForDiagnostics} from '../supernote/noteElements';
 import type {PenEditEntry} from '../domain/penEditModel';
 import {parsePenEditUserData} from '../domain/penEditTags';
@@ -212,7 +211,6 @@ async function analyzePage(
     () =>
       findShapeMarks(markers, strokeStatsByUuid, pageTextboxes, measurer, {
         strikeOwner: pen.strikeOwner,
-        recognizeCircle: strokes => recognizeCircle(notePath, page, strokes),
       }),
     {page},
   );
@@ -693,25 +691,4 @@ function usedModifiersList(
 async function pageWidthOf(notePath: string, page: number): Promise<number> {
   const size = await readPageSizeForDiagnostics(notePath, page);
   return typeof size === 'string' ? 0 : size.width;
-}
-
-/**
- * Asks the handwriting recognizer what a punctuation circle holds (technical-design-fine-marks.md
- * §9.3): the strokes are rebuilt and recognized like a pen edit's. Null when it fails.
- */
-async function recognizeCircle(notePath: string, page: number, strokes: Array<Array<{x: number; y: number}>>): Promise<string | null> {
-  const size = await readPageSizeForDiagnostics(notePath, page);
-  const result = await recognizeStrokes(
-    strokes.map(points => ({
-      thickness: null,
-      penColor: null,
-      penType: null,
-      layerNum: 0,
-      points: points.flatMap(point => [point.x, point.y]),
-      pressures: [],
-    })),
-    typeof size === 'string' ? null : size,
-    page,
-  );
-  return result.error ? null : result.text;
 }

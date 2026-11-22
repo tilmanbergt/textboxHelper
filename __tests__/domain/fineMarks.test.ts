@@ -4,7 +4,6 @@ import {locateHere, type HereTextbox} from '../../src/domain/insertHere';
 import {applyTextMutationRanges, withSpacesKept} from '../../src/domain/markerText';
 import {analyzeCaret, type CaretTextbox, type Point} from '../../src/domain/penEditCaret';
 import {
-  acceptRecognized,
   analyzeCircle,
   findCaretCircle,
   readCircle,
@@ -244,15 +243,6 @@ describe('punctuation circle (§9)', () => {
     expect(read(path([200, 76], [201, 77]), path([200, 88], [201, 89]))).toEqual({char: ':', tie: false});
     expect(read(path([200, 74], [201, 75]), path([201, 84], [199, 93]))).toEqual({char: ';', tie: false});
     expect(read(path([190, 75], [210, 90]), path([210, 75], [190, 90]))).toEqual({char: null, tie: false});
-  });
-
-  it('takes only one punctuation mark from the recognizer', () => {
-    expect(acceptRecognized(' ? ')).toBe('?');
-    expect(acceptRecognized('’')).toBe("'");
-    expect(acceptRecognized('l')).toBeNull();
-    expect(acceptRecognized('1')).toBeNull();
-    expect(acceptRecognized(',,')).toBeNull();
-    expect(acceptRecognized('')).toBeNull();
   });
 
   it('places punctuation by its type (§2.5 examples)', () => {

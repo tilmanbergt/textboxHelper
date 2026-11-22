@@ -30,7 +30,7 @@ import {bracketSnippet} from '../domain/exactBounds';
 import {isReplaceLoopRect, MAX_MARKER_HEIGHT_RATIO, MIN_MARKER_WIDTH} from '../domain/markerStrokes';
 import {formatOperationSnippet} from '../domain/markerText';
 import type {PenEditEntry} from '../domain/penEditModel';
-import {acceptRecognized, findCaretCircle, readCircle, type PlainStroke} from '../domain/punctMark';
+import {findCaretCircle, readCircle, type PlainStroke} from '../domain/punctMark';
 import {trailingDash} from '../domain/paragraphJoin';
 import {breakCommaTie} from '../domain/punctText';
 import {analyzeSlash, placeSlash} from '../domain/slashMark';
@@ -81,8 +81,6 @@ export type ShapeMarkResult = {
 export type ShapeMarkOptions = {
   /** The tagged replacement whose mark this stroke is, if any (a slash with text after it). */
   strikeOwner?: (element: Element) => PenEditEntry | undefined;
-  /** Asks the handwriting recognizer about a circle the plugin couldn't read; null when it fails. */
-  recognizeCircle?: (strokes: Point[][]) => Promise<string | null>;
 };
 
 /** A strike-like stroke (long and flat), which a vertical crossing it belongs to. */
@@ -168,14 +166,11 @@ export async function findShapeMarks(
       );
       return;
     }
+    // Read by the plugin only: a circle it can't read waits for the user's pick in the review
+    // (no recognizer, which would slow the page down; technical-design-fine-marks.md As built).
     const reading = readCircle(circle.shape, circle.contents);
-    let char = reading.tie ? breakCommaTie(target.mode) : reading.char;
-    let source: 'own' | 'recognizer' | 'none' = char ? 'own' : 'none';
-    if (!char && options.recognizeCircle) {
-      const recognized = await options.recognizeCircle(circle.contents.map(item => item.points));
-      char = acceptRecognized(recognized ?? '');
-      source = char ? 'recognizer' : 'none';
-    }
+    const char = reading.tie ? breakCommaTie(target.mode) : reading.char;
+    const source: 'own' | 'none' = char ? 'own' : 'none';
     logEditMarker('punctuationMark', {
       markerNums: parts.map(part => part.marker.numInPage),
       tip: caret.shape.tip,

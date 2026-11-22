@@ -113,7 +113,7 @@ export function findCaretCircle(caret: CaretShape, strokes: PlainStroke[]): Care
   return {circle: found.stroke, shape, contents};
 }
 
-/** The punctuation read in a circle in v1, and `?` from the recognizer. */
+/** The punctuation a circle can hold: the plugin reads all but `?`, which is a quick pick. */
 export const PUNCTUATION_CHARS = [',', ';', '.', ':', "'", '-', '?'] as const;
 export type PunctuationChar = (typeof PUNCTUATION_CHARS)[number];
 
@@ -126,7 +126,7 @@ type Part = {size: number; width: number; height: number; dy: number; dx: number
  * Reads the strokes in a circle (technical-design-fine-marks.md §9.2), every measure relative to
  * the circle: a tiny stroke is a dot; a short steep stroke a comma in the lower half or an
  * apostrophe in the upper half; a flat one a hyphen; two dots one above the other a colon; a dot
- * above a comma a semicolon. Anything else is not read (null): the recognizer is asked.
+ * above a comma a semicolon. Anything else is not read (null): the row waits for the user's pick.
  */
 export function readCircle(circle: Circle, contents: PlainStroke[]): CircleReading {
   const r = Math.max(1, circle.radius);
@@ -178,14 +178,4 @@ export function readCircle(circle: Circle, contents: PlainStroke[]): CircleReadi
     }
   }
   return none;
-}
-
-/**
- * The recognizer's answer for a circle, if it is one punctuation mark of the set: typographic
- * apostrophes count as the straight one. Letters, digits, several characters or nothing: null,
- * so a misread comma can never put a letter into the text.
- */
-export function acceptRecognized(text: string): PunctuationChar | null {
-  const trimmed = text.trim().replace(/[’‘`´]/g, "'").replace(/[‐‑–—]/g, '-');
-  return (PUNCTUATION_CHARS as readonly string[]).includes(trimmed) ? (trimmed as PunctuationChar) : null;
 }

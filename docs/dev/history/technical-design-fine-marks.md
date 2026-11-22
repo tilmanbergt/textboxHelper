@@ -20,9 +20,9 @@ character edges, shape-mark step), `technical-design-paragraph-marks.md` (gap in
   of a paragraph and before the first word of the paragraph directly below, the two arcs join the
   paragraphs (one space between; none when the dash is removed).
 - **Punctuation circle:** a ∧ or V with a filled circle between its legs puts in the mark drawn
-  inside, with no tagging. The plugin reads it from a small set (`, ; . : ' -`); when unsure the
-  recognizer is asked; only one punctuation mark is accepted, never a letter — otherwise the row
-  waits for a quick pick. `?` comes only from the recognizer. Quotes, `!`, brackets and the
+  inside, with no tagging. The plugin reads it from a small set (`, ; . : ' -`); what it can't
+  read waits for a quick pick (also `?`), so a letter never goes in. (Asking the handwriting
+  recognizer was planned as a fallback; see As built.) Quotes, `!`, brackets and the
   typography settings (quotation-mark style, apostrophe) are a later step (P2).
 - **Circles on marks:** empty, the number goes in it (at a vertical, a slash, between a caret's
   legs); filled, it is content (the punctuation circle).
@@ -46,7 +46,7 @@ character edges, shape-mark step), `technical-design-paragraph-marks.md` (gap in
 | `slashMark.ts` | Slash shape (short, steep, straight), its rect test for the look-back, its place on a measured line. |
 | `closeUpMark.ts` | Arc shape (flat chord, one-sided sag, the bend spread out — not a caret's tip), its line by its opening, the gap / end piece / start piece it marks, the punctuation the toggle may take. |
 | `paragraphJoin.ts` | The joined text of two paragraphs, the dash the toggle may take. |
-| `punctMark.ts` | The circle in a caret's opening and the strokes inside it, the plugin's reading of them, which recognizer answers are accepted. |
+| `punctMark.ts` | The circle in a caret's opening and the strokes inside it, the plugin's reading of them. |
 | `punctText.ts` | Where a punctuation mark goes and with which spaces, by its type. |
 | `insertHere.ts` | Where "Insert right here" puts text: a gap, a new textbox, or unclear. |
 | `markerText.ts` | `withSpacesKept`: after a range that removed a space, one is put back where two words would meet (ranges marked `joins` are exempt). |
@@ -59,7 +59,7 @@ character edges, shape-mark step), `technical-design-paragraph-marks.md` (gap in
 - `actions/shapeMarks.ts`: after the paragraph marks, each ∧/V is checked for a circle between its
   legs (filled: punctuation; empty: an ordinary caret) before the space mark's cross; after the
   swap come the close-up arcs (pieces paired into wrap close-ups and joins) and the slashes (with
-  their own number circle). Unclear circles are recognized during the page analysis.
+  their own number circle). A circle the plugin can't read waits for the user's pick.
 - `actions/markerPageAnalysis.ts`: two verticals give an exact range (character edges of the
   struck words); a strike with verticals and no text deletes exactly; the user's number circle at
   the right vertical is consumed with the mark.
@@ -87,7 +87,7 @@ punctuation picks and refusals, joins, new textbox). The help-page tests follow 
 4. Close-up ‿ and ⁀; over two gaps (ignored); "Also remove"; two arcs at a line wrap; join of two
    paragraphs, with a hyphen.
 5. Punctuation circle: each of `, ; . : ' -` in a V and a ∧; a letter in the circle (Check, not
-   applied); `?` (recognizer); replace "," by ";" (slash + circle).
+   applied); `?` by quick pick; replace "," by ";" (slash + circle).
 6. Insert right here from the card and from "Needs attention": between paragraphs, overlapping a
    little, over text, beside, on an empty area (new textbox).
 7. Tag right after an arc (not a caret), after a slash (a replacement), after a punctuation circle
@@ -104,8 +104,10 @@ Differences from the project design, decided while building:
   `( [ {`. It does not touch `) ] } »`; left as it is.
 - **The plugin's ring for two verticals** stays where it was (centred above the verticals); the
   slash's ring sits above its top.
-- **Recognizer for unclear circles** runs inside the page analysis (one call per unclear circle),
-  not through the pen-edit queue: these strokes have no stored entry.
+- **No recognizer for unclear circles** (Tilman): asking it while the page is read would slow the
+  page down. A circle the plugin can't read is a "Check" row that waits for a quick pick; `?` is
+  only a quick pick. If the device test shows many unread circles, the plugin's own reading is
+  tuned first; recognizing in the background (like tagged text) is the later option.
 - **Comma–apostrophe tie:** the place alone decides (between letters → `'`, else `,`); "after a
   word ending in s" was dropped ("Yes, I" is far more common). The row is marked Check either way.
 - **Slash in the look-back** only when it is the newest stroke (or right before its own circle),

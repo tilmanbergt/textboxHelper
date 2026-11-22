@@ -60,14 +60,13 @@ export type CloseUpInfo = {
 
 /**
  * A punctuation circle: where its caret points, and what was read in it. `char` null: not read
- * (the row waits for the user's pick). 'own': the plugin's reading; 'recognizer': the handwriting
- * recognizer's; 'picked': the user's quick pick.
+ * (the row waits for the user's pick). 'own': the plugin's reading; 'picked': the user's quick pick.
  */
 export type PunctInfo = {
   offset: number;
   mode: CaretInsertMode;
   char: PunctuationChar | null;
-  source: 'own' | 'recognizer' | 'picked' | 'none';
+  source: 'own' | 'picked' | 'none';
   /** The plugin couldn't tell `,` from `'`; the place decided. */
   tie: boolean;
 };
