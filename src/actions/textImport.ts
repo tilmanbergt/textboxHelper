@@ -55,6 +55,7 @@ import {
   type ImportFile,
 } from './importLinking';
 import {folderName} from './folderLink';
+import {textEndPage} from './asideArea';
 import {getFontWarning, measureTextboxHeight, resetFontWarnings} from '../supernote/textboxMetrics';
 
 /**
@@ -261,7 +262,7 @@ function requestPaths(request: ImportRequest): string[] {
 type ImportTarget = {
   links: NoteLinks | null;
   linked: boolean;
-  /** Set when adding to a linked note: the note's last page, the import goes after it. */
+  /** Set when adding to a linked note: the last page of its text (before the aside area), the import goes after it. */
   lastPage: number | null;
 };
 
@@ -282,12 +283,12 @@ async function importTarget(request: ImportRequest, notePath: string): Promise<I
     );
   }
   const {pageCount} = await readNoteInfo();
-  return {links, linked: true, lastPage: pageCount - 1};
+  return {links, linked: true, lastPage: await textEndPage(notePath, pageCount)};
 }
 
 /**
  * The settings a linked import uses: linked, in paragraph boxes; into a note that has linked files
- * already, after its last page.
+ * already, after the last page of its text.
  */
 function effectiveSettings(settings: TextboxImportSettings, target: ImportTarget): TextboxImportSettings {
   if (!target.linked) {

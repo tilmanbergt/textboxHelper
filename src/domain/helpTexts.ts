@@ -84,3 +84,17 @@ Each textbox gets a class from its font size and style: heading, paragraph, comm
 ## Pages
 This page, the whole note, or a page range. The list on the right updates by itself after every change.`;
 
+
+/** A short "nothing here" with what the place is for (ui/EmptyState.tsx). */
+export type EmptyText = {title: string; text: string};
+
+export const NO_MARKS: EmptyText = {
+  title: 'No edit marks on this page.',
+  text: 'Delete: draw a line through the words. Replace: add a small loop at its end, write the new words right after it, lasso them and tap the pen-text button. ? shows every mark.',
+};
+
+/** The Outline's Set aside view with nothing set aside (technical-design-aside-area.md §5.3). */
+export const NOTHING_SET_ASIDE: EmptyText = {
+  title: 'Nothing set aside yet.',
+  text: 'Material you set aside stays in this note and is never written to your files. Set aside a paragraph or a section from Show › All: it moves to pages at the end of the note, under the heading “Set aside”. Add your own headings there on the page to sort it. Bring something back with Move back, or move it with the lasso above the “Set aside” heading.',
+};

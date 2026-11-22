@@ -16,4 +16,6 @@ export const GLYPH = {
   dot: '·',
   /** A linked file (an emoji may be missing from the device font). */
   file: '§',
+  /** The aside area (technical-design-aside-area.md §5.2); still to be checked on the device. */
+  aside: '▤',
 } as const;

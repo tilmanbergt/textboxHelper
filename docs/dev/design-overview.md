@@ -57,7 +57,7 @@ check fail if the SDK types drift away from them.
 it opens one screen per button, keyed by the press,
 so a screen opened again starts fresh. The button listener subscribes once and calls the latest
 router through a ref. Screens are built on `ui/ScreenFrame.tsx` and own their state in a hook next
-to them: `screens/manuscript/` (the Manuscript card: `ReviewTab` with its page strip and side bar `ChangeSide`, the Outline in `outline/`, the Files tab in `files/` and Settings in `settings/`; the page states are `domain/manuscriptPages.ts`; the outline is `domain/outlineModel.ts` (what a block is: a file's divider, a heading by its `#`s — `domain/headingText.ts` — or a paragraph; statuses in `storage/blockStatusStore.ts`, block tags `domain/blockTag.ts`), what its panes show `domain/outlineContents.ts` (the Contents, each entry's own paragraphs, the filter, the moves offered), planned moves, levels, set-asides and deletes `domain/outlinePlan.ts`, their new places `domain/outlineLayout.ts`, and `actions/outlineApply.ts` checks and writes them; the tab (`outline/OutlineTab.tsx`) renders `outline/useOutline.ts` (data and plan) through `outline/useOutlineView.ts` (filter, open entry, panel subject, Move to) in `ContentsColumn`, `ParagraphList` and `DetailsPanel`, with the shared light controls `ui/TextChoices.tsx`, `ui/ActionBar.tsx`, `ui/TextLink.tsx` and the symbols in `ui/glyphs.ts`; what was read is kept in memory by `actions/manuscriptCache.ts` with a page fingerprint, `domain/pageFingerprint.ts`, and checked again in the background by `usePageChecks.ts`; timings are `utils/perf.ts`, saved by `actions/timingsExport.ts`), `screens/tools/` (the lasso screen,
+to them: `screens/manuscript/` (the Manuscript card: `ReviewTab` with its page strip and side bar `ChangeSide`, the Outline in `outline/`, the Files tab in `files/` and Settings in `settings/`; the page states are `domain/manuscriptPages.ts`; the outline is `domain/outlineModel.ts` (what a block is: a file's divider, a heading by its `#`s — `domain/headingText.ts` — or a paragraph; statuses in `storage/blockStatusStore.ts`, block tags `domain/blockTag.ts`), what its panes show `domain/outlineContents.ts` (the Contents, each entry's own paragraphs, the filter, the moves offered), planned moves, levels, set-asides and deletes `domain/outlinePlan.ts`, their new places `domain/outlineLayout.ts`, and `actions/outlineApply.ts` checks and writes them; the tab (`outline/OutlineTab.tsx`) renders `outline/useOutline.ts` (data and plan) through `outline/useOutlineView.ts` (filter or Set aside view, open entry, panel subject, Move to and Move back) in `ContentsColumn`, `ParagraphList` and `DetailsPanel` (its actions from `domain/outlineActions.ts`), with the shared light controls `ui/TextChoices.tsx`, `ui/ActionBar.tsx`, `ui/TextLink.tsx`, `ui/EmptyState.tsx` and the symbols in `ui/glyphs.ts`; what was read is kept in memory by `actions/manuscriptCache.ts` with a page fingerprint, `domain/pageFingerprint.ts`, and checked again in the background by `usePageChecks.ts`; timings are `utils/perf.ts`, saved by `actions/timingsExport.ts`), `screens/tools/` (the lasso screen,
 its Details with "Log All Textboxes"),
 `screens/import/` (Import with the page drawing) and `screens/export/` (Export), both opened as
 sub-screens from the Manuscript card's Files tab. Every sub-screen (Settings, Import, Export) is
@@ -166,7 +166,23 @@ and writes every file that changed here after an Apply ("Also update") or from "
 scan, one question about deleted protected blocks for all files, the check that a file didn't
 change outside (fingerprint in its record), then `storage/sourceFile.ts` writes through the
 host's copy or directly and reads it back. A file that can't be written is named; the others are
-written. A block the Outline sets aside gets `a` in its tag and is left out of the file.
+written.
+
+**The aside area** (`domain/noteRegions.ts`, the one place that knows where it starts): the end of
+the note from the aside divider on — a textbox "Set aside" tagged `k:'a'` with a NOTE title of
+ours. Position decides: nothing below the divider is in any file (`fileSegments.ts` cuts the last
+file there; a file's blocks found there count as set aside in `sourceExport.ts`), nothing there is
+exported (`exportClassification.ts` `textPartOf`), and a textbox moved above it by hand is text
+again. Notes set aside before the divider existed are read by their `a` tags until an Outline
+apply gives them a divider. In the Outline the divider is a block of its own kind that starts a
+section like a file's and never moves or goes; `outlinePlan.ts` gives every planned block its
+part by its planned place, `outlineContents.ts` makes the area the last top entry with the
+headings typed in it, and Show › Set aside (`OutlineFilter` `'aside'`) shows only it — the other
+choices only the text. Which actions a block gets there (Move back instead of Set aside) is
+`domain/outlineActions.ts`. `outlineLayout.ts` `layoutNote` lays the text and the area out apart:
+text that grows gets pages inserted before the area; `actions/asideArea.ts` writes a new divider
+(from the Outline's apply and from Clean up) and tells the import where the text ends, so an added
+file goes before the area.
 
 **Folder mode:** "Whole folder" on the Import screen binds the chosen file's folder
 (`screens/import/FolderSetupScreen.tsx`: which files, ordered or not). The note record then holds
@@ -174,7 +190,7 @@ the folder (`LinkedFolder`: path, ordered, files left out, the index as last wri
 `actions/folderLink.ts` reads the folder for the setup, its state on the card (new files, files
 left out, `index.txt` in sync / to be written / changed in Obsidian) and writes `index.txt`, a
 plain `[[name]]` list in the note's order, after the files on Update. New files are added from
-the Files tab on a new page after the last one (`textImport.ts` `addLinkedFiles`, linking in
+the Files tab on a new page after the text's last page, before the aside area (`textImport.ts` `addLinkedFiles`, linking in
 `actions/importLinking.ts`). In the Outline a file's divider is a block of its own kind: it moves
 with its whole file (`outlinePlan.ts` `sectionOf` ranks a divider above `#`, `##`, `###`) and is
 never set aside or deleted alone.
@@ -189,7 +205,7 @@ it through `buildOutline`'s `recordLevel`).
 
 Reads the note context, scans the textboxes of the current page, the whole note or a page range,
 classifies them (heading, paragraph, comment, meta) by configurable rules
-(`domain/exportConfig.ts`, `domain/exportClassification.ts`), and writes a DOCX file (library
+(`domain/exportConfig.ts`, `domain/exportClassification.ts`; the aside area is left out), and writes a DOCX file (library
 `docx`) to the EXPORT folder through a temporary file. The Export screen scans by itself on open
 and 500 ms after the scope, page range or rules change.
 

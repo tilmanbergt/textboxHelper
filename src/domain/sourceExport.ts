@@ -15,7 +15,8 @@
  *   its removal (`removedProtected`); the write asks first (`pendingRemoval`).
  * - Between two blocks that were neighbours in the file and are both untouched, the original text
  *   between them is kept; elsewhere one blank line.
- * - A block the Outline set aside (`a` in its tag) is left out, and doesn't count as missing.
+ * - A block in the aside area (technical-design-aside-area.md) is not in the segment; it counts as
+ *   set aside, not as missing (`CrossingOptions.aside`).
  * - A textbox of another linked file in this file's segment is held back until the user confirms
  *   the move (`CrossingOptions`); then it is written here and is missing in its own file.
  */
@@ -82,6 +83,8 @@ export type CrossingOptions = {
   elsewhere?: Set<number>;
   /** The other files' records, to write a moved block as its own file did (heading, placeholder). */
   lookup?: Map<string, RecordPart>;
+  /** This file's blocks in the aside area: left out, counted as set aside, not missing. */
+  aside?: Set<number>;
 };
 
 type Entry = {
@@ -104,7 +107,7 @@ export function normalizeForCompare(text: string): string {
 
 function ownTag(item: SourceItem, sourceId: string): BlockTag | null {
   const tag = item.tag;
-  return tag && tag.s === sourceId && Number.isInteger(tag.i) && !tag.a ? tag : null;
+  return tag && tag.s === sourceId && Number.isInteger(tag.i) ? tag : null;
 }
 
 /**
@@ -163,10 +166,9 @@ export function regenerateSource(
   const crossings: Crossing[] = [];
   const adoptedIds: string[] = [];
   const adopted = new Set(record.adopted ?? []);
-  // Blocks set aside count as neither written nor missing.
-  const aside = new Set(
-    items.filter(item => item.tag?.s === sourceId && item.tag.a && Number.isInteger(item.tag.i)).map(item => item.tag?.i as number),
-  );
+  // Blocks in the aside area count as neither written nor missing; a copy still in the text wins.
+  const inText = new Set(items.map(item => ownTag(item, sourceId)?.i).filter((index): index is number => index !== undefined));
+  const aside = new Set([...(options.aside ?? [])].filter(index => !inText.has(index)));
   counts.setAside = aside.size;
   const warnings: string[] = [];
   const entries: Entry[] = [];
@@ -176,10 +178,6 @@ export function regenerateSource(
 
   for (let at = 0; at < inRange.length; at++) {
     const item = inRange[at];
-    // A block set aside by the Outline is left out, whichever file it came from.
-    if (item.tag?.s && item.tag.a) {
-      continue;
-    }
     if (item.tag?.s && item.tag.s !== sourceId) {
       const tag = item.tag;
       const from = options.lookup?.get(tag.s as string);

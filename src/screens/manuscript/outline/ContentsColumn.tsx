@@ -3,11 +3,12 @@
  * indented by depth, one line each. The open entry is filled black; ✎ n counts edits waiting in its
  * own text; planned changes show as a short mark ("was #", "set aside"); with a filter, entries
  * without matches are grey and their unmatched subheadings folded in ("▸ n"). In Move to mode each
- * entry the moving block can go to has a → at its right edge; the current one says "here".
+ * entry the moving block can go to has a → at its right edge; the current one says "here". The
+ * aside area's entry carries its own mark (technical-design-aside-area.md §5.2).
  */
 import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
-import type {ContentsRow} from '../../../domain/outlineContents';
+import {ASIDE, type ContentsRow} from '../../../domain/outlineContents';
 import type {ChangeMark, MoveTarget, PlannedOrder} from '../../../domain/outlinePlan';
 import {GLYPH} from '../../../ui/glyphs';
 import PagedSection from '../../../ui/PagedSection';
@@ -26,7 +27,8 @@ interface Props {
   moveTarget: ((entryKey: string) => MoveTarget | null) | null;
   /** The moving block's own entry. */
   hereKey: string | null;
-  onMoveTo: (target: MoveTarget) => void;
+  /** The target and the entry it was chosen on. */
+  onMoveTo: (target: MoveTarget, entryKey: string) => void;
   header: string;
 }
 
@@ -59,7 +61,7 @@ export default function ContentsColumn({
             onPress={() => onOpen(row.entry.key)}
             moving={!!moveTarget}
             here={moveTarget !== null && row.entry.key === hereKey}
-            onMoveHere={target !== null ? () => onMoveTo(target) : null}
+            onMoveHere={target !== null ? () => onMoveTo(target, row.entry.key) : null}
           />
         );
       }}
@@ -95,22 +97,24 @@ function ContentsLine({
 }): React.JSX.Element {
   const {entry} = row;
   const hashes = entry.kind === 'heading' ? `${'#'.repeat(entry.level)} ` : '';
-  const pseudo = entry.kind === 'start' || entry.kind === 'orphans' || entry.kind === 'aside';
+  const pseudo = entry.kind === 'start' || entry.kind === 'orphans' || entry.key === ASIDE;
   const label = markLabel(mark, was);
   return (
     <View style={[styles.row, open && styles.open]}>
       <Pressable
         accessibilityRole="button"
         accessibilityState={{selected: open}}
-        accessibilityLabel={`${entry.kind === 'file' ? 'File' : entry.kind === 'heading' ? `Heading level ${entry.level}` : ''} ${entry.title}`}
+        accessibilityLabel={`${entry.kind === 'file' ? 'File' : entry.kind === 'heading' ? `Heading level ${entry.level}` : entry.kind === 'aside' ? 'Set aside area' : ''} ${entry.title}`}
         onPress={onPress}
         style={[styles.main, {paddingLeft: SPACING.sm + entry.depth * INDENT}]}>
-        {entry.kind === 'file' ? <Text style={[styles.file, open && styles.openText]}>{GLYPH.file} </Text> : null}
+        {entry.kind === 'file' || entry.kind === 'aside' ? (
+          <Text style={[styles.file, open && styles.openText]}>{entry.kind === 'file' ? GLYPH.file : GLYPH.aside} </Text>
+        ) : null}
         <Text
           numberOfLines={1}
           style={[
             styles.title,
-            (entry.kind === 'file' || entry.kind === 'heading') && styles.bold,
+            (entry.kind === 'file' || entry.kind === 'heading' || entry.kind === 'aside') && styles.bold,
             pseudo && styles.pseudo,
             (row.dim || mark === 'aside' || mark === 'delete') && styles.dim,
             mark === 'delete' && styles.struck,

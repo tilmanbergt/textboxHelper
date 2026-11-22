@@ -3,14 +3,14 @@
  * textbox's `userData`. It gives a textbox an identity that survives page reads, renumbering and
  * saves (uuids and numbers don't, host facts §3). The Outline uses `id` for a block's status; the
  * source link (technical-design-source-link.md) adds `s` (source), `i` (source block) and `p`
- * (piece); linked files (technical-design-linked-files.md) add the file divider and its title.
- * Pure.
+ * (piece); linked files (technical-design-linked-files.md) add the file divider and its title; the
+ * aside area (technical-design-aside-area.md) adds its divider. Pure.
  */
 
 const PREFIX = 'tbt:b:';
 
-export type BlockKind = 'x' | 'f' | 't';
-const KINDS: BlockKind[] = ['x', 'f', 't'];
+export type BlockKind = 'x' | 'f' | 't' | 'a';
+const KINDS: BlockKind[] = ['x', 'f', 't', 'a'];
 
 export type BlockTag = {
   v: 1;
@@ -24,13 +24,19 @@ export type BlockTag = {
   /**
    * "x": the placeholder of a protected block (technical-design-source-link.md §2.5).
    * "f": a file divider, the textbox with a linked file's name that starts its part of the note.
-   * "t": a NOTE title element of ours, over a file divider (technical-design-linked-files.md §1)
-   * or a heading (technical-design-outline-sections.md §4).
+   * "t": a NOTE title element of ours, over a file divider (technical-design-linked-files.md §1),
+   * a heading (technical-design-outline-sections.md §4) or the aside divider.
+   * "a": the aside divider, the textbox "Set aside" that starts the aside area: everything after it
+   * in reading order is in no file (technical-design-aside-area.md §1).
    */
   k?: BlockKind;
   /** A title of ours over a heading: the heading's level (1–3). */
   h?: number;
-  /** 1: set aside by the Outline; a linked file leaves it out (technical-design-source-link.md §2.4). */
+  /**
+   * On a title of ours: it is the aside divider's title. On a textbox: set aside by an older
+   * version, before the aside divider existed; such textboxes still mark where the aside area
+   * starts in a note without divider (`noteRegions.ts`). Not written on textboxes any more.
+   */
   a?: 1;
 };
 
@@ -79,25 +85,6 @@ export function newBlockId(now: Date, random: () => number = Math.random): strin
   return `b-${now.getTime().toString(36)}${tail}`;
 }
 
-/**
- * A textbox's `userData` with the block tag marked as set aside (or not): the Outline sets it when
- * it sets a block aside and clears it when it moves the block back. Anything that isn't a block
- * tag comes back unchanged.
- */
-export function withAside(userData: string | null, aside: boolean): string | null {
-  const tag = parseBlockTag(userData);
-  if (!tag || !!tag.a === aside) {
-    return userData;
-  }
-  const next: BlockTag = {...tag};
-  if (aside) {
-    next.a = 1;
-  } else {
-    delete next.a;
-  }
-  return formatBlockTag(next);
-}
-
 /** The tag of a linked file's divider textbox. */
 export function dividerTag(sourceId: string, now: Date): BlockTag {
   return {v: 1, id: newBlockId(now), s: sourceId, k: 'f'};
@@ -111,4 +98,14 @@ export function titleTag(sourceId: string, now: Date): BlockTag {
 /** The tag of the NOTE title element of ours over a heading of this level. */
 export function headingTitleTag(level: number, now: Date): BlockTag {
   return {v: 1, id: newBlockId(now), k: 't', h: level};
+}
+
+/** The tag of the aside divider textbox. */
+export function asideDividerTag(now: Date): BlockTag {
+  return {v: 1, id: newBlockId(now), k: 'a'};
+}
+
+/** The tag of the NOTE title element of ours over the aside divider. */
+export function asideTitleTag(now: Date): BlockTag {
+  return {v: 1, id: newBlockId(now), k: 't', a: 1};
 }

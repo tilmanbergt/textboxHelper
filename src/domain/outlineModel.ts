@@ -1,5 +1,6 @@
 import {parseBlockTag, type BlockTag} from './blockTag';
 import {headingLevelOf, type HeadingLevel} from './headingText';
+import {asideStart, isAsideDivider} from './noteRegions';
 import type {Rect} from './textboxModel';
 import type {ScannedTextBox} from './exportClassification';
 import type {PageReview} from './manuscriptPages';
@@ -13,7 +14,11 @@ import type {PageReview} from './manuscriptPages';
  * divider (its tag) starts the file's section; a text starting with `#`s is a heading of that
  * level; a heading of a note linked before the `#`s stayed on the page counts by its file's record;
  * a textbox under a NOTE title is a heading of the default level; everything else is a paragraph.
- * The textbox's look never decides. Pure.
+ * The textbox's look never decides.
+ *
+ * The aside area (technical-design-aside-area.md): its divider is a block of its own kind that
+ * starts a section like a file; every block from it on is `aside`, by position (`noteRegions.ts`).
+ * A file's divider there is just text: the area belongs to no file. Pure.
  */
 
 export type BlockStatus = 'open' | 'review' | 'final';
@@ -36,11 +41,11 @@ export type OutlineBlock = {
   /** Empty when the block is short enough to show whole in its first line. */
   lastLine: string;
   kind: OutlineBlockKind;
-  /** File 0, heading 1–3, paragraph null. */
+  /** File and the aside divider 0, heading 1–3, paragraph null. */
   level: number | null;
   /** A linked file's divider (its name under a title): the file's source id. */
   fileSource: string | null;
-  /** Set aside by the Outline earlier: on the pages at the end, left out of a linked file. */
+  /** In the aside area (the divider and everything after it): in no file, never written. */
   aside: boolean;
   /** A linked block: its file and block (`source:index`), so pieces of one block go together. */
   sourceBlock: string | null;
@@ -53,12 +58,15 @@ export type OutlineBlock = {
   pendingEdits: number | null;
 };
 
-export type OutlineBlockKind = 'file' | 'heading' | 'paragraph';
+export type OutlineBlockKind = 'file' | 'heading' | 'paragraph' | 'aside';
 
-/** What the Outline shows: everything, blocks with edits waiting, blocks not final yet. */
-export type OutlineFilter = 'all' | 'edits' | 'notFinal';
+/**
+ * What the Outline shows: the text — everything, blocks with edits waiting, blocks not final yet —
+ * or only the aside area (technical-design-aside-area.md §2.3); the two never mix.
+ */
+export type OutlineFilter = 'all' | 'edits' | 'notFinal' | 'aside';
 
-export const OUTLINE_FILTERS: OutlineFilter[] = ['all', 'edits', 'notFinal'];
+export const OUTLINE_FILTERS: OutlineFilter[] = ['all', 'edits', 'notFinal', 'aside'];
 
 /** How blocks are told apart beyond their text (technical-design-outline-sections.md §1.2). */
 export type OutlineOptions = {
@@ -119,12 +127,16 @@ export function buildOutline(
   options: OutlineOptions = DEFAULT_OUTLINE_OPTIONS,
 ): OutlineBlock[] {
   const pending = pendingByTextbox(pages);
-  return items.map(item => {
-    const tag = parseBlockTag(item.userData);
+  const tags = items.map(item => parseBlockTag(item.userData));
+  const asideFrom = asideStart(tags) ?? items.length;
+  return items.map((item, index) => {
+    const tag = tags[index];
     const tagId = tag?.id ?? null;
     const place = `${item.page}:${item.numInPage}`;
-    const fileSource = tag?.k === 'f' && tag.s ? tag.s : null;
-    const level = fileSource ? 0 : headingLevel(item, tag, options);
+    const aside = index >= asideFrom;
+    const divider = isAsideDivider(tag);
+    const fileSource = tag?.k === 'f' && tag.s && !aside ? tag.s : null;
+    const level = fileSource || divider ? 0 : headingLevel(item, tag, options);
     return {
       key: tagId ?? place,
       tagId,
@@ -134,10 +146,10 @@ export function buildOutline(
       text: item.text,
       firstLine: firstLineOf(item.text),
       lastLine: lastLineOf(item.text),
-      kind: fileSource ? 'file' : level ? 'heading' : 'paragraph',
-      level: fileSource ? 0 : level || null,
+      kind: divider ? 'aside' : fileSource ? 'file' : level ? 'heading' : 'paragraph',
+      level: fileSource || divider ? 0 : level || null,
       fileSource,
-      aside: tag?.a === 1,
+      aside,
       sourceBlock: tag?.s && tag.i !== undefined ? `${tag.s}:${tag.i}` : null,
       piece: tag?.p ?? 0,
       placeholder: tag?.k === 'x',
@@ -159,12 +171,15 @@ function headingLevel(item: ScannedTextBox, tag: BlockTag | null, options: Outli
   return item.underTitle ? options.defaultLevel : 0;
 }
 
-/** How deep a block starts a section: a file 0, a heading its level; a paragraph starts none. */
+/** How deep a block starts a section: a file and the aside divider 0, a heading its level; a paragraph none. */
 export function rank(block: Pick<OutlineBlock, 'kind' | 'level'>): number {
   return block.kind === 'paragraph' ? Infinity : block.level ?? Infinity;
 }
 
 export function matchesFilter(block: OutlineBlock, filter: OutlineFilter): boolean {
+  if (filter === 'aside' || block.aside) {
+    return filter === 'aside' && block.aside;
+  }
   if (filter === 'edits') {
     return (block.pendingEdits ?? 0) > 0;
   }

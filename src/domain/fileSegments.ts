@@ -6,8 +6,12 @@
  *
  * Notes linked before dividers existed have tags but no divider: when exactly one such file is on
  * the note, it owns the textboxes before the first divider that lie on the pages from its first to
- * its last tag, as such notes were read before. Pure.
+ * its last tag, as such notes were read before.
+ *
+ * The aside area (`noteRegions.ts`, technical-design-aside-area.md) ends the last file: nothing in
+ * it belongs to any file. Pure.
  */
+import {isAsideDivider, splitAtAside} from './noteRegions';
 import type {SourceItem} from './sourceExport';
 
 export type FileSegments = {
@@ -21,13 +25,16 @@ export type FileSegments = {
   withDivider: Set<string>;
   /** A second divider of a file is ignored (its textboxes count for the file before it). */
   extraDividers: number;
+  /** The textboxes of the aside area, its divider left out: in no file. */
+  aside: SourceItem[];
 };
 
 export function isDivider(item: SourceItem): boolean {
   return item.tag?.k === 'f' && !!item.tag.s;
 }
 
-export function segmentByFile(items: SourceItem[]): FileSegments {
+export function segmentByFile(all: SourceItem[]): FileSegments {
+  const {text: items, aside} = splitAtAside(all, item => item.tag);
   const bySource = new Map<string, SourceItem[]>();
   const order: string[] = [];
   const withDivider = new Set<string>();
@@ -74,7 +81,14 @@ export function segmentByFile(items: SourceItem[]): FileSegments {
     order.unshift(undivided[0]);
     orphans = before.filter(item => !owned(item));
   }
-  return {bySource, order, orphans: orphans.filter(item => item.text.trim()), withDivider, extraDividers};
+  return {
+    bySource,
+    order,
+    orphans: orphans.filter(item => item.text.trim()),
+    withDivider,
+    extraDividers,
+    aside: aside.filter(item => !isAsideDivider(item.tag)),
+  };
 }
 
 /**
@@ -88,7 +102,7 @@ export function heldElsewhere(segments: FileSegments, adopted: Map<string, strin
     const confirmed = new Set(adopted.get(owner) ?? []);
     for (const item of items) {
       const tag = item.tag;
-      if (!tag?.s || tag.s === owner || tag.a || !Number.isInteger(tag.i) || confirmed.has(tag.id)) {
+      if (!tag?.s || tag.s === owner || !Number.isInteger(tag.i) || confirmed.has(tag.id)) {
         continue;
       }
       const set = held.get(tag.s) ?? new Set<number>();
@@ -97,4 +111,19 @@ export function heldElsewhere(segments: FileSegments, adopted: Map<string, strin
     }
   }
   return held;
+}
+
+/** Each file's blocks in the aside area: source id → block indexes (they count as set aside). */
+export function asideBlocks(segments: FileSegments): Map<string, Set<number>> {
+  const result = new Map<string, Set<number>>();
+  for (const item of segments.aside) {
+    const tag = item.tag;
+    if (!tag?.s || !Number.isInteger(tag.i)) {
+      continue;
+    }
+    const set = result.get(tag.s) ?? new Set<number>();
+    set.add(tag.i as number);
+    result.set(tag.s, set);
+  }
+  return result;
 }
