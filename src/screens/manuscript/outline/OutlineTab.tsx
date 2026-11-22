@@ -117,14 +117,17 @@ export default function OutlineTab({outline, disabled, onReviewPage, onGoToPage}
         </View>
       ) : (
         <View style={styles.topLine}>
-          <TextChoices
-            caption="Show"
-            size="small"
-            choices={OUTLINE_FILTERS.map(key => ({key, label: FILTER_LABELS[key]}))}
-            value={view.filter}
-            onChange={view.setFilter}
-            ruleBefore="aside"
-          />
+          {/* The choices take the line's whole width, over both columns, before they wrap. */}
+          <View style={styles.showLine}>
+            <TextChoices
+              caption="Show"
+              size="small"
+              choices={OUTLINE_FILTERS.map(key => ({key, label: FILTER_LABELS[key]}))}
+              value={view.filter}
+              onChange={view.setFilter}
+              ruleBefore="aside"
+            />
+          </View>
         </View>
       )}
       <View style={styles.panes}>
@@ -214,6 +217,9 @@ function checkNote(outline: Outline): string {
 
 const styles = StyleSheet.create({
   tab: {
+    flex: 1,
+  },
+  showLine: {
     flex: 1,
   },
   topLine: {
