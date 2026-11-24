@@ -422,3 +422,73 @@ cases.
 - Wording of reasons (`domain/marks/reasons.ts`).
 - S1 + S2 are the large moves (≈ 1,500 lines change place). If a step gets too big, S1 is split
   into S1a (caret, slash, strike families) and S1b (swap, space, close-up, punct).
+
+### 13.1 Questions before S1 (found while starting S1; S0 is done)
+
+Places where the design and the code (`feature/mark-dialogue` after S0) disagree, or where S1
+needs a decision the design doesn't make. S1 and S2 wait for the answers.
+
+**Q1 — Swap pieces need a text line to be read at all.** §2.3 puts `swap.ts` into pass 1
+("strokes only") and §2.5 says shape refusals never happen in pass 2. But a swap piece is read
+*against a line's letters*: `pieceOnLine(points, letterZone(line, xHeight))`
+(`domain/swapMark.ts:140`, called per line at `:235`): which runs of the stroke are "above" and
+"below" and whether an upright "crosses the letters" are measured from that line's baseline and
+x-height. Without a textbox there is no zone, so pass 1 cannot tell a corner, a middle piece or
+a plain line from handwriting.
+- (a) Pass 1 reads only "may be a swap piece" (≥ 3 points, one or two flat runs, an upright at an
+  end, by the stroke's own size); pass 2 reads the piece against the line (`pieceOnLine`) and
+  pairs. Results stay the same; the real shape test of this one family sits in pass 2.
+- (b) A new text-free reading (the zone estimated from the stroke itself). Results change; needs
+  its own device test.
+- *Recommendation: (a)*, stated in §2.5 as the one exception.
+
+**Q2 — One rule for a replace mark's verticals and loop.** Today there are three:
+- Review: `isPotentialReplaceModifier` (`domain/markerStrokes.ts:242–255`) needs the vertical to
+  overlap the strike's *text line* by half its height and its centre within max(48, 0.45 × strike
+  width) of the strike's centre; pairs are chosen per textbox in text order
+  (`orderTextboxMarkerCandidates`, `actions/markerPageAnalysis.ts:404`). The loop: any loop
+  near the strike, nearest to its end.
+- Look-back: `crossesStrike` (`domain/penEditPairing.ts:80`): crosses the strike's middle
+  height, centre within a 15 % margin; no line, no centre-distance limit; the loop must be
+  written after the strike (`:160–161`).
+- Select mark: like the look-back, but up to two crossings without a pair-gap limit (`:354`),
+  any loop (`:350`), and a strike alone is a replace mark.
+Decision 4 ("one pass 1") needs one rule; any choice changes results of the other two callers
+beyond slashes (S1's only allowed golden change).
+- (a) Pass 1 uses the look-back rule (shape only); pass 2 adds the line-overlap check when it
+  places a `replaceVerticals` reading. The Review can then pair verticals the line check
+  refuses today only if they fail in pass 2, so its results stay; the look-back and Select mark
+  stay as they are; the Review's centre-distance limit is dropped (a golden change to list).
+- (b) Pass 1 uses the Review's rule without the line; the look-back and Select mark get stricter.
+- And: does Select mark keep its relaxations (one vertical, a strike alone = replace mark), as a
+  separate `readDeclared` rule, or does it use exactly pass 1?
+- *Recommendation: (a), and Select mark keeps "a strike alone is a replace mark" (it is the
+  user's declaration), drops "one vertical".*
+
+**Q3 — Falling through when a reading doesn't place.** §2.6 keeps today's behaviour by ranking
+readings *within one group*. Today a stroke whose shape test matched but whose place failed is
+free for the *next family*, which may group it with *other* strokes:
+- a swap piece or close-up arc that doesn't place is free for a slash, a replace mark (as its
+  loop) or a strike (`actions/shapeMarks.ts:388`, `:481`);
+- a slash that doesn't place is free for a replace mark as a vertical (`:598`);
+- a one- or two-stroke ∧/V away from every textbox is skipped before its cross or circle is
+  looked for (`:295`): its legs and the cross stay free and are read as strikes (they are
+  "Ignored marker n" today, see `golden/space-punct.json`).
+A group is decided in pass 1 without text, so its readings can only re-read the *same* strokes.
+- (a) Pass 1 returns groups per family in today's order of consumption and may let groups
+  overlap; pass 2 resolves the page in that order, and the strokes of a group that doesn't place
+  are free for the later families' groups (`resolveGroup` becomes a page-level `resolvePage`).
+  Keeps today's results.
+- (b) Pass 1 decides exclusive groups; a group that doesn't place is unclear or handwriting as
+  a whole. Results change in these corner cases; the golden pages show some of them.
+- *Recommendation: (a) for S1/S2 (golden unchanged), and revisit with To decide in S4/S5.*
+
+**Q4 — Slash rules of §7, details.**
+- `isSlashCandidateRect` isn't defined. Proposal: not strike-like (height > 0.55 × width, so the
+  two never overlap), height 10–130 px, width ≤ 130 px.
+- §7 pass 2 replaces "at most two letters wide" (`domain/slashMark.ts:86`) by "width ≤ 1.6
+  line heights, wider than two letters → uncertain". This also finds steep slashes (> 45°) that
+  are wider than two letters, which are refused today: a golden change outside 30–45°. Accept
+  and list it, or keep the two-letter limit for slashes steeper than 45°?
+- The Review's own pre-test (`actions/shapeMarks.ts:582`: height 10–160, width ≤ height) goes:
+  pass 1 decides.
