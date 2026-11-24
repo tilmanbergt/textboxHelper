@@ -6,6 +6,7 @@ import type {EdgeShift} from './edgeShift';
 import type {RecognitionStatus} from './penEditModel';
 import type {PenEditKind} from './penEditTags';
 import type {SwapZones} from './swapMark';
+import type {PunctuationChar} from './punctMark';
 import type {PageElementData, Rect, TextElementData, TextboxData} from './textboxModel';
 
 /**
@@ -20,9 +21,55 @@ export type EditMarkerOperationKind = 'delete' | 'replace';
 /**
  * What a change in the review does; an insertion comes only from a pen edit. 'split': a paragraph
  * break from a < or > or a step mark with its second upright; 'space': a caret with a cross;
- * 'swap': two parts side by side change places (technical-design-swap-space-marks.md).
+ * 'swap': two parts side by side change places (technical-design-swap-space-marks.md);
+ * 'closeUp': an arc removes the space between two words; 'punct': a caret with a filled circle
+ * puts in a punctuation mark (technical-design-fine-marks.md).
  */
-export type ReviewOperationKind = EditMarkerOperationKind | 'insert' | 'split' | 'space' | 'swap';
+export type ReviewOperationKind =
+  | EditMarkerOperationKind
+  | 'insert'
+  | 'split'
+  | 'space'
+  | 'swap'
+  | 'closeUp'
+  | 'punct'
+  | 'join';
+
+/**
+ * Two paragraphs joined by two close-up arcs (technical-design-fine-marks.md §7): the operation's
+ * textbox is the upper one; the lower one's text is added to it and the lower textbox goes.
+ */
+export type JoinInfo = {
+  belowUuid: string;
+  belowNumInPage: number;
+  /** The dash ending the upper paragraph, which the "Also remove" toggle takes; '' when none. */
+  hyphen: string;
+  /** The user's choice in the review: the dash goes and no space is put between. */
+  removeHyphen: boolean;
+};
+
+/** A close-up's gap, and the punctuation at it the "Also remove" toggle would take. */
+export type CloseUpInfo = {
+  gapStart: number;
+  gapEnd: number;
+  /** The punctuation run at the gap: `from`–`to` covers it and the gap; empty text when none. */
+  punct: {from: number; to: number; text: string};
+  /** The user's choice in the review. */
+  removePunct: boolean;
+};
+
+/**
+ * A punctuation circle: where its caret points, and what was read in it. `char` null: not read
+ * (the row waits for the user's pick). 'own': the plugin's reading; 'picked': the user's quick pick.
+ */
+export type PunctInfo = {
+  offset: number;
+  mode: CaretInsertMode;
+  char: PunctuationChar | null;
+  source: 'own' | 'picked' | 'none';
+  /** The plugin couldn't tell `,` from `'`; the place decided. */
+  tie: boolean;
+};
 
 /** A swap's parts in its textbox's original text, and how its text is made. */
 export type SwapInfo = {
@@ -75,6 +122,12 @@ export type RecognizedEditOperation = {
   swap?: SwapInfo;
   /** Set by the assembly for a change made inside a swapped part (the swap's operation id). */
   insideSwap?: string;
+  /** Set for a close-up arc. */
+  closeUp?: CloseUpInfo;
+  /** Set for a punctuation circle. */
+  punct?: PunctInfo;
+  /** Set for a join of two paragraphs. */
+  join?: JoinInfo;
 };
 
 export type IgnoredEditMarker = {
@@ -85,6 +138,8 @@ export type IgnoredEditMarker = {
   /** Set when the ignored item is a tagged snippet, not a marker stroke. */
   penEditNumber?: number;
   penEditId?: string;
+  /** Set for tagged text without a usable mark: "Insert right here" is offered (fine-marks §8). */
+  canPlaceHere?: boolean;
   /**
    * The stroke numbers "Remove" deletes for a marker that landed on a textbox (with a replace
    * mark's verticals or loop). Unset for strokes that may be ordinary handwriting: those are
@@ -181,6 +236,8 @@ export type InsertionDraft = {
   belowNumInPage: number | null;
   aboveRect: Rect | null;
   belowRect: Rect | null;
+  /** Set for "Insert right here": 'newBox' when it is a new textbox where the handwriting is. */
+  here?: 'gap' | 'newBox';
 };
 
 /** Everything the review needs that doesn't change while pen edits are recognized or corrected. */
@@ -284,6 +341,11 @@ export type TextMutationRange = {
   replacementText?: string;
   /** Shown only: a placeholder for a pen edit's text that isn't there yet. */
   pending?: boolean;
+  /**
+   * Set when the range joins two words on purpose (a close-up, a hyphen put into a gap): no space
+   * is put back between them (technical-design-fine-marks.md §2.1).
+   */
+  joins?: boolean;
 };
 
 export type WordCandidate = PageWordCandidate;

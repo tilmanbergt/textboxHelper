@@ -13,6 +13,7 @@ import type {PenEditMark} from './penEditModel';
 import {isTakenStrike, rectsMatch} from './penEditMatching';
 import {analyzeCaret, analyzeTwoStrokeCaret, type CaretShape, type Point} from './penEditCaret';
 import {isSecondUpright} from './paragraphMarks';
+import {isSlashSizedRect} from './slashMark';
 import type {StrokeStats} from './markerTypes';
 
 /**
@@ -24,10 +25,11 @@ import type {StrokeStats} from './markerTypes';
 
 /**
  * How many strokes before the snippet are looked at. A mark counts only when it is the last thing
- * written before the text (`pickNewestMark`), and the largest mark has three strokes (a strike and
- * two crossing lines), so three are enough; fewer reads make the tag quicker.
+ * written before the text (`pickNewestMark`), and the largest mark has four strokes (a strike, two
+ * crossing lines and the user's own circle for the number), so four are enough; fewer reads make
+ * the tag quicker.
  */
-export const LOOK_BACK_WINDOW = 3;
+export const LOOK_BACK_WINDOW = 4;
 /**
  * The most element numbers read: the host renumbers after inserts, so our own icons and numbers
  * can sit between a mark and its snippet and are skipped without counting.
@@ -113,15 +115,42 @@ function bestModifierPair(crossing: WindowStroke[]): WindowStroke[] | null {
   return best;
 }
 
-/** A replace mark found in the window: the strike and its two vertical lines, or its loop. */
-export type WindowMark = {strike: WindowStroke; modifiers: WindowStroke[]; loop: WindowStroke | null};
+/**
+ * A replace mark found in the window: the strike and its two vertical lines, or its loop; or a
+ * slash through one letter (`slash`, the slash in `strike`). `numberCircle`: the user's own circle
+ * for the number at the right vertical or the slash's top (technical-design-fine-marks.md §2.2).
+ */
+export type WindowMark = {
+  strike: WindowStroke;
+  modifiers: WindowStroke[];
+  loop: WindowStroke | null;
+  slash?: boolean;
+  numberCircle?: WindowStroke;
+};
+
+/** A point's tiny rect, as the replace loop's test takes a strike: the circle is measured from it. */
+function anchorAt(x: number, y: number): Rect {
+  return {left: x, right: x, top: y, bottom: y};
+}
+
+/** The newest stroke newer than `after` that is a circle for the number at `anchor`. */
+function ownCircle(strokes: WindowStroke[], after: number, anchor: Rect, used: Set<string>): WindowStroke | undefined {
+  return strokes.find(
+    stroke =>
+      !used.has(stroke.uuid) && !stroke.isStraightLine && stroke.numInPage > after && isReplaceLoopRect(anchor, stroke.stats.rect),
+  );
+}
 
 /**
  * The newest replace mark in the window: a strike (long flat stroke or straight line) crossed by
  * two short vertical strokes, or followed by a small loop at its end. Strikes matching a `taken`
  * rect are already paired with another snippet.
  */
-export function findReplaceMarkInWindow(window: WindowStroke[], taken: Rect[]): WindowMark | null {
+export function findReplaceMarkInWindow(
+  window: WindowStroke[],
+  taken: Rect[],
+  options: {slash: boolean} = {slash: true},
+): WindowMark | null {
   const newestFirst = [...window].sort((a, b) => b.numInPage - a.numInPage);
   for (const strike of newestFirst) {
     if (isTakenStrike(strike.stats.rect, taken) || !isStrikeLike(strike)) {
@@ -131,12 +160,45 @@ export function findReplaceMarkInWindow(window: WindowStroke[], taken: Rect[]): 
     const loop = others.find(
       other => other.numInPage > strike.numInPage && isReplaceLoopRect(strike.stats.rect, other.stats.rect),
     );
+    const pair = bestModifierPair(others.filter(other => crossesStrike(strike, other)));
+    if (pair) {
+      const right = pair[1].stats.rect;
+      const circle = ownCircle(
+        others,
+        strike.numInPage,
+        anchorAt((right.left + right.right) / 2, right.top),
+        new Set(pair.map(item => item.uuid)),
+      );
+      return circle ? {strike, modifiers: pair, loop: null, numberCircle: circle} : {strike, modifiers: pair, loop: null};
+    }
     if (loop) {
       return {strike, modifiers: [loop], loop};
     }
-    const pair = bestModifierPair(others.filter(other => crossesStrike(strike, other)));
-    if (pair) {
-      return {strike, modifiers: pair, loop: null};
+  }
+  if (!options.slash) {
+    return null;
+  }
+  // A slash through one letter: a tall, narrow stroke of a letter's size, written last (or right
+  // before its own circle for the number). Whether it crosses a letter is checked in the review.
+  // A window with a strike that another stroke crosses holds an unfinished replace mark: its
+  // vertical is no slash.
+  const unfinished = newestFirst.some(
+    strike => isStrikeLike(strike) && newestFirst.some(other => other !== strike && crossesStrike(strike, other)),
+  );
+  if (unfinished) {
+    return null;
+  }
+  const [newest, second] = newestFirst;
+  for (const slash of [newest, second]) {
+    if (!slash || slash.isStraightLine || isTakenStrike(slash.stats.rect, taken) || !isSlashSizedRect(slash.stats.rect)) {
+      continue;
+    }
+    const rect = slash.stats.rect;
+    const circle = ownCircle(newestFirst, slash.numInPage, anchorAt((rect.left + rect.right) / 2, rect.top), new Set([slash.uuid]));
+    if (slash === newest || circle?.uuid === newest.uuid) {
+      return circle
+        ? {strike: slash, modifiers: [], loop: null, slash: true, numberCircle: circle}
+        : {strike: slash, modifiers: [], loop: null, slash: true};
     }
   }
   return null;
@@ -144,11 +206,20 @@ export function findReplaceMarkInWindow(window: WindowStroke[], taken: Rect[]): 
 
 /** The mark as stored: where its strike and verticals were. */
 export function storedMark(mark: WindowMark): PenEditMark {
+  const exact = mark.slash || (mark.modifiers.length === 2 && !mark.loop);
   return {
     kind: 'replace',
     strikeRect: {...mark.strike.stats.rect},
     modifierRects: mark.modifiers.map(modifier => ({...modifier.stats.rect})),
+    ...(exact ? {bounds: 'exact' as const} : {}),
+    ...(mark.slash ? {slash: true} : {}),
+    ...(mark.numberCircle ? {numberRect: {...mark.numberCircle.stats.rect}} : {}),
   };
+}
+
+/** Every stroke of a replace mark, the user's circle for the number included. */
+export function markStrokesOf(mark: WindowMark): WindowStroke[] {
+  return [mark.strike, ...mark.modifiers, ...(mark.numberCircle ? [mark.numberCircle] : [])];
 }
 
 /** The newest element number among a mark's strokes. */
@@ -165,7 +236,7 @@ export function ownedRects(entries: Array<{strokeRects: Rect[]; mark: PenEditMar
   return entries.flatMap(entry => [
     ...entry.strokeRects,
     ...(entry.mark?.kind === 'replace'
-      ? [entry.mark.strikeRect, ...entry.mark.modifierRects]
+      ? [entry.mark.strikeRect, ...entry.mark.modifierRects, ...(entry.mark.numberRect ? [entry.mark.numberRect] : [])]
       : entry.mark?.kind === 'caret'
         ? [entry.mark.caretRect]
         : []),
@@ -193,9 +264,13 @@ export function pickNewestMark(
     return null;
   }
   const newest = newestNum(window);
-  const replaceStrokes = replace ? [replace.strike, ...replace.modifiers] : [];
+  const replaceStrokes = replace ? markStrokesOf(replace) : [];
   const replaceIsLast = replaceStrokes.length > 0 && newestNum(replaceStrokes) === newest;
   const caretIsLast = !!caretStrokes && caretStrokes.length > 0 && newestNum(caretStrokes) === newest;
+  if (replaceIsLast && caretIsLast && replace?.slash) {
+    // A caret's leg is slash-sized: the caret, the larger shape, is meant.
+    return 'caret';
+  }
   if (replaceIsLast && caretIsLast) {
     const replaceUuids = new Set(replaceStrokes.map(stroke => stroke.uuid));
     return (caretStrokes as WindowStroke[]).some(stroke => replaceUuids.has(stroke.uuid)) ? 'replace' : 'caret';
@@ -252,7 +327,24 @@ export function readDeclaredMark(strokes: DeclaredStroke[]): DeclaredMark | null
     .filter(isStrikeLike)
     .sort((a, b) => b.stats.width - a.stats.width)[0];
   if (!strike) {
-    return null;
+    // A slash through one letter, with its own circle for the number when lassoed along.
+    const slash = ordered.find(stroke => !stroke.isStraightLine && isSlashSizedRect(stroke.stats.rect));
+    if (!slash) {
+      return null;
+    }
+    const rect = slash.stats.rect;
+    const circle = ordered.find(
+      other =>
+        other !== slash &&
+        !other.isStraightLine &&
+        isReplaceLoopRect(anchorAt((rect.left + rect.right) / 2, rect.top), other.stats.rect),
+    );
+    return {
+      kind: 'replace',
+      mark: circle
+        ? {strike: slash, modifiers: [], loop: null, slash: true, numberCircle: circle}
+        : {strike: slash, modifiers: [], loop: null, slash: true},
+    };
   }
   const others = ordered.filter(other => other.uuid !== strike.uuid && !other.isStraightLine);
   const loop = others.find(other => isReplaceLoopRect(strike.stats.rect, other.stats.rect)) ?? null;

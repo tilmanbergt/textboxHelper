@@ -2,11 +2,12 @@
  * The small card "Insertion or Replacement" opens only when something went wrong or needs a word
  * (technical-design-pen-edits.md §3.4, technical-design-pen-edits-2.md §4.3). A successful tag
  * opens nothing: the badges and numbers on the page are the confirmation. A snippet without a mark
- * is offered Select mark: the user draws or lassos the mark and taps the button again.
+ * is offered Select mark (the user draws or lassos the mark and taps the button again) and Insert
+ * right here (a new paragraph where its handwriting starts, technical-design-fine-marks.md §8).
  */
 import React, {useEffect, useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
-import {startSelectMark} from '../../actions/penEditReview';
+import {placePenEditHere, startSelectMark} from '../../actions/penEditReview';
 import type {PenEditTagOutcome} from '../../actions/penEditTag';
 import PillButton from '../../ui/PillButton';
 import {COLORS, FONT, RADII, SPACING} from '../../ui/theme';
@@ -20,7 +21,8 @@ function texts(outcome: PenEditTagOutcome): {title: string; body: string} {
         body:
           'The text is tagged, but no replace mark or caret was found just before it. Select mark: ' +
           'draw the mark (or lasso the one you drew) and tap "Insertion or Replacement" again within ' +
-          '5 minutes. Or fix it later: until then it shows under Ignored in the review.',
+          '5 minutes. Insert right here: it becomes a new paragraph where the handwriting starts. ' +
+          'Or fix it later: until then it shows under Ignored in the review.',
       };
     case 'markNotRead':
       return {
@@ -65,6 +67,18 @@ export default function PenEditOutcomeScreen({outcome, onClose}: Props): React.J
       });
   };
 
+  const placeHere = () => {
+    if (outcome.kind !== 'noMark' || outcome.saving) {
+      return;
+    }
+    placePenEditHere(outcome.id)
+      .then(onClose)
+      .catch(caught => {
+        console.warn('[PenEdit] insert here not stored', String(caught));
+        setError('Could not store "Insert right here". Please try again.');
+      });
+  };
+
   return (
     <View style={styles.screen}>
       <View style={styles.card}>
@@ -76,6 +90,7 @@ export default function PenEditOutcomeScreen({outcome, onClose}: Props): React.J
           {outcome.kind === 'noMark' ? (
             <>
               <PillButton label="Fix in review" onPress={onClose} disabled={saving} />
+              <PillButton label="Insert right here" onPress={placeHere} disabled={saving} />
               <PillButton label="Select mark now" primary onPress={selectMark} disabled={saving} />
             </>
           ) : (

@@ -26,6 +26,10 @@ import {
 } from './paragraphMarks';
 import {composeSwap, swapSummary, type ChangeNearSwap} from './swapText';
 import type {IgnoredEditMarker} from './markerTypes';
+import {closeUpSnippet} from './closeUpMark';
+import type {PunctuationChar} from './punctMark';
+import {placePunctuation, punctuationSnippet} from './punctText';
+import {joinParagraphTexts} from './paragraphJoin';
 
 /**
  * The edit-marker preview assembled from the analysis and the pen edits' current text
@@ -152,22 +156,61 @@ function shiftedRanges(
 }
 
 function isZeroLengthKind(kind: RecognizedEditOperation['kind']): boolean {
-  return kind === 'insert' || kind === 'split' || kind === 'space';
+  return kind === 'insert' || kind === 'split' || kind === 'space' || kind === 'punct';
+}
+
+/**
+ * Close-ups that meet another change (technical-design-fine-marks.md §6.5): a close-up yields to
+ * any other change at its gap (a strike over it, an insertion or a break in it); with a space mark
+ * at the same gap the two contradict each other and both are left out. Swaps are handled by the
+ * swap's own composition. Returns the left-out changes by operation id, with why.
+ */
+function closeUpConflicts(base: MarkerPreviewBase): Map<string, string> {
+  const blocked = new Map<string, string>();
+  for (const closeUp of base.drafts.filter(draft => draft.operation.kind === 'closeUp')) {
+    for (const other of base.drafts) {
+      const kind = other.operation.kind;
+      if (
+        other === closeUp ||
+        kind === 'swap' ||
+        kind === 'closeUp' ||
+        other.operation.targetTextboxUuid !== closeUp.operation.targetTextboxUuid ||
+        other.range.start > closeUp.range.end ||
+        other.range.end < closeUp.range.start
+      ) {
+        continue;
+      }
+      if (kind === 'space') {
+        blocked.set(closeUp.operation.id, 'Contradicting marks: a space and a close-up at the same gap.');
+        blocked.set(other.operation.id, 'Contradicting marks: a space and a close-up at the same gap.');
+      } else {
+        blocked.set(closeUp.operation.id, 'Another change is at this gap: apply it first, then close up.');
+      }
+    }
+  }
+  return blocked;
 }
 
 /** A change's range with the operation it belongs to, so a swap can take the ones inside it. */
 type TaggedRange = TextMutationRange & {opId: string};
 
-/** The user's choices for swaps while the review is open: "Fix capitals", by operation id. */
-export type SwapOptions = Record<string, {fixCase: boolean}>;
+/**
+ * The user's choices in the rows while the review is open, by operation id: a swap's "Fix
+ * capitals", a close-up's "Also remove", a punctuation circle's quick pick.
+ */
+export type RowOptions = Record<string, {fixCase?: boolean; removePunct?: boolean; char?: PunctuationChar}>;
+export type SwapOptions = RowOptions;
 
 export function assembleMarkerPreview(
   base: MarkerPreviewBase,
   penStates: Record<string, PenTextState>,
   fontWarning: string | null = null,
   plainShifts: Record<string, EdgeShift> = {},
-  swapOptions: SwapOptions = {},
+  swapOptions: RowOptions = {},
 ): EditMarkerPreview {
+  const rowOptions = swapOptions;
+  const blocked = closeUpConflicts(base);
+  const leftOut: IgnoredEditMarker[] = [];
   const operations: RecognizedEditOperation[] = [];
   const displayRanges = new Map<string, TaggedRange[]>();
   const applyRanges = new Map<string, TaggedRange[]>();
@@ -197,9 +240,14 @@ export function assembleMarkerPreview(
 
   const shifted = shiftedRanges(base, penStates, plainShifts);
 
+  const joinDrafts: MarkerPreviewBase['drafts'] = [];
   for (const draft of base.drafts) {
     if (draft.operation.kind === 'swap') {
       swapDrafts.push(draft);
+      continue;
+    }
+    if (draft.operation.kind === 'join') {
+      joinDrafts.push(draft);
       continue;
     }
     currentOpId = draft.operation.id;
@@ -285,6 +333,74 @@ export function assembleMarkerPreview(
         kind: 'replace',
         replacementText: SPLIT_SIGN,
       });
+      continue;
+    }
+    const blockedReason = blocked.get(operation.id);
+    if (blockedReason) {
+      leftOut.push(ignoredOperation(operation, blockedReason));
+      continue;
+    }
+    if (operation.kind === 'closeUp' && operation.closeUp) {
+      const info = operation.closeUp;
+      const removePunct = !!info.punct.text && (rowOptions[operation.id]?.removePunct ?? info.removePunct);
+      const span = removePunct ? {start: info.punct.from, end: info.punct.to} : {start: info.gapStart, end: info.gapEnd};
+      const closed: TextMutationRange = {kind: 'replace', ...span, replacementText: '', joins: true};
+      const assembled: RecognizedEditOperation = {
+        ...operation,
+        textStart: span.start,
+        closeUp: {...info, removePunct},
+        summary: `Close up · ${closeUpSnippet(original, span.start, span.end)}`,
+        edgeView: edgeViewOf(original, span.start, span.end, false, ''),
+      };
+      operations.push(assembled);
+      readyOperations.push(assembled);
+      add(displayRanges, uuid, closed);
+      add(applyRanges, uuid, closed);
+      continue;
+    }
+    if (operation.kind === 'punct' && operation.punct) {
+      const info = operation.punct;
+      const picked = rowOptions[operation.id]?.char;
+      const char = picked ?? info.char;
+      if (!char) {
+        pendingCount += 1;
+        operations.push({
+          ...operation,
+          summary: `Insert ‹?› · ${punctuationSnippet(original, range.start, range.start)}`,
+          uncertain: "The mark in the circle wasn't read: tap the one it is.",
+          edgeView: view('‹?›'),
+        });
+        add(displayRanges, uuid, {...range, kind: 'replace', replacementText: '‹?›', pending: true});
+        continue;
+      }
+      const place = placePunctuation(original, range.start, info.mode, char);
+      if (place.kind === 'refused') {
+        leftOut.push(ignoredOperation(operation, place.reason));
+        continue;
+      }
+      const placed: TextMutationRange = {
+        kind: 'replace',
+        start: place.start,
+        end: place.end,
+        replacementText: place.text,
+        ...(place.joins ? {joins: true} : {}),
+      };
+      const uncertain = !picked && info.tie ? 'The mark could be a comma or an apostrophe: check it.' : operation.uncertain;
+      const assembled: RecognizedEditOperation = {
+        ...operation,
+        textStart: place.start,
+        punct: {...info, char, source: picked ? 'picked' : info.source},
+        summary: `Insert "${char}" · ${punctuationSnippet(original, place.start, place.end)}`,
+        edgeView: edgeViewOf(original, place.start, place.end, place.start === place.end, place.text),
+        ...(uncertain ? {uncertain} : {}),
+      };
+      if (picked) {
+        delete assembled.uncertain;
+      }
+      operations.push(assembled);
+      readyOperations.push(assembled);
+      add(displayRanges, uuid, placed);
+      add(applyRanges, uuid, placed);
       continue;
     }
     if (!operation.penEditId) {
@@ -452,15 +568,79 @@ export function assembleMarkerPreview(
     });
   }
 
+  // Each changed textbox's new text; joins then put the lower paragraph's text into the upper
+  // one and leave the lower one empty (it is removed when applied).
+  const nextTexts = new Map<string, string>();
+  for (const textbox of base.textboxes) {
+    if (displayRanges.has(textbox.uuid)) {
+      nextTexts.set(textbox.uuid, applyTextMutationRanges(textbox.originalText, applyRanges.get(textbox.uuid) ?? []));
+    }
+  }
+  const joinHunks = new Map<string, ChangeHunk>();
+  if (joinDrafts.length > 0) {
+    const order = new Map(base.textboxes.map((textbox, index) => [textbox.uuid, index]));
+    const owner = new Map<string, string>();
+    const holder = (uuid: string): string => {
+      let at = uuid;
+      while (owner.has(at)) {
+        at = owner.get(at) as string;
+      }
+      return at;
+    };
+    const textNow = (uuid: string) => nextTexts.get(uuid) ?? originalTextOf.get(uuid) ?? '';
+    const sorted = [...joinDrafts].sort(
+      (a, b) => (order.get(a.operation.targetTextboxUuid) ?? 0) - (order.get(b.operation.targetTextboxUuid) ?? 0),
+    );
+    for (const {operation} of sorted) {
+      const info = operation.join;
+      if (!info) {
+        continue;
+      }
+      const upper = holder(operation.targetTextboxUuid);
+      const lowerText = textNow(info.belowUuid);
+      const upperText = textNow(upper);
+      const between = base.insertions.some(
+        insertion =>
+          insertion.aboveNumInPage === operation.targetTextboxNumInPage &&
+          insertion.belowNumInPage === info.belowNumInPage,
+      );
+      const reason = between
+        ? 'A new paragraph goes between the two: apply it first, then join.'
+        : upperText.includes(SPLIT_SIGN) || lowerText.includes(SPLIT_SIGN)
+        ? 'A paragraph break in one of the two paragraphs: apply it first, then join.'
+        : null;
+      if (reason) {
+        leftOut.push(ignoredOperation(operation, reason));
+        continue;
+      }
+      const removeHyphen = !!info.hyphen && (rowOptions[operation.id]?.removePunct ?? info.removeHyphen);
+      nextTexts.set(upper, joinParagraphTexts(upperText, lowerText, removeHyphen));
+      nextTexts.set(info.belowUuid, '');
+      owner.set(info.belowUuid, upper);
+      const assembled: RecognizedEditOperation = {...operation, join: {...info, removeHyphen}};
+      operations.push(assembled);
+      readyOperations.push(assembled);
+      const tail = upperText.trimEnd();
+      joinHunks.set(operation.id, {
+        operationId: operation.id,
+        label: 'Join paragraphs',
+        before: removeHyphen ? tail.slice(0, -1) : tail,
+        segments: [
+          ...(removeHyphen ? [{text: info.hyphen, style: 'removed' as const}] : []),
+          {text: ' ¶ ', style: 'removed' as const},
+        ],
+        after: lowerText.trimStart(),
+        meta: operation.detail,
+      });
+    }
+  }
+
   const textMutations: TextMutationPlan[] = [];
   for (const textbox of base.textboxes) {
-    if (!displayRanges.has(textbox.uuid)) {
+    const nextText = nextTexts.get(textbox.uuid);
+    if (nextText === undefined) {
       continue;
     }
-    const nextText = applyTextMutationRanges(
-      textbox.originalText,
-      applyRanges.get(textbox.uuid) ?? [],
-    );
     if (nextText !== textbox.originalText) {
       // The new height is measured when the change is applied.
       textMutations.push({
@@ -490,7 +670,9 @@ export function assembleMarkerPreview(
       lineIndex: 0,
       summary: `New paragraph "${shown}"`,
       detail:
-        insertion.aboveNumInPage !== null
+        insertion.here === 'newBox'
+          ? 'New textbox where the handwriting is'
+          : insertion.aboveNumInPage !== null
           ? `After textbox ${insertion.aboveNumInPage}`
           : `Before textbox ${insertion.belowNumInPage ?? ''}`.trim(),
       words: [],
@@ -532,6 +714,7 @@ export function assembleMarkerPreview(
         !shownMarkerNums.has(marker.markerNumInPage),
     ),
     ...swapIgnored,
+    ...leftOut,
   ];
   const recognizedMarkerNums = [
     ...new Set(
@@ -566,10 +749,11 @@ export function assembleMarkerPreview(
       const original = originalTextOf.get(operation.targetTextboxUuid) ?? '';
       const hunk =
         swapHunks.get(operation.id) ??
+        joinHunks.get(operation.id) ??
         buildHunk(operation, original, shownByOp.get(operation.id) ?? []);
       return {
         order: textboxOrder.get(operation.targetTextboxUuid) ?? base.textboxes.length,
-        at: operation.swap ? operation.swap.zones.a0 : operation.textStart,
+        at: operation.swap ? operation.swap.zones.a0 : operation.join ? original.length : operation.textStart,
         hunk,
       };
     })
@@ -586,6 +770,16 @@ export function assembleMarkerPreview(
     base,
     penEdits: base.penEdits,
     pendingCount,
+  };
+}
+
+function ignoredOperation(operation: RecognizedEditOperation, reason: string): IgnoredEditMarker {
+  return {
+    markerUuid: operation.markerUuid,
+    markerNumInPage: operation.markerNumInPage,
+    summary: operation.summary,
+    reason,
+    removableNums: operation.consumedMarkerNums,
   };
 }
 

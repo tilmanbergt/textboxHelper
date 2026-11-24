@@ -223,6 +223,15 @@ const MARKS = {
     c.anchor = {x: x + half, y: L.baseline};
     let svg = pen(handStroke(pts, c.rnd, 0.9), c);
     if (m.number) svg += numberIn(c, m.number, num[0], num[1], 0.62);
+    if (m.circle) {
+      // The punctuation circle between the legs (punctMark.ts: its middle in the caret's opening),
+      // with the mark written inside it.
+      const r = h * 0.3;
+      const cx = x, cy = m.dir === 'down' ? L.baseline + 4 - h * 0.62 : L.baseline + 2 + h * 0.62;
+      svg += pen(handLoop(cx, cy, r, r, c.rnd), c);
+      if (m.circle === ',') svg += pen([[cx + 1, cy], [cx + 2.5, cy + r * 0.25], [cx + 1, cy + r * 0.5], [cx - 3, cy + r * 0.75]], c);
+      else if (m.circle === '.') svg += pen([[cx, cy], [cx + 1, cy + 1]], c);
+    }
     if (m.cross) {
       // The small cross that makes a caret an inserted space: at the tip, inside the caret's
       // opening (spaceMark.ts accepts its middle within 40 px of the tip).
@@ -272,6 +281,57 @@ const MARKS = {
     const pts = [[a0, mid], [a0, top], [split, top], [split, low], [b1, low], [b1, mid]];
     return pen(handStroke(pts, c.rnd, 1), c);
   },
+  /** A slash through one character: short, steep, a little taller than the letters. */
+  slash(m, c) {
+    const L = c.lines[m.line ?? 0];
+    const w = c.lines[m.line ?? 0].words[m.word];
+    const ch = L.chars[w.start + m.char];
+    const x = ch.x + ch.w / 2;
+    const top = L.capTop - 6, bottom = L.baseline + 8;
+    c.anchor = {x: x + 30, y: L.baseline};
+    let svg = pen(handStroke([[x + 7, top], [x - 7, bottom]], c.rnd, 0.4), c);
+    if (m.number) svg += ringAbove(c, m.number, x + 7, top);
+    return svg;
+  },
+  /** A strike with two verticals at exact character places (from/to: {word, char} or edge). */
+  exact(m, c) {
+    const L = c.lines[m.line ?? 0];
+    const y = (L.baseline + L.xHeight) / 2 + 1;
+    const x0 = xOf(c.lines, {line: m.line, ...m.from});
+    const x1 = xOf(c.lines, {line: m.line, ...m.to});
+    c.anchor = {x: x1 + 20, y};
+    let svg = pen(handStroke([[x0 - 2, y + 1], [x1 + 2, y - 1]], c.rnd, 0.6), c);
+    svg += [x0, x1].map(x => pen(handStroke([[x + 1, L.capTop - 6], [x - 1, L.baseline + 8]], c.rnd, 0.5), c)).join('');
+    if (m.number) svg += ringAbove(c, m.number, x1, L.capTop - 6);
+    return svg;
+  },
+  /**
+   * The close-up arc ‿ under a gap (or ⁀ over it, dir 'down'); `piece: 'end'` after the line's last
+   * word, `'start'` before its first, for a gap at a line wrap.
+   */
+  arc(m, c) {
+    const L = c.lines[m.line ?? 0];
+    let x0, x1;
+    if (m.piece === 'end') {
+      const last = L.words[L.words.length - 1];
+      x0 = last.x1 - 22; x1 = last.x1 + 22;
+    } else if (m.piece === 'start') {
+      const first = L.words[0];
+      x0 = first.x0 - 22; x1 = first.x0 + 22;
+    } else {
+      const x = xOf(c.lines, {line: m.line, gap: m.gap});
+      x0 = x - 22; x1 = x + 22;
+    }
+    const up = m.dir !== 'down';
+    const y = up ? L.baseline + 6 : L.capTop - 6;
+    const sag = up ? 12 : -12;
+    const pts = [];
+    for (let k = 0; k <= 12; k++) {
+      const t = k / 12;
+      pts.push([x0 + (x1 - x0) * t, y + sag * 4 * t * (1 - t)]);
+    }
+    return pen(handStroke(pts, c.rnd, 0.3), c);
+  },
   /** Tagged handwriting: the words in a handwriting face, with the circled number left of them. */
   write(m, c) {
     const x = m.x ?? (c.anchor ? c.anchor.x + 40 : c.textX), y = m.y;
@@ -297,6 +357,13 @@ function pen(points, c) {
     c.minX = Math.min(c.minX ?? Infinity, ...points.map(p => p[0] - PEN));
   }
   return `<path d="${smoothPath(points)}" fill="none" stroke="#000" stroke-width="${PEN}" stroke-linecap="round" stroke-linejoin="round"/>`;
+}
+
+/** The plugin's grey ring with the number, just above a point (a vertical's or slash's top). */
+function ringAbove(c, n, x, top) {
+  if (c.icon) return '';
+  const r = 15, cy = top - r - 2;
+  return `<circle cx="${fmt(x)}" cy="${fmt(cy)}" r="${r}" fill="none" stroke="${TOOL}" stroke-width="2"/>` + numberIn(c, n, x, cy);
 }
 
 /** A number as the plugin places it: small, upright, centred on a point. */

@@ -151,6 +151,9 @@ export function composeSwap(
   const a = part('a', zones.a0, zones.a1);
   const gap = part('gap', zones.a1, zones.b0);
   const b = part('b', zones.b0, zones.b1);
+  if (/\s/.test(original.slice(zones.a1, zones.b0)) && !/\s/.test(gap)) {
+    return {kind: 'conflict', reason: 'A close-up between the swapped parts: apply it first, then swap.'};
+  }
   if (!a.trim() || !b.trim()) {
     return {kind: 'conflict', reason: 'One swapped part is deleted completely: nothing to swap with.'};
   }

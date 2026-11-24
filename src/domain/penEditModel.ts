@@ -35,7 +35,20 @@ export type PenEditStrokeData = {
  * technical-design-pen-edits.md §8) need no change to stored entries.
  */
 export type PenEditMark =
-  | {kind: 'replace'; strikeRect: Rect; modifierRects: Rect[]}
+  | {
+      kind: 'replace';
+      strikeRect: Rect;
+      modifierRects: Rect[];
+      /**
+       * 'exact' for a strike with two verticals or a slash: the mark says exactly which letters
+       * (technical-design-fine-marks.md §3, §4); missing on a loop and on older entries: whole words.
+       */
+      bounds?: 'exact';
+      /** Set for a slash through one letter: `strikeRect` is the slash. */
+      slash?: boolean;
+      /** The user's own circle for the number, drawn with the mark (§2.2). */
+      numberRect?: Rect;
+    }
   | {
       kind: 'caret';
       /** The caret stroke's rect at tag time. */
@@ -92,6 +105,11 @@ export type PenEditEntry = {
   awaitingMark: AwaitingMark | null;
   /** The user's character nudges of the change's edges (review, §6): one entry per edge. */
   edges: EdgeShift | null;
+  /**
+   * 'here': the user chose "Insert right here" for text without a usable mark: it goes in as a new
+   * paragraph where its handwriting starts (technical-design-fine-marks.md §8). Missing: by its mark.
+   */
+  placement?: 'here';
 };
 
 /** Where Select mark was started: the tag's result card, or the review (which opens again). */
@@ -145,7 +163,18 @@ function parseMark(value: unknown): PenEditMark | null {
     return null;
   }
   const strikeRect = parseRect(value.strikeRect);
-  return strikeRect ? {kind: 'replace', strikeRect, modifierRects: parseRects(value.modifierRects)} : null;
+  if (!strikeRect) {
+    return null;
+  }
+  const numberRect = parseRect(value.numberRect);
+  return {
+    kind: 'replace',
+    strikeRect,
+    modifierRects: parseRects(value.modifierRects),
+    ...(value.bounds === 'exact' ? {bounds: 'exact' as const} : {}),
+    ...(value.slash === true ? {slash: true} : {}),
+    ...(numberRect ? {numberRect} : {}),
+  };
 }
 
 function parseRecognition(value: unknown): PenEditRecognition {
@@ -200,6 +229,7 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     doneAt: isString(value.doneAt) ? value.doneAt : null,
     awaitingMark: parseAwaitingMark(value.awaitingMark),
     edges: parseEdges(value.edges),
+    ...(value.placement === 'here' ? {placement: 'here' as const} : {}),
   };
 }
 
@@ -333,6 +363,19 @@ export function setAwaitingMark(
           : entry,
     ),
   };
+}
+
+/**
+ * "Insert right here" (technical-design-fine-marks.md §8): the text goes in as a new paragraph
+ * where its handwriting starts, as an insertion; it stops waiting for a mark.
+ */
+export function setPlaceHere(index: PenEditIndex, id: string): PenEditIndex {
+  return updatePenEdit(index, id, entry => ({
+    ...entry,
+    kind: 'insertion',
+    placement: 'here',
+    awaitingMark: null,
+  }));
 }
 
 /** The active entry of this page still waiting for its mark, if its wait hasn't run out. */

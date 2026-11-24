@@ -16,8 +16,8 @@ export const MARK_HELP_LAYOUT = {
   /** A mark's name line, a block's title line, the page heading. */
   titleHeight: 26,
   headingHeight: 34,
-  /** An overview row: icon box, name and the glance line. */
-  rowHeight: 64,
+  /** An overview row: icon box, name and the glance line (the two text lines exactly). */
+  rowHeight: 46,
   /** Between the parts of an entry, and between entries or blocks (with their line). */
   gap: 6,
   sectionGap: 14,

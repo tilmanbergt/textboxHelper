@@ -15,6 +15,7 @@ import {
 import {
   findReplaceMarkInWindow,
   lookBackNumbers,
+  markStrokesOf,
   ownedRects,
   pickNewestMark,
   readDeclaredMark,
@@ -49,6 +50,7 @@ import {hideLassoBox} from '../supernote/noteElements';
 import {insertTagElements, tagUserStrokes, type TagBadge, type TagNumber} from '../supernote/penEditElements';
 import {findCaretInWindow, readLookBackWindow, recycleWindow} from '../supernote/penEditPageRead';
 import {caretNumberCenter, type CaretShape} from '../domain/penEditCaret';
+import {inCaretOpening} from '../domain/punctMark';
 import type {WindowStroke} from '../domain/penEditPairing';
 import {ensurePermissions} from '../supernote/permissions';
 
@@ -253,8 +255,9 @@ export async function tagPenEdit(
     const lowest = Math.min(...snap.strokeNums);
     const taken = takenStrikeRects(index, notePath, page);
     const owned = ownedRects(activePenEditsOnPage(index, notePath, page));
+    // A slash alone never ends the reads early: it may be a leg of a caret read next.
     const result = await readLookBackWindow(notePath, page, lookBackNumbers(lowest), window =>
-      findReplaceMarkInWindow(withoutOwned(window, owned), taken) !== null,
+      findReplaceMarkInWindow(withoutOwned(window, owned), taken, {slash: false}) !== null,
     );
     windowElements = result.elements;
     const window = withoutOwned(result.window, owned);
@@ -264,6 +267,12 @@ export async function tagPenEdit(
       result.elements,
       takenCaretRects(index, notePath, page),
     );
+    // The user's own circle between the caret's legs, for the number (technical-design-fine-
+    // marks.md §2.2): drawn last, it belongs to the caret.
+    const caretCircle = caret ? emptyCircleOf(caret, window) : null;
+    if (caret && caretCircle) {
+      caret = {...caret, strokes: [...caret.strokes, caretCircle]};
+    }
     const choice = pickNewestMark(window, found, caret?.strokes ?? null);
     if (choice !== 'replace') {
       found = null;
@@ -308,7 +317,7 @@ export async function tagPenEdit(
       }
     }
     if (found && windowElements) {
-      for (const item of [found.strike, ...found.modifiers]) {
+      for (const item of markStrokesOf(found)) {
         const element = windowElements.get(item.uuid);
         if (element) {
           strokesToTag.push({element, role: 'mark'});
@@ -329,7 +338,7 @@ export async function tagPenEdit(
     const badge = snippetBadgeRect(lassoRect);
     const badges: TagBadge[] = [{role: 'snippet', points: snippetBadgePolygon(badge)}];
     const numbers: TagNumber[] = [{role: 'snippetnum', rect: badgeNumberRect(badge, number), number}];
-    const markTags = markBadges(found, caret, number, snap.pageSize?.width ?? 0);
+    const markTags = markBadges(found, caret, number, snap.pageSize?.width ?? 0, caretCircle);
     badges.push(...markTags.badges);
     numbers.push(...markTags.numbers);
     const placed = await insertTagElements({page, id, badges, numbers});
@@ -378,7 +387,16 @@ export async function tagPenEdit(
         strokes: snap.strokes.length,
         strokeNums: [Math.min(...snap.strokeNums), Math.max(...snap.strokeNums)],
         paired: !!found || !!caret,
-        markKind: caret ? `caret-${caret.shape.direction}` : found ? (found.loop ? 'loop' : 'verticals') : null,
+        markKind: caret
+          ? `caret-${caret.shape.direction}`
+          : found
+            ? found.slash
+              ? 'slash'
+              : found.loop
+                ? 'loop'
+                : 'verticals'
+            : null,
+        ownCircle: !!(found?.numberCircle || caretCircle),
         lookBack,
         strokesTagged: tagged.tagged,
         tagError: tagged.error,
@@ -432,8 +450,21 @@ function markBadges(
   caret: {shape: CaretShape} | null,
   number: number,
   pageWidth: number,
+  caretCircle: WindowStroke | null = null,
 ): {badges: TagBadge[]; numbers: TagNumber[]} {
   const half = BADGE_SIZE_PX / 2;
+  // A circle the user drew for the number holds it (technical-design-fine-marks.md §2.2).
+  const own = caret ? caretCircle : found?.numberCircle ?? null;
+  if (own) {
+    return {badges: [], numbers: [{role: 'marknum', rect: badgeNumberRect(own.stats.rect, number), number}]};
+  }
+  if (found?.slash) {
+    const box = markBadgeRect([found.strike.stats.rect], found.strike.stats.rect, pageWidth);
+    return {
+      badges: [{role: 'markring', points: circlePolygon(box)}],
+      numbers: [{role: 'marknum', rect: badgeNumberRect(box, number), number}],
+    };
+  }
   if (caret) {
     const center = caretNumberCenter(caret.shape);
     const box = {left: center.x - half, top: center.y - half, right: center.x + half, bottom: center.y + half};
@@ -515,7 +546,7 @@ async function attachSelectedMark(
   }
   const found = declared.kind === 'replace' ? declared.mark : null;
   const caret = declared.kind === 'caret' ? declared : null;
-  const markStrokes = found ? [found.strike, ...found.modifiers] : caret ? caret.strokes : [];
+  const markStrokes = found ? markStrokesOf(found) : caret ? caret.strokes : [];
   const elementsByUuid = new Map(snap.strokeElements.map(element => [element.uuid, element]));
   const settle = LASSO_SETTLE_MS - (Date.now() - lassoHiddenAt);
   if (settle > 0) {
@@ -549,6 +580,7 @@ async function attachSelectedMark(
       mark,
       strokesTagged: entry.strokesTagged && tagged.tagged,
       awaitingMark: null,
+      placement: undefined,
     })),
   );
   console.log(
@@ -556,7 +588,15 @@ async function attachSelectedMark(
     JSON.stringify({
       id: waiting.id,
       result: 'attached',
-      markKind: caret ? `caret-${caret.shape.direction}` : found?.loop ? 'loop' : found?.modifiers.length ? 'verticals' : 'strike',
+      markKind: caret
+        ? `caret-${caret.shape.direction}`
+        : found?.slash
+          ? 'slash'
+          : found?.loop
+            ? 'loop'
+            : found?.modifiers.length
+              ? 'verticals'
+              : 'strike',
       strokes: snap.strokes.length,
       markStrokes: markStrokes.length,
       strokesTagged: tagged.tagged,
@@ -571,4 +611,28 @@ async function attachSelectedMark(
     fromReview,
     focus: {notePath: waiting.notePath, page, penEditId: waiting.id, number: waiting.number, kind: tagKind},
   };
+}
+
+/**
+ * The newest window stroke after the caret's own that is a small round loop (by its rect) with its
+ * middle in the caret's opening: the user's circle for the number. Null when there is none.
+ */
+function emptyCircleOf(caret: {strokes: WindowStroke[]; shape: CaretShape}, window: WindowStroke[]): WindowStroke | null {
+  const newestCaret = Math.max(...caret.strokes.map(stroke => stroke.numInPage));
+  const legs = caret.shape.ends.map(end => Math.hypot(end.x - caret.shape.tip.x, end.y - caret.shape.tip.y));
+  return (
+    window.find(stroke => {
+      const rect = stroke.stats.rect;
+      const width = rect.right - rect.left;
+      const height = rect.bottom - rect.top;
+      return (
+        !stroke.isStraightLine &&
+        stroke.numInPage > newestCaret &&
+        Math.max(width, height) >= 12 &&
+        Math.max(width, height) <= Math.max(...legs) * 1.2 &&
+        Math.min(width, height) >= Math.max(width, height) * 0.6 &&
+        inCaretOpening(caret.shape, {x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2})
+      );
+    }) ?? null
+  );
 }

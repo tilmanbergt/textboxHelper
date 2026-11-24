@@ -28,18 +28,16 @@ import type {
   PenTextState,
 } from '../domain/markerTypes';
 import {coveredSpan} from '../domain/edgeShift';
+import {bracketSnippet, exactSpan} from '../domain/exactBounds';
+import {isReplaceLoopRect} from '../domain/markerStrokes';
+import {readPageSizeForDiagnostics} from '../supernote/noteElements';
 import type {PenEditEntry} from '../domain/penEditModel';
 import {parsePenEditUserData} from '../domain/penEditTags';
 import {isNormalTextElement, sortTextElements} from '../domain/textboxEditPlan';
 import {pageFingerprint, snippetIdsOnPage, type FingerprintElement} from '../domain/pageFingerprint';
 import {DEFAULT_FONT_SIZE} from '../domain/textboxModel';
 import {loadMarkerStrokeStats} from '../supernote/markerStrokeRead';
-import {
-  readPageContext,
-  readPageSizeForDiagnostics,
-  recycleElements,
-  type PageContext,
-} from '../supernote/noteElements';
+import {readPageContext, recycleElements, type PageContext} from '../supernote/noteElements';
 import {resetFontWarnings} from '../supernote/textboxMetrics';
 import {readPenEditIndex} from '../storage/penEditStore';
 import {logEditMarker} from '../utils/editMarkerLog';
@@ -63,12 +61,14 @@ type TextElement = Element & {textBox: TextBox};
 
 type ReplaceInfo = {
   pair: MarkerStrokeAnalysis<Element>[];
+  /** The user's own circle for the number, drawn at the right vertical (consumed with the mark). */
+  numberCircle?: MarkerStrokeAnalysis<Element>;
   ignoredReason?: string;
   penEdit?: PenEditEntry;
 };
 
 const REPLACE_WITHOUT_TEXT =
-  'Replace mark without new text: write the new words right after it, lasso them and tap Insertion or Replacement.';
+  'Replace mark without new text: write the new words right after it, lasso them and tap Insertion or Replacement. (A strike with two short verticals and no text deletes exactly what is between them.)';
 
 /**
  * Reads one page's edit marks into a preview. Marks on a textbox whose font can't be read are
@@ -208,7 +208,10 @@ async function analyzePage(
   // (technical-design-swap-space-marks.md §6.1). Their strokes never reach the delete analysis.
   const shapeMarks = await timed(
     'page.shapeMarks',
-    () => findShapeMarks(markers, strokeStatsByUuid, pageTextboxes, measurer),
+    () =>
+      findShapeMarks(markers, strokeStatsByUuid, pageTextboxes, measurer, {
+        strikeOwner: pen.strikeOwner,
+      }),
     {page},
   );
   const isFree = (element: Element) => !shapeMarks.consumedNums.has(element.numInPage);
@@ -247,18 +250,29 @@ async function analyzePage(
   ];
 
   const {replaceInfo, pairedPenEditIds} = pairReplaceMarks(markerCandidates, modifierAnalyses, pen);
+  shapeMarks.pairedPenEditIds.forEach(id => pairedPenEditIds.add(id));
   const groupedTextboxes = new Map<string, TextElement>();
   const drafts = buildLineMarkDrafts(markerCandidates, replaceInfo, ignoredMarkers, groupedTextboxes);
   ignoredMarkers.push(...unpairedPenEdits(pen.entries, pairedPenEditIds, lockedPenIds));
 
   // Insertions: into the paragraph their caret points to, or as a new paragraph between two.
+  const pageWidth = pen.entries.some(entry => entry.placement === 'here') ? await pageWidthOf(notePath, page) : 0;
   const placed = await timed(
     'page.carets',
-    () => placeCaretInsertions(pen.entries, pen.carets, pageTextboxes, measurer),
+    () =>
+      placeCaretInsertions(pen.entries, pen.carets, pageTextboxes, measurer, {
+        snippetRects: pen.snippetRects,
+        pageWidth,
+      }),
     {page},
   );
   placed.ignored.forEach(({entry, reason}) => {
-    ignoredMarkers.push(penEditIgnored(entry, `Insertion ${entry.number}`, reason));
+    // Its caret was missing or unclear: it can go where its handwriting is. One already placed
+    // there that didn't fit keeps Select mark only.
+    ignoredMarkers.push({
+      ...penEditIgnored(entry, `Insertion ${entry.number}`, reason),
+      ...(entry.placement === 'here' ? {} : {canPlaceHere: true}),
+    });
   });
   shapeMarks.textboxes.forEach((textbox, uuid) => groupedTextboxes.set(uuid, textbox));
   drafts.push(...shapeMarks.drafts);
@@ -393,6 +407,13 @@ function pairReplaceMarks(
     const usedModifiers = new Set<string>();
     textboxCandidates
       .map(candidate => ({candidate, pair: replaceModifiers(candidate, modifierAnalyses)}))
+      .map(entry => ({
+        ...entry,
+        numberCircle:
+          entry.pair.length === 2
+            ? numberCircleAt(entry.pair[1], modifierAnalyses, [...entry.pair, ...usedModifiersList(usedModifiers, modifierAnalyses)])
+            : undefined,
+      }))
       .filter(entry => {
         // A strike selected as a snippet's mark (Select mark) may stand alone: the user said it
         // is a replace mark (technical-design-pen-edits-2.md §4.2).
@@ -411,6 +432,9 @@ function pairReplaceMarks(
           return false;
         }
         entry.pair.forEach(pairEntry => usedModifiers.add(pairEntry.marker.uuid));
+        if (entry.numberCircle) {
+          usedModifiers.add(entry.numberCircle.marker.uuid);
+        }
         return true;
       })
       .forEach(entry => {
@@ -418,9 +442,13 @@ function pairReplaceMarks(
         if (penEdit) {
           pairedPenEditIds.add(penEdit.id);
         }
+        // Two verticals mark exact places: without text they delete exactly what is between them
+        // (technical-design-fine-marks.md §3.2). A loop without text has nothing to do.
+        const verticals = entry.pair.length === 2;
         replaceInfo.set(entry.candidate.markerUuid, {
           pair: entry.pair,
-          ...(penEdit ? {penEdit} : {ignoredReason: REPLACE_WITHOUT_TEXT}),
+          ...(entry.numberCircle ? {numberCircle: entry.numberCircle} : {}),
+          ...(penEdit ? {penEdit} : verticals ? {} : {ignoredReason: REPLACE_WITHOUT_TEXT}),
         });
       });
   });
@@ -474,16 +502,22 @@ function buildLineMarkDrafts(
     usedRangesByTextbox.set(textboxUuid, usedRanges);
     groupedTextboxes.set(textboxUuid, candidate.targetTextbox);
 
-    const wordTexts = nextWords.map(word => word.text);
     const penEdit = info?.penEdit;
     const kind: EditMarkerOperationKind = penEdit ? 'replace' : 'delete';
-    // Punctuation at the ends that the stroke didn't reach stays (technical-design-pen-edits-2.md
-    // §6): "default," with the line over "default" keeps its comma.
-    const span = coveredSpan(
-      nextWords,
-      candidate.strokeStats.rect.left,
-      candidate.strokeStats.rect.right,
-    ) ?? {start: nextWords[0].start, end: nextWords[nextWords.length - 1].end};
+    // Two verticals: exactly between them, letter by letter (technical-design-fine-marks.md §3).
+    // Otherwise whole words, and punctuation at the ends that the stroke didn't reach stays
+    // (technical-design-pen-edits-2.md §6): "default," with the line over "default" keeps its comma.
+    const exact = info && info.pair.length === 2 ? exactRange(candidate, info.pair) : null;
+    const span =
+      exact ??
+      coveredSpan(nextWords, candidate.strokeStats.rect.left, candidate.strokeStats.rect.right) ??
+      {start: nextWords[0].start, end: nextWords[nextWords.length - 1].end};
+    const text = candidate.targetTextbox.textBox.textContentFull || '';
+    const insideWord =
+      !!exact &&
+      ((span.start > 0 && /\S/.test(text.charAt(span.start - 1)) && /\S/.test(text.charAt(span.start))) ||
+        (/\S/.test(text.charAt(span.end - 1)) && /\S/.test(text.charAt(span.end))));
+    const wordTexts = insideWord ? [bracketSnippet(text, span.start, span.end)] : nextWords.map(word => word.text);
     drafts.push({
       range: {kind, start: span.start, end: span.end},
       operation: {
@@ -494,6 +528,7 @@ function buildLineMarkDrafts(
         consumedMarkerNums: [
           candidate.markerNumInPage,
           ...(info?.pair.map(pairEntry => pairEntry.marker.numInPage) || []),
+          ...(info?.numberCircle ? [info.numberCircle.marker.numInPage] : []),
         ],
         targetTextboxUuid: candidate.targetTextbox.uuid,
         targetTextboxNumInPage: candidate.targetTextbox.numInPage,
@@ -505,7 +540,7 @@ function buildLineMarkDrafts(
           nextWords,
         ),
         words: wordTexts,
-        textStart: nextWords[0].start,
+        textStart: span.start,
         ...(penEdit ? {penEditId: penEdit.id, penEditNumber: penEdit.number} : {}),
       },
     });
@@ -532,13 +567,14 @@ function unpairedPenEdits(
 ): IgnoredEditMarker[] {
   const withoutMark = entries
     .filter(entry => entry.kind === 'unpaired')
-    .map(entry =>
-      penEditIgnored(
+    .map(entry => ({
+      ...penEditIgnored(
         entry,
         `Text ${entry.number}`,
-        'No replace mark or caret was found just before it. Select mark, then draw or lasso its mark.',
+        'No replace mark or caret was found just before it. Select mark, then draw or lasso its mark - or insert it right here as a new paragraph.',
       ),
-    );
+      canPlaceHere: true,
+    }));
   const markNotFound = entries
     .filter(entry => entry.kind === 'replacement' && !pairedPenEditIds.has(entry.id))
     .map(entry =>
@@ -604,4 +640,55 @@ function toTextboxBase(textbox: TextElement): MarkerTextboxBase {
     textFrameStyle: box.textFrameStyle ?? 0,
     textEditable: box.textEditable ?? 0,
   };
+}
+
+/**
+ * The exact range between a replace mark's two verticals: each vertical's middle x turned into a
+ * character offset among the words the strike covers (technical-design-fine-marks.md §3.1). Null
+ * when the words have no positions to go by, or the verticals mark nothing.
+ */
+function exactRange(
+  candidate: MarkerCandidate,
+  verticals: MarkerStrokeAnalysis<Element>[],
+): {start: number; end: number} | null {
+  const words = candidate.words.map(word => ({
+    start: word.start,
+    end: word.end,
+    left: word.absoluteLeft,
+    right: word.absoluteRight,
+    ...(word.charEdges ? {edges: word.charEdges.map(edge => word.absoluteLeft - word.left + edge)} : {}),
+  }));
+  const [left, right] = verticals.map(vertical => (vertical.strokeStats.rect.left + vertical.strokeStats.rect.right) / 2);
+  return exactSpan(words, left, right);
+}
+
+/**
+ * The user's own circle for the number at a replace mark's right vertical: found with the same
+ * test as the replace loop, measured from the vertical's top (technical-design-fine-marks.md §2.2).
+ */
+function numberCircleAt(
+  rightVertical: MarkerStrokeAnalysis<Element>,
+  analyses: MarkerStrokeAnalysis<Element>[],
+  taken: MarkerStrokeAnalysis<Element>[],
+): MarkerStrokeAnalysis<Element> | undefined {
+  const rect = rightVertical.strokeStats.rect;
+  const x = (rect.left + rect.right) / 2;
+  const anchor = {left: x, right: x, top: rect.top, bottom: rect.top};
+  const takenUuids = new Set(taken.map(item => item.marker.uuid));
+  return analyses.find(
+    analysis => !takenUuids.has(analysis.marker.uuid) && isReplaceLoopRect(anchor, analysis.strokeStats.rect),
+  );
+}
+
+function usedModifiersList(
+  used: Set<string>,
+  analyses: MarkerStrokeAnalysis<Element>[],
+): MarkerStrokeAnalysis<Element>[] {
+  return analyses.filter(analysis => used.has(analysis.marker.uuid));
+}
+
+/** The page's width for a new textbox; 0 when the host doesn't say. */
+async function pageWidthOf(notePath: string, page: number): Promise<number> {
+  const size = await readPageSizeForDiagnostics(notePath, page);
+  return typeof size === 'string' ? 0 : size.width;
 }

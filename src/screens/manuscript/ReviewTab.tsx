@@ -201,6 +201,7 @@ export default function ReviewTab({
           onIndex={setAttentionIndex}
           disabled={busy || loading || applied}
           onSelectMark={id => review.selectMark(id, onClose)}
+          onPlaceHere={item => item.marker.penEditId && review.placeHere(item.page, item.marker.penEditId)}
           onDrop={item => {
             const dropItem = dropItemOfIgnored(item.marker);
             if (dropItem) {
@@ -268,6 +269,8 @@ export default function ReviewTab({
               onRecognizeAgain={() => selectedPen && review.recognizeAgain(selectedPen.id)}
               onNudge={(edge, delta) => review.nudge(selected.operation, edge, delta)}
               onFixCase={fixCase => review.setFixCase(selected.operation.id, fixCase)}
+              onRemovePunct={removePunct => review.setRemovePunct(selected.operation.id, removePunct)}
+              onPunctChar={char => review.setPunctChar(selected.operation.id, char)}
               onDrop={
                 !applied && dropItemOfOperation(selected.operation)
                   ? () =>
@@ -372,6 +375,7 @@ function AttentionLine({
   onIndex,
   disabled,
   onSelectMark,
+  onPlaceHere,
   onDrop,
 }: {
   items: AttentionItem[];
@@ -379,6 +383,7 @@ function AttentionLine({
   onIndex: (index: number) => void;
   disabled: boolean;
   onSelectMark: (penEditId: string) => void;
+  onPlaceHere: (item: AttentionItem) => void;
   onDrop: (item: AttentionItem) => void;
 }): React.JSX.Element {
   const {page, marker: item} = items[index];
@@ -397,6 +402,9 @@ function AttentionLine({
           onPress={() => onSelectMark(item.penEditId as string)}
           disabled={disabled}
         />
+      ) : null}
+      {item.penEditId && item.canPlaceHere ? (
+        <PillButton size="small" label="Insert right here" onPress={() => onPlaceHere(items[index])} disabled={disabled} />
       ) : null}
       {dropItemOfIgnored(item) ? (
         <PillButton size="small" label="Drop" onPress={() => onDrop(items[index])} disabled={disabled} />
