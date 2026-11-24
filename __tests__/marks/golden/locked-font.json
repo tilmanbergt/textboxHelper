@@ -1,0 +1,45 @@
+{
+  "about": "Marks on a textbox whose font plugins can't read: a strike, a tagged insertion; a strike on a readable textbox still works.",
+  "changes": [
+    {
+      "kind": "delete",
+      "summary": "Delete \"big\"",
+      "detail": "Textbox 1, line 1 - 1 word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 4,
+      "words": [
+        "big"
+      ],
+      "strokes": [
+        8
+      ]
+    }
+  ],
+  "ignored": [
+    {
+      "summary": "Ignored marker 3",
+      "reason": "The font locked.ttf can't be read by plugins, so marks on this textbox can't be placed. Copy the font file to MyStyle/TextboxHelper/fonts and open the review again.",
+      "stroke": 3,
+      "removable": [
+        3
+      ]
+    },
+    {
+      "summary": "Insertion 1",
+      "reason": "The font locked.ttf can't be read by plugins, so marks on this textbox can't be placed. Copy the font file to MyStyle/TextboxHelper/fonts and open the review again.",
+      "stroke": 0,
+      "penEdit": 1,
+      "canPlaceHere": true
+    }
+  ],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "the red car and more words here"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": "Marks on 1 textbox was ignored: the font can't be read by plugins (locked.ttf). Copy the font file to MyStyle/TextboxHelper/fonts and open the review again. See Ignored.",
+  "canApply": true
+}

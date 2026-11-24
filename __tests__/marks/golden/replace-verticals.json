@@ -1,0 +1,51 @@
+{
+  "about": "Strike with two verticals and no text: exactly what is between them goes, a whole word and letters inside a word.",
+  "changes": [
+    {
+      "kind": "delete",
+      "summary": "Delete \"red\"",
+      "detail": "Textbox 1, line 1 - 1 word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 8,
+      "words": [
+        "red"
+      ],
+      "strokes": [
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "kind": "delete",
+      "summary": "Delete \"bi[gg]er\"",
+      "detail": "Textbox 2, line 1 - 1 word",
+      "textbox": 2,
+      "line": 0,
+      "textStart": 4,
+      "words": [
+        "bi[gg]er"
+      ],
+      "strokes": [
+        6,
+        7,
+        8
+      ]
+    }
+  ],
+  "ignored": [],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "the big car and more words here"
+    },
+    {
+      "textbox": 2,
+      "text": "a bier word"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

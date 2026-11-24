@@ -1,0 +1,62 @@
+{
+  "about": "A ∧ with a cross puts a space into \"bigred\"; a ∧ with a comma in its circle puts a comma after \"car\"; a ∧ with an empty circle is a caret waiting for text.",
+  "changes": [
+    {
+      "kind": "space",
+      "summary": "Space · he big|red ca",
+      "detail": "Textbox 1 · he big|red ca",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 7,
+      "words": [],
+      "strokes": [
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "kind": "punct",
+      "summary": "Insert \",\" · ed car| and m",
+      "detail": "Textbox 1",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 14,
+      "words": [],
+      "strokes": [
+        5,
+        6,
+        7
+      ],
+      "uncertain": "The mark could be a comma or an apostrophe: check it.",
+      "punct": {
+        "offset": 14,
+        "mode": "betweenWords",
+        "char": ",",
+        "source": "own",
+        "tie": true
+      }
+    }
+  ],
+  "ignored": [
+    {
+      "summary": "Ignored marker 8",
+      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
+      "stroke": 8
+    },
+    {
+      "summary": "Ignored marker 9",
+      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
+      "stroke": 9
+    }
+  ],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "the big red car, and more words here"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

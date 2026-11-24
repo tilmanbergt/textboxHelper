@@ -1,0 +1,57 @@
+{
+  "about": "A < between two lines splits there; a step with its second upright splits at a word gap; a bare step is ignored; a > before the first line is already a break.",
+  "changes": [
+    {
+      "kind": "split",
+      "summary": "Paragraph break",
+      "detail": "Textbox 1 · between two lines",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 19,
+      "words": [],
+      "strokes": [
+        2
+      ]
+    },
+    {
+      "kind": "split",
+      "summary": "Paragraph break",
+      "detail": "Textbox 1 · at a word gap",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 40,
+      "words": [],
+      "strokes": [
+        3,
+        4
+      ]
+    }
+  ],
+  "ignored": [
+    {
+      "summary": "Ignored marker 6",
+      "reason": "It is at a paragraph's start or end, which is already a paragraph break.",
+      "stroke": 6,
+      "removable": [
+        6
+      ]
+    },
+    {
+      "summary": "Ignored marker 5",
+      "reason": "A swap middle piece (or a step) without a start and an end corner. A paragraph break needs a second short line next to its upright (_||‾).",
+      "stroke": 5,
+      "removable": [
+        5
+      ]
+    }
+  ],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "one two three four five six seven eight nine ten eleven twelve thirteen"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

@@ -1,0 +1,118 @@
+{
+  "about": "Insertions: a ∧ in a word gap, a V inside a word, a caret in two strokes, a caret between two paragraphs; one whose caret was erased; tagged text without a mark; text put right here.",
+  "changes": [
+    {
+      "kind": "insert",
+      "summary": "Insert \"very\"",
+      "detail": "Textbox 1 · between words",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 7,
+      "words": [],
+      "strokes": [],
+      "penEdit": 1,
+      "insertMode": "betweenWords"
+    },
+    {
+      "kind": "insert",
+      "summary": "Insert \"X\"",
+      "detail": "Textbox 1 · inside a word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 22,
+      "words": [],
+      "strokes": [],
+      "penEdit": 2,
+      "insertMode": "inWord"
+    },
+    {
+      "kind": "insert",
+      "summary": "Insert \"old\"",
+      "detail": "Textbox 1 · between words",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 15,
+      "words": [],
+      "strokes": [],
+      "penEdit": 3,
+      "insertMode": "betweenWords"
+    },
+    {
+      "kind": "insert",
+      "summary": "New paragraph \"Here it goes.\"",
+      "detail": "After textbox 2",
+      "textbox": 2,
+      "line": 0,
+      "textStart": 0,
+      "words": [],
+      "strokes": [],
+      "penEdit": 6
+    },
+    {
+      "kind": "insert",
+      "summary": "New paragraph \"Between.\"",
+      "detail": "After textbox 1",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 0,
+      "words": [],
+      "strokes": [],
+      "penEdit": 7
+    }
+  ],
+  "ignored": [
+    {
+      "summary": "Text 5",
+      "reason": "No replace mark or caret was found just before it. Select mark, then draw or lasso its mark - or insert it right here as a new paragraph.",
+      "stroke": 0,
+      "penEdit": 5,
+      "canPlaceHere": true
+    },
+    {
+      "summary": "Insertion 4",
+      "reason": "Its caret is no longer on the page.",
+      "stroke": 0,
+      "penEdit": 4,
+      "canPlaceHere": true
+    }
+  ],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "the big very red car old and moXre words here"
+    }
+  ],
+  "newParagraphs": [
+    {
+      "text": "Here it goes.",
+      "left": 100,
+      "width": 1000,
+      "above": {
+        "left": 100,
+        "top": 400,
+        "right": 1100,
+        "bottom": 448
+      },
+      "below": null
+    },
+    {
+      "text": "Between.",
+      "left": 100,
+      "width": 1000,
+      "above": {
+        "left": 100,
+        "top": 200,
+        "right": 1100,
+        "bottom": 248
+      },
+      "below": {
+        "left": 100,
+        "top": 400,
+        "right": 1100,
+        "bottom": 448
+      }
+    }
+  ],
+  "fontWarning": null,
+  "canApply": true
+}

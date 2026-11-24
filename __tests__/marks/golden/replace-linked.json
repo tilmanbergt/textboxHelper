@@ -1,0 +1,87 @@
+{
+  "about": "Replace marks with tagged text: verticals, a loop, a strike chosen with Select mark; a loop without text; a replacement whose mark was erased.",
+  "changes": [
+    {
+      "kind": "replace",
+      "summary": "Replace \"big\" -> \"small\"",
+      "detail": "Textbox 1, line 1 - 1 word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 4,
+      "words": [
+        "big"
+      ],
+      "strokes": [
+        2,
+        3,
+        4
+      ],
+      "penEdit": 1
+    },
+    {
+      "kind": "replace",
+      "summary": "Replace \"car\" -> \"bus\"",
+      "detail": "Textbox 1, line 1 - 1 word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 12,
+      "words": [
+        "car"
+      ],
+      "strokes": [
+        10,
+        11
+      ],
+      "penEdit": 2
+    },
+    {
+      "kind": "replace",
+      "summary": "Replace \"more\" -> \"less\"",
+      "detail": "Textbox 1, line 1 - 1 word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 20,
+      "words": [
+        "more"
+      ],
+      "strokes": [
+        17
+      ],
+      "penEdit": 5
+    }
+  ],
+  "ignored": [
+    {
+      "summary": "Ignored marker 16",
+      "reason": "The marker is too short to classify reliably.",
+      "stroke": 16,
+      "removable": [
+        16
+      ]
+    },
+    {
+      "summary": "Ignored marker 15",
+      "reason": "Replace mark without new text: write the new words right after it, lasso them and tap Insertion or Replacement. (A strike with two short verticals and no text deletes exactly what is between them.)",
+      "stroke": 15,
+      "removable": [
+        15,
+        16
+      ]
+    },
+    {
+      "summary": "Replacement 4",
+      "reason": "Its replace mark was not recognized on the page (erased, or not over a textbox).",
+      "stroke": 0,
+      "penEdit": 4
+    }
+  ],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "the small red bus and less words here"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

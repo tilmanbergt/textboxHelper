@@ -1,0 +1,60 @@
+{
+  "about": "Slashes through one letter at about 60°, 50° and 35°, and one through a space. Today 35° is no slash (read as a tall strike).",
+  "changes": [
+    {
+      "kind": "delete",
+      "summary": "Delete \"[b]ig\"",
+      "detail": "Textbox 1, line 1 - 1 letter",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 4,
+      "words": [
+        "[b]ig"
+      ],
+      "strokes": [
+        2
+      ]
+    },
+    {
+      "kind": "delete",
+      "summary": "Delete \"r[e]d\"",
+      "detail": "Textbox 1, line 1 - 1 letter",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 9,
+      "words": [
+        "r[e]d"
+      ],
+      "strokes": [
+        3
+      ]
+    }
+  ],
+  "ignored": [
+    {
+      "summary": "Ignored marker 5",
+      "reason": "A slash marks one letter; to join two words, use the close-up arc.",
+      "stroke": 5,
+      "removable": [
+        5
+      ]
+    },
+    {
+      "summary": "Ignored marker 4",
+      "reason": "The marker is too tall relative to its width.",
+      "stroke": 4,
+      "removable": [
+        4
+      ]
+    }
+  ],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "the ig rd car and more words here"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

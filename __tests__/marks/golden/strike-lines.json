@@ -1,0 +1,46 @@
+{
+  "about": "A slanted strike from one line into the next; a strike on the second line; a tall stroke over a word.",
+  "changes": [
+    {
+      "kind": "delete",
+      "summary": "Delete \"six\"",
+      "detail": "Textbox 1, line 2 - 1 word",
+      "textbox": 1,
+      "line": 1,
+      "textStart": 24,
+      "words": [
+        "six"
+      ],
+      "strokes": [
+        3
+      ]
+    }
+  ],
+  "ignored": [
+    {
+      "summary": "Ignored marker 2",
+      "reason": "The marker crosses multiple rendered lines or does not align with a single line.",
+      "stroke": 2,
+      "removable": [
+        2
+      ]
+    },
+    {
+      "summary": "Ignored marker 4",
+      "reason": "The marker is too tall relative to its width.",
+      "stroke": 4,
+      "removable": [
+        4
+      ]
+    }
+  ],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "one two three four five seven eight nine ten eleven twelve thirteen"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

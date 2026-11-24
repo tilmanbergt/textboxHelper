@@ -1,0 +1,38 @@
+{
+  "about": "A one-line swap mark: \"big\" and \"red\" change places.",
+  "changes": [
+    {
+      "kind": "swap",
+      "summary": "Swap · \"big\" ⇄ \"red\"",
+      "detail": "Textbox 1 · line 1",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 4,
+      "words": [
+        "big",
+        "red"
+      ],
+      "strokes": [
+        2
+      ],
+      "swap": {
+        "zones": {
+          "a0": 4,
+          "a1": 7,
+          "b0": 8,
+          "b1": 11
+        }
+      }
+    }
+  ],
+  "ignored": [],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "the red big car and more words here"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

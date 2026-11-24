@@ -1,0 +1,91 @@
+{
+  "about": "The device page of 2026-11-20: three swaps, two across lines, one in two textboxes.",
+  "changes": [
+    {
+      "kind": "swap",
+      "summary": "Swap · \"have to manipulate\" ⇄ \"the world\"",
+      "detail": "Textbox 4 · line 2",
+      "textbox": 4,
+      "line": 1,
+      "textStart": 75,
+      "words": [
+        "have to manipulate",
+        "the world"
+      ],
+      "strokes": [
+        34
+      ],
+      "swap": {
+        "zones": {
+          "a0": 75,
+          "a1": 93,
+          "b0": 94,
+          "b1": 103
+        }
+      }
+    },
+    {
+      "kind": "swap",
+      "summary": "Swap · \"not trying to secure on…\" ⇄ \"things to appear,\"",
+      "detail": "Textbox 4 · line 3",
+      "textbox": 4,
+      "line": 2,
+      "textStart": 129,
+      "words": [
+        "not trying to secure oneself through every encounter. There is room for",
+        "things to appear,"
+      ],
+      "strokes": [
+        35,
+        36
+      ],
+      "swap": {
+        "zones": {
+          "a0": 129,
+          "a1": 200,
+          "b0": 201,
+          "b1": 218
+        }
+      }
+    },
+    {
+      "kind": "swap",
+      "summary": "Swap · \"This simplicity is not …\" ⇄ \"recruited into our stor…\"",
+      "detail": "Textbox 3 · line 1",
+      "textbox": 3,
+      "line": 0,
+      "textStart": 0,
+      "words": [
+        "This simplicity is not dullness. It is vivid. It lets things be just what they are before they are",
+        "recruited into our story about ourselves. The face of another person, the steam above tea,"
+      ],
+      "strokes": [
+        26,
+        31,
+        33
+      ],
+      "swap": {
+        "zones": {
+          "a0": 0,
+          "a1": 98,
+          "b0": 99,
+          "b1": 189
+        }
+      }
+    }
+  ],
+  "ignored": [],
+  "after": [
+    {
+      "textbox": 3,
+      "text": "Recruited into our story about ourselves. The face of another person, the steam above tea this simplicity is not dullness. It is vivid. It lets things be just what they are before they are, the ache in the chest, the sound of rain on a window: each arrives without needing permission."
+    },
+    {
+      "textbox": 4,
+      "text": "To live from such simplicity is already a kind of compassion. One does not the world have to manipulate so intensely when one is things to appear not trying to secure oneself through every encounter. There is room for, and in that room something gentle becomes possible."
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

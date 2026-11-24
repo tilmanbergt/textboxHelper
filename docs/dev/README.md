@@ -63,6 +63,7 @@ To change a picture: edit the spec (or `scripts/lib/markDrawing.mjs` for every p
 | `src/screens/` | The views and dialogs of the plugin window. |
 | `src/ui/` | Shared building blocks of the screens: `ScreenFrame`, buttons, tabs, paging (`PagedSection`, `PagedText`), the help (`HelpOverlay`, `MarkHelp`), `theme.ts`; `generated/` holds the bundled help pictures (not committed). |
 | `__tests__/domain/`, `__tests__/ui/` | Jest tests, one file per domain module or group; `ui/` for the help screen and its pictures. |
+| `__tests__/marks/` | The edit marks' tests: builders that draw marks and lay out textboxes (`build.ts`), and the golden record of the review (`golden.test.ts`): pages served by a fake host (`golden/host.ts`, `golden/pages.ts`) and the changes and ignored marks today's review gives for each (`golden/*.json`). Helpers there are no test files: Jest runs only `*.test.ts(x)`. |
 | `scripts/` | `marks.mjs`, `gen-mark-images.mjs`, `test-marks.mjs` and `lib/`: drawing, bundling and checking the help pictures. |
 | `docs/user/marks/`, `docs/user/images/marks/` | The help pictures' spec and the drawn PNGs. |
 | `android/.../com/textboxhelper/TextboxMetricsModule.kt` | Native module: Android `StaticLayout` text measurement for textbox sizes and hit testing. |
