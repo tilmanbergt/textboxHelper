@@ -1,6 +1,6 @@
 # Technical design: Comments and images (part B), with part C outlined
 
-Status: **design, decisions of §10 taken; ready to build after part A is merged.** Follows part A (`technical-design-mark-dialogue.md`,
+Status: **part B built (B1–B4, see §11 As built); part C outlined.** Follows part A (`technical-design-mark-dialogue.md`,
 S0–S8 on `feature/mark-dialogue`, with §13.4 verticals and §13.5 New text / Marks). Requirements: claude.ai project doc
 `claude/requirements-mark-dialogue.md` §2, §3.2, §4.3; mockups: design canvas "Textbox Tools –
 Marken-Dialog und Review", artboards 2, 2b, 3, 6, 8, 9. Built on part A (`feature/mark-dialogue` `eb7c60b`). Branch
@@ -263,3 +263,62 @@ notes of a set-aside block go with it into the aside area.
 - Q-B2: no shortcut; "Comment or Image" always shows its small card.
 - Q-B3: Outline counts for the whole note from the index and the Outline scan (§6), no extra
   page reads.
+
+## 11. As built (part B)
+
+Built on `feature/comments-images` in four commits, `npm run check` green after each, the golden
+record of `__tests__/marks/golden` unchanged throughout.
+
+| Step | Tests | What changed |
+|---|---|---|
+| B1 Entry, signs, button | 692 → 713 | `kind` comment/image, `note`; `bubblePolygon`, `framePolygon`, `snippetSign`; `actions/sidemarkWrite.ts` (moved from `penEditTag.ts`, 568 → 472 lines); `actions/noteTag.ts`; `NoteKindCard`; button 6320 |
+| B2 Converting | 713 → 727 | `convertSidemarkEntry` / `canConvertSidemark`; `replaceSnippetSign`; `actions/sidemarkConvert.ts`; Comment · Image on both cards and on To decide's "?" side |
+| B3 Paragraph | 727 → 773 | `domain/notes/paragraphOf.ts` (`paragraphOf`, `neighbours`, `sectionsOf`, `sectionAt`), `noteRows.ts`; `actions/notesRead.ts`; `actions/noteEdit.ts` `chooseNoteParagraph` with `blockStatus.ensureBlockId` |
+| B4 Notes tab and the rest | 773 → 801 | Notes tab (`NotesList`, `NoteSide`, `useNotes`, `ui/NoteSign`), To decide `noParagraph`, Outline counts (`outlineNotes.ts`), planned-line note, help block, CHANGELOG |
+
+Test files: `__tests__/notes/` `notes.model`, `notes.signs`, `notes.apply`, `notes.paragraph`,
+`notes.neighbours`, `notes.rows`, `notes.outline` (tables, builders in `build.ts`);
+`__tests__/ui/noteCards`, `notesTab`, and `toDecide` extended.
+
+Where the build fills in what the design left open or differs in detail:
+
+- **Unknown kind** (§2.1): read as `'unpaired'`, as the design says. Before part B such an entry
+  was dropped from the index; it is now kept as "?".
+- **Sign text** (§3.2): the number textbox request carries its text (`TagNumber.text`), so the
+  same insert writes a number, "?" or "C".
+- **Converting** (§3.3): the old sign and its textbox are deleted and the new ones inserted
+  (delete first: inserting renumbers), rather than the textbox's text changed in place; if the
+  insert fails the old sign is put back. Only an entry without mark and number converts
+  (`canConvertSidemark`): a number on the page means linked.
+- **Region and file of a note** (§4): position decides, as in `noteRegions.ts`: a note takes the
+  section of the textbox before it in reading order. A page read alone by the Review starts in the
+  section its first textbox's tag names (an imported block carries its file), else in the text with
+  no file; dividers on the page start theirs. The Outline has the whole note and walks its dividers.
+- **A chosen paragraph on another page** (§2.2): the Review looks for its block id on the other
+  pages, nearest first; only when no page has it is it gone. ‹ › past the page edge take the last
+  paragraph of the page before or the first of the page after, read on demand.
+- **Moved handwriting** (§6): when the Review reads a page, a note whose tagged strokes moved more
+  than 2 px gets `rect` and `strokeRects` moved along in the index (`movedNote`; only with tagged
+  strokes, so the fallback by place is not shifted twice). `iconRect` stays.
+- **Read on demand** (§5.2): Read puts the comment into the review's recognition queue; notes are
+  never in the queue otherwise (also not a note without a paragraph in To decide).
+- **Update image** (§5.2): the tagged strokes as they are on the page now are stored in place of
+  those from tag time and drawn as the picture (part A §6, no page render); the PNG from tag time is
+  removed. A new PNG of the strokes is part C (C0 check 1).
+- **Drop** (§5.4): the sign and its textbox are deleted and the strokes' `userData` cleared, so
+  they are plain handwriting again; the entry is `dropped`.
+- **Outline counts** (§6): on paragraph rows ("C n", "▣ n"; the glyph `▣` is still to be checked
+  on the device) and in the details line of the selected block ("2 comments · 1 image"), which also
+  covers headings. Counted on the index and the Outline scan, no page read.
+- **Apply** (§3.2): `penEditElementNums` removes decorations only of the applied entries' ids;
+  `notes.apply.test.ts` pins that a comment's sign and handwriting stay.
+- **Export and write-back**: notes are no textboxes; the "C" textbox carries the pen-edit tag and
+  looks like a pen-edit number, so `isPenEditNumberElement` keeps it out of every textbox tool, the
+  export and the write-back (tested).
+- New files beyond §8's list: `actions/noteEdit.ts` (the writes of the Notes side),
+  `domain/notes/noteRows.ts`, `domain/notes/outlineNotes.ts`, `ui/NoteSign.tsx`.
+
+Still open for the device: everything in B4's device test, `▣` in the device font, and whether
+inserting and deleting signs while the plugin view is open (the Comment or Image card, the cards'
+Comment · Image) behaves like Select mark does.
+
