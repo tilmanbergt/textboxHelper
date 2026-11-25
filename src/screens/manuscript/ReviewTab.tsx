@@ -313,6 +313,7 @@ export default function ReviewTab({
                 onHere={(edges, option) => review.here(decided.page, decided.item, edges, option)}
                 onSelectMark={() => decided.item.penEditId && review.selectMark(decided.item.penEditId, onClose)}
                 onPlaceHere={() => decided.item.penEditId && review.placeHere(decided.page, decided.item.penEditId)}
+                onKeepAs={kind => decided.item.penEditId && review.convert(decided.page, decided.item.penEditId, kind)}
                 onIgnore={() => review.ignore(decided.page, decided.item)}
                 onDrop={
                   !applied && dropItemOfToDecide(decided.item)

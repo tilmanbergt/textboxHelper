@@ -4,7 +4,8 @@
  * - Place open: the mark's picture, why it didn't place, Place ‹ › from the nearest place found
  *   (running over line ends), the result line, Here · Drop.
  * - "?" (text without a mark): its handwriting and recognized text (Correct), where it is on the
- *   page, Select mark ›, Insert right here, Drop.
+ *   page, Select mark ›, Insert right here, keep as Comment or Image
+ *   (technical-design-comments-images.md §5.3), Drop.
  * - Unclear: its picture, the words under it, why; one button per reading pass 1 found, then that
  *   reading's edges, result and Here; Ignore, and Remove for strokes on the text.
  */
@@ -14,6 +15,7 @@ import type {DecideEntry} from '../../domain/manuscriptPages';
 import {nudgeShift, type EdgeShift} from '../../domain/edgeShift';
 import {decideView} from '../../domain/marks/decide';
 import type {PenEditView} from '../../domain/markerTypes';
+import type {NoteKind} from '../../domain/penEditTags';
 import PageMap from '../../ui/PageMap';
 import PillButton from '../../ui/PillButton';
 import StrokeDrawing from '../../ui/StrokeDrawing';
@@ -35,6 +37,8 @@ interface Props {
   onHere: (edges: EdgeShift | null, option?: number) => void;
   onSelectMark: () => void;
   onPlaceHere: () => void;
+  /** "?" kept as a comment or an image. */
+  onKeepAs: (kind: NoteKind) => void;
   onIgnore: () => void;
   /** Null when there is nothing to drop or remove. */
   onDrop: (() => void) | null;
@@ -54,6 +58,7 @@ export default function ToDecideSide({
   onHere,
   onSelectMark,
   onPlaceHere,
+  onKeepAs,
   onIgnore,
   onDrop,
   dropConfirm,
@@ -130,6 +135,8 @@ export default function ToDecideSide({
             <>
               <PillButton size="small" primary label="Select mark ›" onPress={onSelectMark} disabled={busy} />
               <PillButton size="small" label="Insert right here" onPress={onPlaceHere} disabled={busy} />
+              <PillButton size="small" label="Comment" onPress={() => onKeepAs('comment')} disabled={busy} />
+              <PillButton size="small" label="Image" onPress={() => onKeepAs('image')} disabled={busy} />
             </>
           ) : null}
           {item.kind === 'placeOpen' && item.canPlaceHere ? (

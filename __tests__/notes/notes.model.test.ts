@@ -1,4 +1,11 @@
-import {notePlace, parsePenEditEntry, type PenEditEntry} from '../../src/domain/penEditModel';
+import {
+  canConvertSidemark,
+  convertSidemarkEntry,
+  notePlace,
+  parsePenEditEntry,
+  type PenEditEntry,
+  type SidemarkKind,
+} from '../../src/domain/penEditModel';
 
 /**
  * Do comment and image entries parse (technical-design-comments-images.md §2.1)? One row per
@@ -47,5 +54,47 @@ describe('notes.model: comment and image entries', () => {
     expect(notePlace({note: {}})).toBe('after');
     expect(notePlace({})).toBe('after');
     expect(notePlace({note: {place: 'before'}})).toBe('before');
+  });
+});
+
+/** Does a sidemark change between "?", comment and image (§3.3), and what does it keep? */
+describe('notes.model: converting a sidemark', () => {
+  const read = (value: Record<string, unknown>) => parsePenEditEntry({...stored, ...value}) as PenEditEntry;
+  type Step = {name: string; from: Record<string, unknown>; to: SidemarkKind; expect: Partial<PenEditEntry> & {noNote?: true}};
+  const STEPS: Step[] = [
+    {name: '"?" -> comment', from: {kind: 'unpaired'}, to: 'comment', expect: {kind: 'comment', number: null, note: {}}},
+    {name: '"?" -> image', from: {kind: 'unpaired'}, to: 'image', expect: {kind: 'image', note: {}}},
+    {name: 'comment -> "?": the note goes', from: {kind: 'comment', note: {done: true, paragraph: 'b-1'}}, to: 'unpaired', expect: {kind: 'unpaired', noNote: true}},
+    {name: 'comment -> image keeps the paragraph, not Done', from: {kind: 'comment', note: {done: true, paragraph: 'b-1'}}, to: 'image', expect: {kind: 'image', note: {paragraph: 'b-1'}}},
+    {name: 'image -> comment keeps the paragraph, not the place', from: {kind: 'image', note: {place: 'before', paragraph: 'b-2'}}, to: 'comment', expect: {kind: 'comment', note: {paragraph: 'b-2'}}},
+    {name: 'a waiting "?" stops waiting', from: {kind: 'unpaired', awaitingMark: {since: '2026-11-25T10:00:00.000Z', from: 'tag'}}, to: 'comment', expect: {awaitingMark: null}},
+    {name: '"Insert right here" is forgotten', from: {kind: 'insertion', placement: 'here'}, to: 'image', expect: {kind: 'image'}},
+  ];
+
+  it.each(STEPS.map(item => [item.name, item] as const))('%s', (_name, item) => {
+    const before = read(item.from);
+    expect(canConvertSidemark(before)).toBe(true);
+    const after = convertSidemarkEntry(before, item.to);
+    const {noNote, ...fields} = item.expect;
+    expect(after).toMatchObject(fields);
+    expect(after.strokeRects).toBe(before.strokeRects);
+    if (noNote) {
+      expect(after.note).toBeUndefined();
+    }
+    expect(after.placement).toBeUndefined();
+    expect(parsePenEditEntry(JSON.parse(JSON.stringify(after)))).toEqual(after);
+  });
+
+  it('round trip "?" -> comment -> image -> "?" ends as it began', () => {
+    const start = read({kind: 'unpaired'});
+    const back = convertSidemarkEntry(convertSidemarkEntry(convertSidemarkEntry(start, 'comment'), 'image'), 'unpaired');
+    expect(back).toEqual(start);
+  });
+
+  it.each([
+    ['linked text (a number on the page)', {kind: 'replacement', number: 2, mark: strike}],
+    ['applied text', {kind: 'unpaired', state: 'applied'}],
+  ])('%s stays as it is', (_name, value) => {
+    expect(canConvertSidemark(read(value))).toBe(false);
   });
 });

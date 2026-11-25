@@ -174,6 +174,9 @@ writes the entry, the tag on the strokes and the sign (a speech bubble with "C" 
 frame, `domain/penEditTags.ts` `snippetSign`; circles stay for the numbers of tagged text). Both
 lasso buttons write through `actions/sidemarkWrite.ts`: lasso snapshot and picture, the wait after
 the lasso closes, the tag on the strokes, the index entry before the sign, and the sign.
+`actions/sidemarkConvert.ts` changes a sidemark without a link between "?", comment and image
+(`domain/penEditModel.ts` `convertSidemarkEntry`): the entry first, then the sign
+(`supernote/penEditElements.ts` `replaceSnippetSign`), set back if the sign can't change.
 
 **Housekeeping** (`domain/housekeeping.ts`, `storage/housekeepingStore.ts`,
 `actions/housekeeping.ts`) keeps the plugin folder small: once per JS context, a few seconds after

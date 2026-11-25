@@ -7,6 +7,8 @@ import {
   penEditNumberText,
   penEditUserData,
   parsePenEditUserData,
+  snippetSign,
+  type PenEditKind,
   type PenEditRole,
 } from '../domain/penEditTags';
 import {readPageElements, recycleElements} from './noteElements';
@@ -225,6 +227,60 @@ export async function setSnippetNumber(
     const response = (await PluginCommAPI.modifyPageElements([numberBox], page, null)) as SdkResponse<number[]>;
     const error = response?.success ? null : 'modifyPageElements: ' + sdkErrorText(response, 'failed');
     return {changed: error === null, error};
+  } catch (caught) {
+    return {changed: false, error: caught instanceof Error ? caught.message : String(caught)};
+  } finally {
+    await recycleElements(elements);
+  }
+}
+
+/**
+ * A sidemark changes between "?", comment and image (technical-design-comments-images.md §3.3):
+ * its sign is replaced where it is now (a ring with "?", a bubble with "C", a frame). One read of
+ * the page finds the old sign and its text by `userData`; they are deleted, then the new ones
+ * inserted (inserting renumbers the page, so never the other way round) and the note saved. If the
+ * new sign can't be inserted, the old one is put back. `fallback`: where the sign was tagged, for a
+ * sign no longer found. Never throws; `error` says why nothing changed.
+ */
+export async function replaceSnippetSign(
+  notePath: string,
+  page: number,
+  id: string,
+  change: {from: PenEditKind; to: PenEditKind; fallback: Rect},
+): Promise<{changed: boolean; error: string | null}> {
+  let elements: Element[] = [];
+  try {
+    elements = await readPageElements(notePath, page, `Could not read page ${page + 1}.`);
+    const own = elements.filter(element => {
+      const role = parsePenEditUserData(element.userData);
+      return role?.id === id && (role.role === 'snippet' || role.role === 'snippetnum');
+    });
+    const badge = own.find(element => parsePenEditUserData(element.userData)?.role === 'snippet');
+    const box = boundsOfPoints(badge?.geometry?.points ?? []) ?? change.fallback;
+    const request = (kind: PenEditKind): TagElementsRequest => {
+      const sign = snippetSign(kind, box, null);
+      return {
+        page,
+        id,
+        badges: [{role: 'snippet', points: sign.points}],
+        numbers: sign.text !== null && sign.textRect ? [{role: 'snippetnum', rect: sign.textRect, text: sign.text}] : [],
+      };
+    };
+    if (own.length > 0) {
+      const response = (await PluginCommAPI.deletePageElements(own.map(element => element.numInPage), page, null)) as SdkResponse<boolean>;
+      if (!response?.success) {
+        return {changed: false, error: 'deletePageElements: ' + sdkErrorText(response, 'failed')};
+      }
+    }
+    const placed = await insertTagElements(request(change.to));
+    if (!placed.placed) {
+      const back = own.length > 0 ? await insertTagElements(request(change.from)) : null;
+      if (back && !back.placed) {
+        console.warn('[PenEditElements] old sign not put back', JSON.stringify({id, error: back.error}));
+      }
+      return {changed: false, error: placed.error};
+    }
+    return {changed: true, error: null};
   } catch (caught) {
     return {changed: false, error: caught instanceof Error ? caught.message : String(caught)};
   } finally {

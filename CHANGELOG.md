@@ -7,6 +7,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 ### Added
 
 - Comments and images: the new lasso button "Comment or Image" keeps handwriting beside the text as a comment or an image. A small card asks Comment · Image (or Cancel); a comment gets a speech bubble with "C" on the page, an image a plain double frame. They have no number and never change the text: Apply leaves them and their signs alone.
+  - Text tagged with "Insertion or Replacement" that has no mark can become a comment or an image, and back: on the "No mark found" card (Select mark now · Comment · Image · Later), on "Not a clear mark" for the text that waits for its mark (the strokes you just selected stay plain handwriting), and in the review under To decide. Its "?" becomes the bubble or the frame.
 
 - Fine marks: change single letters, spaces and punctuation by pen.
   - A strike with a short line across each end deletes exactly what is between them, from one letter to several words, even inside a word ("redd|ish|" → "red", "kind|ness|" → "kind"); for one letter the strike between the lines may be very short. With a small circle too (after the strike, above it or at the right line's top), the tagged text replaces exactly that part ("simp|licity|" + "le" → "simple"); the number goes into the circle. Lines inside a strike, away from its ends, mark nothing. A strike alone or with a small circle still takes whole words.

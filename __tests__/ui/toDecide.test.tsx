@@ -26,7 +26,7 @@ const base: ToDecideItem = {kind: 'unclear', key: 'k', summary: '', reason: 'why
 const at = {uuid: 'tb1', numInPage: 1, lineIndex: 0, start: 4, end: 7};
 
 function render(item: ToDecideItem) {
-  const calls = {here: jest.fn(), selectMark: jest.fn(), placeHere: jest.fn(), ignore: jest.fn(), drop: jest.fn()};
+  const calls = {here: jest.fn(), selectMark: jest.fn(), placeHere: jest.fn(), keepAs: jest.fn(), ignore: jest.fn(), drop: jest.fn()};
   let tree!: renderer.ReactTestRenderer;
   act(() => {
     tree = renderer.create(
@@ -42,6 +42,7 @@ function render(item: ToDecideItem) {
         onHere={calls.here}
         onSelectMark={calls.selectMark}
         onPlaceHere={calls.placeHere}
+        onKeepAs={calls.keepAs}
         onIgnore={calls.ignore}
         onDrop={calls.drop}
         dropConfirm={null}
@@ -60,13 +61,23 @@ describe('To decide sides', () => {
     expect(calls.here).toHaveBeenCalledWith([1]);
   });
 
-  it('"?": Select mark ›, Insert right here, Drop', () => {
+  it('"?": Select mark ›, Insert right here, Comment, Image, Drop', () => {
     const {tree, calls} = render({...base, kind: 'noMark', summary: 'Text ?', penEditId: 'pe', canPlaceHere: true});
     expect(JSON.stringify(tree.toJSON())).toContain('Where it is on the page');
     press(tree, 'Select mark ›');
     press(tree, 'Insert right here');
+    press(tree, 'Comment');
+    press(tree, 'Image');
     press(tree, 'Drop');
     expect([calls.selectMark, calls.placeHere, calls.drop].map(call => call.mock.calls.length)).toEqual([1, 1, 1]);
+    expect(calls.keepAs.mock.calls).toEqual([['comment'], ['image']]);
+  });
+
+  it('place open and unclear offer no Comment or Image (only text without a mark is a sidemark to keep)', () => {
+    const {tree} = render({...base, kind: 'placeOpen', summary: 'Replacement 3', guess: at, text: TEXT, penEditId: 'pe', number: 3});
+    const labels = tree.root.findAll(node => node.type === Text).map(node => String(node.props.children));
+    expect(labels).not.toContain('Comment');
+    expect(labels).not.toContain('Image');
   });
 
   it('unclear: a reading offered, its place, then Here; Ignore; Remove strokes', () => {

@@ -48,6 +48,8 @@ import {useTimingsExport} from './useTimingsExport';
 import type {PunctuationChar} from '../../domain/marks/shapes/punct';
 import type {ToDecideItem} from '../../domain/marks/toDecide';
 import {rememberIgnored} from '../../storage/ignoredMarks';
+import {convertSidemark} from '../../actions/sidemarkConvert';
+import type {SidemarkKind} from '../../domain/penEditModel';
 
 export interface ManuscriptReview {
   note: NoteInfo | null;
@@ -75,6 +77,11 @@ export interface ManuscriptReview {
   setPunctChar: (operationId: string, char: PunctuationChar) => void;
   /** "Insert right here": tagged text without a usable mark goes in where its handwriting starts. */
   placeHere: (page: number, id: string) => void;
+  /**
+   * A sidemark becomes "?", a comment or an image (technical-design-comments-images.md §3.3): the
+   * entry and its sign change at once, then the page is read again.
+   */
+  convert: (page: number, id: string, kind: SidemarkKind) => void;
   /**
    * Here on a place that stayed open (technical-design-mark-dialogue.md §2.7): a pen edit stores
    * it (`confirmed`, with its edges) and the page is read again; an unclear plain mark becomes the
@@ -602,6 +609,12 @@ export function useManuscriptReview(): ManuscriptReview {
     [storeAndReread],
   );
 
+  const convert = useCallback(
+    (page: number, id: string, kind: SidemarkKind) =>
+      storeAndReread(page, () => convertSidemark(id, kind), 'Could not change the sign on the page. Please try again.'),
+    [storeAndReread],
+  );
+
   const here = useCallback(
     (page: number, item: ToDecideItem, edges: EdgeShift | null, option?: number) => {
       const penId = item.penEditId;
@@ -654,6 +667,7 @@ export function useManuscriptReview(): ManuscriptReview {
     setRemovePunct,
     setPunctChar,
     placeHere,
+    convert,
     loading,
     busy,
     applied,

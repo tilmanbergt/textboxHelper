@@ -1,5 +1,5 @@
 import {isNoShift, type EdgeShift} from './edgeShift';
-import {isNoteKind, type PenEditKind} from './penEditTags';
+import {isNoteKind, type NoteKind, type PenEditKind} from './penEditTags';
 import type {Rect} from './textboxModel';
 
 /**
@@ -472,4 +472,39 @@ export function kindOfMark(mark: PenEditMark | null): PenEditKind {
     return 'unpaired';
   }
   return mark.kind === 'replace' ? 'replacement' : 'insertion';
+}
+
+/** What a sidemark without a link can become: text without a mark ("?"), a comment, an image. */
+export type SidemarkKind = 'unpaired' | NoteKind;
+
+/**
+ * Whether a sidemark can change between "?", comment and image (technical-design-comments-images.md
+ * §3.3): only while it is linked to no mark. A number on the page means linked, and stays.
+ */
+export function canConvertSidemark(entry: PenEditEntry): boolean {
+  return entry.state === 'active' && entry.mark === null && entry.number === null;
+}
+
+/**
+ * The entry as `kind`: no number, no mark, no wait for a mark, no place of its own. A note keeps
+ * the paragraph the user chose (and an image its place, a comment its Done); "?" has no note.
+ * Its strokes keep their tags, so the review keeps taking them out of the marks.
+ */
+export function convertSidemarkEntry(entry: PenEditEntry, kind: SidemarkKind): PenEditEntry {
+  const converted: PenEditEntry = {...entry, kind, number: null, mark: null, awaitingMark: null, edges: null};
+  delete converted.note;
+  delete converted.placement;
+  delete converted.confirmed;
+  if (kind === 'unpaired') {
+    return converted;
+  }
+  const kept = entry.note ?? {};
+  return {
+    ...converted,
+    note: {
+      ...(kept.paragraph ? {paragraph: kept.paragraph} : {}),
+      ...(kind === 'image' && kept.place ? {place: kept.place} : {}),
+      ...(kind === 'comment' && kept.done ? {done: true} : {}),
+    },
+  };
 }
