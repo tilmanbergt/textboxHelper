@@ -7,9 +7,20 @@ It targets the Android-based Supernote plugin runtime only. It does not support 
 
 ## Status
 
-Manuscript is in beta.
+Manuscript is in beta. It changes NOTE page elements directly: try it on a copy of a note before
+using it on an important notebook. It writes a backup of the pages before every change.
 
-The plugin directly modifies NOTE page elements. Please test it on copied notes before using it on important notebooks.
+New to it? Open Manuscript and tap **?**: **Getting started** explains the buttons and the core
+marks and puts a cheat sheet of the marks on a page of your choice.
+
+### Known limits
+
+- Developed and tested on the Supernote A5 X; the Nomad, Manta and other devices are beta.
+- Made for portrait; landscape is untested.
+- Fonts that come with the Supernote (for example 851tegakizatsu) can't be read by plugins: marks
+  on textboxes in such a font are listed under To decide until you copy the font to
+  `MyStyle/Manuscript/fonts` (see Fonts below).
+- Handwriting recognition is the Supernote's own; tagged text can need a correction in the review.
 
 ## Main Features
 
@@ -30,7 +41,7 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 - Put in punctuation with a caret and a small circle holding the mark, without tagging
 - Support both freehand strokes and Supernote straight-line geometry
 - Review all changes before applying them: removed words struck through, replacements in bold, one textbox at a time
-- Calibrate the text measurement and save diagnostics of a marker preview to the EXPORT folder (Manuscript → Settings), for bug reports
+- Calibrate the text measurement (Manuscript → Settings → Calibration); Report a problem (Settings → Diagnostics) saves how the last marks were read, for bug reports
 
 ### Replacement and Insertion
 
@@ -99,7 +110,8 @@ edit-marker calibration and the Outline's heading settings in `settings.json` in
 kept in `pen-edits/` in the same folder, the Outline's block statuses in `block-status.json`, and
 what a linked import came from (the file's path and its original text) and which files a note is
 linked to in `sources/`, together with each linked file's text before the plugin's latest write
-to it.
+to it. Getting started is shown by itself only once (`onboarding` in `settings.json`). What the
+plugin reads and writes in detail: [PRIVACY.md](PRIVACY.md).
 
 ## Installation
 
@@ -114,6 +126,10 @@ to it.
 Developed and tested on the Supernote A5 X; other devices are beta.
 
 ## Support
+
+Something wrong? Right after it happens, open Manuscript → Settings → Diagnostics → **Report a
+problem**. It saves one file to EXPORT with the version, device, settings, how the last marks were
+read and the errors of this session - your text only if you tick it. Attach it to a bug report.
 
 - Bugs, ideas and questions: [GitHub Issues](https://github.com/tilmanbergt/manuscript/issues)
   (the forms ask for what helps).
