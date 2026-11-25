@@ -5,6 +5,8 @@ import type {
   RecognizedEditOperation,
 } from './markerTypes';
 import type {ToDecideItem} from './marks/toDecide';
+import type {NoteRow} from './notes/noteRows';
+import {plural} from './plural';
 
 /**
  * The Manuscript card across the whole note (technical-design-manuscript.md §4.2): which pages are
@@ -29,9 +31,14 @@ export type ManuscriptEntry = {
 /** One item of To decide in the card's list, with the page it is on. */
 export type DecideEntry = {key: string; page: number; item: ToDecideItem};
 
+/** A comment or image in the card's Notes tab (technical-design-comments-images.md §5.2). */
+export type NoteEntry = {key: string; page: number; row: NoteRow};
+
 export type ManuscriptView = {
   entries: ManuscriptEntry[];
   toDecide: DecideEntry[];
+  /** The comments and images of every read page. */
+  notes: NoteEntry[];
   /** The ready changes of every read page, page by page. */
   plans: EditMarkerApplyPlan[];
   readyCount: number;
@@ -46,6 +53,7 @@ export function combinePages(pages: Record<number, PageReview>): ManuscriptView 
   const view: ManuscriptView = {
     entries: [],
     toDecide: [],
+    notes: [],
     plans: [],
     readyCount: 0,
     pendingCount: 0,
@@ -67,6 +75,9 @@ export function combinePages(pages: Record<number, PageReview>): ManuscriptView 
     preview.toDecide.forEach(item => {
       view.toDecide.push({key: `${page}:${item.key}`, page, item});
     });
+    (preview.base?.notes ?? []).forEach(row => {
+      view.notes.push({key: `${page}:note:${row.id}`, page, row});
+    });
     if (preview.applyPlan && preview.canApply) {
       view.plans.push(preview.applyPlan);
       view.readyCount += preview.applyPlan.operations.length;
@@ -77,7 +88,10 @@ export function combinePages(pages: Record<number, PageReview>): ManuscriptView 
   return view;
 }
 
-/** A page chip: "p.3 ✓" nothing to do, "p.3 · 4" changes, "p.3 ?" not read, "p.3 …" reading. */
+/**
+ * A page chip: "p.3 ✓" nothing to do, "p.3 · 4" changes, "p.3 ?" not read, "p.3 …" reading; its
+ * comments and images after them ("p.3 · 4 · 2 notes", "p.3 · 1 note").
+ */
 export function chipLabel(page: number, review: PageReview | undefined): string {
   const name = `p.${page + 1}`;
   if (!review || review.state === 'unread') {
@@ -90,7 +104,9 @@ export function chipLabel(page: number, review: PageReview | undefined): string 
     return `${name} !`;
   }
   const count = review.preview.hunks.length + review.preview.toDecide.length;
-  return count === 0 ? `${name} ✓` : `${name} · ${count}`;
+  const notes = review.preview.base?.notes?.length ?? 0;
+  const notesPart = notes > 0 ? ` · ${plural(notes, 'note')}` : '';
+  return count === 0 ? (notes > 0 ? `${name}${notesPart}` : `${name} ✓`) : `${name} · ${count}${notesPart}`;
 }
 
 /** Pages not read yet (or whose read failed), in order. */
@@ -129,6 +145,7 @@ export function listChanged(before: PageReview | undefined, after: EditMarkerPre
     JSON.stringify([
       preview.hunks.map(hunk => [hunk.label, hunk.before, hunk.after, hunk.segments]),
       preview.toDecide.map(item => [item.kind, item.reason]),
+      (preview.base?.notes ?? []).map(row => [row.id, row.kind, row.at?.uuid ?? null]),
     ]);
   return keys(before.preview) !== keys(after);
 }

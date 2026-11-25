@@ -4,6 +4,7 @@ import {asideStart, isAsideDivider} from './noteRegions';
 import type {Rect} from './textboxModel';
 import type {ScannedTextBox} from './exportClassification';
 import type {PageReview} from './manuscriptPages';
+import type {NoteCount} from './notes/outlineNotes';
 
 /**
  * The Manuscript Outline (technical-design-manuscript.md §5.1): every textbox of the note as one
@@ -56,6 +57,8 @@ export type OutlineBlock = {
   status: BlockStatus;
   /** Edits waiting on this block; null while its page is not read by the Review. */
   pendingEdits: number | null;
+  /** Its comments and images (technical-design-comments-images.md §6); missing when none. */
+  notes?: NoteCount;
 };
 
 export type OutlineBlockKind = 'file' | 'heading' | 'paragraph' | 'aside';

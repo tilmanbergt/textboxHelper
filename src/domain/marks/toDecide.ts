@@ -20,13 +20,15 @@ import type {DecideOption} from './decide';
  *   margin beside it): a picture, the words under them, why, the readings pass 1 found. Strokes
  *   refused by the strike family that lie close together over one line form one item (§13.3 Q7).
  *   Strokes away from the text are handwriting: not listed.
+ * - `noParagraph`: a comment or image with no paragraph on its page
+ *   (technical-design-comments-images.md §5.3): ‹ › choose one on the pages beside it, or Drop.
  */
 
 /** What Ignore remembers of an unclear item: where it is (± 4 px) and a short hash of its points. */
 export type IgnoreKey = {rect: Rect; hash: string};
 
 export type ToDecideItem = {
-  kind: 'placeOpen' | 'noMark' | 'unclear';
+  kind: 'placeOpen' | 'noMark' | 'unclear' | 'noParagraph';
   /** Unique on its page. */
   key: string;
   /** "Replacement 4", "Text ?", "Insertion 2", or what an unclear mark may be ("Slash"). */

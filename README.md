@@ -46,6 +46,9 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 - Keep handwriting beside the text as a comment or an image with the lasso button "Comment or Image": a small card asks which; a comment gets a speech bubble with "C", an image a plain double frame (circles stay for the numbers of tagged text)
 - Comments and images never change the text: Apply leaves them alone
 - Text without a mark ("?") can become a comment or an image, and back: on the tag's cards and under To decide
+- Each belongs to the paragraph beside it; Manuscript's Notes tab lists them with their paragraph: read and correct a comment, choose another paragraph, tick it done, or drop it; an image goes before or after its paragraph
+- The Outline counts the comments and images of each paragraph across the whole note
+- Not exported; images are written to a linked file in a later version
 
 ### Manuscript
 

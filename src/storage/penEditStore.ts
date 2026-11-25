@@ -172,6 +172,20 @@ export async function readPenEditStrokes(id: string): Promise<PenEditStrokeData 
   }
 }
 
+/**
+ * Replaces an entry's stored strokes (Update image) and removes its picture from tag time: the
+ * strokes as they are now are drawn in its place.
+ */
+export async function replacePenEditStrokes(data: PenEditStrokeData): Promise<void> {
+  const dir = buildPenEditEntryDir(await pluginDir(), data.id);
+  await RNFS.mkdir(dir);
+  await RNFS.writeFile(`${dir}/${STROKES_FILE}`, JSON.stringify(data), 'utf8');
+  const picture = `${dir}/${PICTURE_FILE}`;
+  if (await RNFS.exists(picture)) {
+    await RNFS.unlink(picture);
+  }
+}
+
 /** The picture's path for an `Image` (`file://…`). */
 export async function penEditPictureUri(id: string): Promise<string> {
   return `file://${buildPenEditEntryDir(await pluginDir(), id)}/${PICTURE_FILE}`;

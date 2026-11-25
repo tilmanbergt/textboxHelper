@@ -287,3 +287,43 @@ export async function replaceSnippetSign(
     await recycleElements(elements);
   }
 }
+
+/**
+ * Drop of a comment or image (technical-design-comments-images.md §5.4): its sign and the sign's
+ * text are deleted, and its strokes lose their tag, so they are plain handwriting again. Strokes
+ * first (a change in place), then the delete (which renumbers), then save. Never throws.
+ */
+export async function removeSidemarkTags(notePath: string, page: number, id: string): Promise<{done: boolean; error: string | null}> {
+  let elements: Element[] = [];
+  try {
+    elements = await readPageElements(notePath, page, `Could not read page ${page + 1}.`);
+    const own = elements.filter(element => parsePenEditUserData(element.userData)?.id === id);
+    const strokes = own.filter(element => {
+      const role = parsePenEditUserData(element.userData)?.role;
+      return role === 'stroke' || role === 'mark';
+    });
+    const signs = own.filter(element => !strokes.includes(element));
+    if (strokes.length > 0) {
+      strokes.forEach(element => {
+        element.userData = '';
+      });
+      const modified = (await PluginCommAPI.modifyPageElements(strokes, page, null)) as SdkResponse<number[]>;
+      if (!modified?.success) {
+        return {done: false, error: 'modifyPageElements: ' + sdkErrorText(modified, 'failed')};
+      }
+    }
+    if (signs.length > 0) {
+      const deleted = (await PluginCommAPI.deletePageElements(signs.map(element => element.numInPage), page, null)) as SdkResponse<boolean>;
+      if (!deleted?.success) {
+        return {done: false, error: 'deletePageElements: ' + sdkErrorText(deleted, 'failed')};
+      }
+    }
+    const saved = await saveCurrentNote();
+    console.log('[PenEditElements] sidemark untagged', JSON.stringify({id, page, strokes: strokes.length, signs: signs.length, saved}));
+    return {done: true, error: null};
+  } catch (caught) {
+    return {done: false, error: caught instanceof Error ? caught.message : String(caught)};
+  } finally {
+    await recycleElements(elements);
+  }
+}

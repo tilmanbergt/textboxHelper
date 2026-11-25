@@ -4,12 +4,13 @@
  *
  * The page strip: every page of the note with its count of changes and items to decide (✓ none,
  * ? not read yet); tapping a page shows only its own (and reads it first), "Read n pages" reads
- * the rest. Three tabs, New text n · Marks m · To decide k (technical-design-mark-dialogue.md
- * §5.3, §13.5). New text: the changes with tagged text, by their number on the page, which is
+ * the rest. Four tabs, New text n · Marks m · To decide k · Notes j (technical-design-mark-dialogue.md
+ * §5.3, §13.5; technical-design-comments-images.md §5.2). New text: the changes with tagged text, by their number on the page, which is
  * circled as on the page; Marks: the other changes in reading order, each with its kind's symbol.
  * Left, the changes, each with its changed text in full and a few words of context, and Drop; right, the side bar for the selected change, with its text to correct, its
  * edges and its actions. To decide: left, what the review can't make a change of on its own;
- * right, its side (`ToDecideSide`). Drop asks in the side bar, so rows never change height.
+ * right, its side (`ToDecideSide`). Notes: the comments and images, which are no changes, and
+ * their side (`NoteSide`). Drop asks in the side bar, so rows never change height.
  */
 import React, {useEffect, useMemo, useState} from 'react';
 import {Pressable, StyleSheet, Text, View, type LayoutChangeEvent} from 'react-native';
@@ -20,7 +21,7 @@ import type {ChangeHunk, PenTextState} from '../../domain/markerTypes';
 import {plural} from '../../domain/plural';
 import {estimateLines, segmentsText} from '../../domain/textPages';
 import {NO_MARKS} from '../../domain/helpTexts';
-import {rowMarker, splitReviewLists} from '../../domain/reviewLists';
+import {notesList, rowMarker, splitReviewLists} from '../../domain/reviewLists';
 import ChipRow from '../../ui/ChipRow';
 import CountTabs from '../../ui/CountTabs';
 import EmptyState from '../../ui/EmptyState';
@@ -31,7 +32,10 @@ import {COLORS, FONT, LINE_HEIGHT, RADII, SPACING} from '../../ui/theme';
 import ChangeSide, {DropConfirm, type PenDetail} from './ChangeSide';
 import ToDecideList from './ToDecideList';
 import ToDecideSide, {penOf} from './ToDecideSide';
+import NotesList from './NotesList';
+import NoteSide, {NoteDropConfirm} from './NoteSide';
 import type {ManuscriptReview} from './useManuscriptReview';
+import {useNotes} from './useNotes';
 
 /** Words of context a list row shows on each side of a change. */
 const ROW_CONTEXT_WORDS = 6;
@@ -45,7 +49,7 @@ const ROW_SIDES = 32 + 96 + 2 * SPACING.md + 2 * (SPACING.sm + ROW_BORDER);
 const ROW_CHAR_WIDTH_SHARE = 0.6;
 
 type PageFilter = 'all' | `${number}`;
-type ReviewList = 'text' | 'marks' | 'decide';
+type ReviewList = 'text' | 'marks' | 'decide' | 'notes';
 type PendingDrop = {title: string; page: number; items: DropItem[]; withHandwriting: boolean; forAttention: boolean};
 
 interface Props {
@@ -79,10 +83,13 @@ export default function ReviewTab({
   // Null: New text when it has changes, else Marks (technical-design-mark-dialogue.md §13.5).
   const [chosenList, setList] = useState<ReviewList | null>(null);
   const [decideKey, setDecideKey] = useState<string | null>(null);
+  const [noteKey, setNoteKey] = useState<string | null>(null);
+  const [droppingNote, setDroppingNote] = useState(false);
+  const notes = useNotes(review);
   const [listWidth, setListWidth] = useState(0);
   const [pageFilter, setPageFilter] = useState<PageFilter>('all');
 
-  useEffect(() => onBlockedChange(editing || !!pendingDrop), [editing, onBlockedChange, pendingDrop]);
+  useEffect(() => onBlockedChange(editing || !!pendingDrop || droppingNote), [droppingNote, editing, onBlockedChange, pendingDrop]);
   useEffect(() => {
     if (showPage !== null) {
       setPageFilter(`${showPage}`);
@@ -93,7 +100,12 @@ export default function ReviewTab({
   const list: ReviewList = chosenList ?? (lists.text.length > 0 ? 'text' : 'marks');
   const entries = list === 'marks' ? lists.marks : lists.text;
   const toDecide = useMemo(() => onPage(view.toDecide, pageFilter), [view.toDecide, pageFilter]);
-  useEffect(() => setPendingDrop(null), [view]);
+  const noteEntries = useMemo(() => notesList(onPage(view.notes, pageFilter)), [view.notes, pageFilter]);
+  const noted = noteEntries.find(entry => entry.key === noteKey) ?? noteEntries[0] ?? null;
+  useEffect(() => {
+    setPendingDrop(null);
+    setDroppingNote(false);
+  }, [view]);
 
   // A new set of changes selects the first one (or the one whose mark was just selected); a pen
   // edit's text arriving re-assembles the list but keeps the selection.
@@ -178,7 +190,13 @@ export default function ReviewTab({
     estimateLines(rowText(entry.hunk), textWidth, FONT.medium, ROW_CHAR_WIDTH_SHARE) * LINE_HEIGHT.medium;
   // The page "Go to page" opens: the chosen page, else the selected change's page.
   const shownPage =
-    pageFilter !== 'all' ? Number(pageFilter) : list === 'decide' ? decided?.page ?? null : selected?.page ?? null;
+    pageFilter !== 'all'
+      ? Number(pageFilter)
+      : list === 'decide'
+      ? decided?.page ?? null
+      : list === 'notes'
+      ? noted?.page ?? null
+      : selected?.page ?? null;
   useEffect(() => onPageShown(shownPage), [onPageShown, shownPage]);
   const header =
     pageFilter === 'all'
@@ -232,18 +250,32 @@ export default function ReviewTab({
             {key: 'text', label: 'New text', count: lists.text.length},
             {key: 'marks', label: 'Marks', count: lists.marks.length},
             {key: 'decide', label: 'To decide', count: toDecide.length},
+            {key: 'notes', label: 'Notes', count: noteEntries.length},
           ]}
           activeKey={list}
           onChange={key => {
             setEditing(false);
             setPendingDrop(null);
+            setDroppingNote(false);
             setList(key);
           }}
         />
       </View>
       <View style={styles.columns}>
         <View style={styles.list} onLayout={(event: LayoutChangeEvent) => setListWidth(event.nativeEvent.layout.width)}>
-          {list === 'decide' ? (
+          {list === 'notes' ? (
+            <NotesList
+              entries={noteEntries}
+              selectedKey={noted?.key ?? null}
+              onSelect={key => {
+                setEditing(false);
+                setNoteKey(key);
+              }}
+              penStates={review.penStates}
+              severalPages={pageCount > 1}
+              resetKey={`${pageFilter}|${noteEntries.map(entry => entry.key).join('|')}`}
+            />
+          ) : list === 'decide' ? (
             <ToDecideList
               entries={toDecide}
               selectedKey={decided?.key ?? null}
@@ -291,7 +323,26 @@ export default function ReviewTab({
           ) : null}
         </View>
         <View style={styles.side}>
-          {list === 'decide' ? (
+          {list === 'notes' ? (
+            noted ? (
+              <NoteSide
+                entry={noted}
+                pageRects={notes.paragraphs(noted.page).map(item => item.rect)}
+                penState={review.penStates[noted.row.id] ?? null}
+                busy={busy || loading || applied}
+                editing={editing}
+                onEditing={setEditing}
+                onRead={() => review.readNote(noted.row.id, noted.page)}
+                onSaveText={text => review.correct(noted.row.id, text)}
+                onStep={direction => notes.step(noted.row, direction)}
+                onDone={done => notes.setDone(noted.row, done)}
+                onPlace={place => notes.setPlace(noted.row, place)}
+                onUseAsText={() => notes.useAsText(noted.row)}
+                onUpdateImage={() => notes.updateImage(noted.row)}
+                onDrop={() => notes.drop(noted.row)}
+              />
+            ) : null
+          ) : list === 'decide' ? (
             decided ? (
               <ToDecideSide
                 entry={decided}
@@ -314,9 +365,14 @@ export default function ReviewTab({
                 onSelectMark={() => decided.item.penEditId && review.selectMark(decided.item.penEditId, onClose)}
                 onPlaceHere={() => decided.item.penEditId && review.placeHere(decided.page, decided.item.penEditId)}
                 onKeepAs={kind => decided.item.penEditId && review.convert(decided.page, decided.item.penEditId, kind)}
+                onStepParagraph={direction =>
+                  decided.item.penEditId && notes.step({id: decided.item.penEditId, page: decided.page, at: null}, direction)
+                }
                 onIgnore={() => review.ignore(decided.page, decided.item)}
                 onDrop={
-                  !applied && dropItemOfToDecide(decided.item)
+                  decided.item.kind === 'noParagraph'
+                    ? () => setDroppingNote(true)
+                    : !applied && dropItemOfToDecide(decided.item)
                     ? () =>
                         askDrop(
                           decided.item.kind === 'unclear'
@@ -328,7 +384,23 @@ export default function ReviewTab({
                         )
                     : null
                 }
-                dropConfirm={pendingDrop?.forAttention ? dropConfirm : null}
+                dropConfirm={
+                  decided.item.kind === 'noParagraph' && droppingNote ? (
+                    <NoteDropConfirm
+                      kind={decided.item.summary === 'Image' ? 'image' : 'comment'}
+                      busy={busy}
+                      onDrop={() => {
+                        setDroppingNote(false);
+                        if (decided.item.penEditId) {
+                          notes.drop({id: decided.item.penEditId, page: decided.page, at: null});
+                        }
+                      }}
+                      onCancel={() => setDroppingNote(false)}
+                    />
+                  ) : pendingDrop?.forAttention ? (
+                    dropConfirm
+                  ) : null
+                }
               />
             ) : null
           ) : selected ? (
@@ -386,6 +458,7 @@ export function reviewContext(review: ManuscriptReview): string {
     loading && view.entries.length === 0 ? null : plural(view.entries.length, 'edit'),
     view.pendingCount > 0 ? `${view.pendingCount} recognizing` : null,
     view.toDecide.length > 0 ? `${view.toDecide.length} to decide` : null,
+    view.notes.length > 0 ? plural(view.notes.length, 'note') : null,
   ]
     .filter(Boolean)
     .join(' · ');

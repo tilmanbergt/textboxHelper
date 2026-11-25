@@ -39,6 +39,7 @@ import {createTextboxMeasurer, type MeasuredTextbox, type TextboxMeasurer} from 
 import {cachedPage, rememberPage} from './manuscriptCache';
 import {loadPenEditContext, placeCaretInsertions, stateOf} from './penEditReview';
 import {readNotesOfPage} from './notesRead';
+import type {NoteRow} from '../domain/notes/noteRows';
 
 /**
  * Reading a page's edit marks into a review preview (technical-design-mark-dialogue.md §5.1): the
@@ -281,6 +282,10 @@ async function analyzePage(
     ...placed.gaps.map(gap => gap.penEditId),
   ]);
 
+  // Comments and images: their paragraphs; one without a paragraph on its page goes to To decide.
+  const notes = await timed('page.notes', () => readNotesOfPage(notePath, page, pageElements, pen.entries, pen.snippetRects), {page});
+  toDecide.push(...notes.notes.filter(row => !row.at).map(noParagraphItem));
+
   const base: MarkerPreviewBase = {
     notePath,
     page,
@@ -294,12 +299,13 @@ async function analyzePage(
     pageRects: views.map(view => ({...view.rect})),
     textboxes: sortTextElements([...groupedTextboxes.values()]).map(toTextboxBase),
     insertions: placed.gaps,
-    // The texts of the changes, and those in To decide (their text is shown and can be corrected).
+    // The texts of the changes, and those in To decide (their text is shown and can be corrected);
+    // never a note, which is recognized only when asked (Read).
     penEdits: pen.views.filter(
-      view => pairedPenEditIds.has(view.id) || insertedIds.has(view.id) || toDecide.some(item => item.penEditId === view.id),
+      view => pairedPenEditIds.has(view.id) || insertedIds.has(view.id) || toDecide.some(item => item.penEditId === view.id && item.kind !== 'noParagraph'),
     ),
     penStates: pen.states,
-    ...(await timed('page.notes', () => readNotesOfPage(notePath, page, pageElements, pen.entries, pen.snippetRects), {page})),
+    ...notes,
   };
   const endAssemble = startTiming('page.assemble', {page});
   const preview = assembleMarkerPreview(base, pen.states);
@@ -463,6 +469,23 @@ function noMarkItem(entry: PenEditEntry, rect: Rect): ToDecideItem {
     readings: [],
     guess: null,
     canPlaceHere: true,
+  };
+}
+
+/** A comment or image with no paragraph on its page: ‹ › choose one on the pages beside it. */
+function noParagraphItem(row: NoteRow): ToDecideItem {
+  return {
+    kind: 'noParagraph',
+    key: `nopara:${row.id}`,
+    summary: row.kind === 'comment' ? 'Comment' : 'Image',
+    reason: 'No paragraph on this page: choose one on the page before or after.',
+    penEditId: row.id,
+    number: null,
+    rect: row.rect,
+    strokes: [],
+    words: '',
+    readings: [],
+    guess: null,
   };
 }
 

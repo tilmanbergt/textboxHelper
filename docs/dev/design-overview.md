@@ -184,7 +184,14 @@ gives the textbox a block id only then, `actions/blockStatus.ts` `ensureBlockId`
 it is in the note. The Review reads a page's notes with their paragraphs after pass 2
 (`actions/notesRead.ts`, on the textboxes already read; a stored paragraph on another page is
 looked for there) into the preview base (`notes`, `paragraphs`), and stores a moved note's new
-place in the index.
+place in the index. The Review's fourth tab, Notes (`NotesList.tsx`, `NoteSide.tsx`, `useNotes.ts`;
+the list from `domain/reviewLists.ts` `notesList`), shows them; every action writes at once
+(`actions/noteEdit.ts`: paragraph, Done, place, Drop, Update image; `sidemarkConvert.ts` for Use as
+text) and the page is read again. A note without a paragraph on its page is a To decide item
+(`noParagraph`). The Outline counts each block's notes for the whole note from the index and its
+own scan (`domain/notes/outlineNotes.ts`). Apply removes signs only of the entries it applies
+(`penEditElementNums` filters by id), so notes and their signs stay; the "C" textbox carries the
+pen-edit tag, so the export and the write-back skip it (`isPenEditNumberElement`).
 
 **Housekeeping** (`domain/housekeeping.ts`, `storage/housekeepingStore.ts`,
 `actions/housekeeping.ts`) keeps the plugin folder small: once per JS context, a few seconds after

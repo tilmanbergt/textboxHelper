@@ -3,7 +3,7 @@ import {shiftRect} from '../penEditMatching';
 import type {NoteInfo, PenEditEntry} from '../penEditModel';
 import type {NoteKind} from '../penEditTags';
 import type {Rect} from '../textboxModel';
-import {readingOrder, type ParagraphCandidate, type ParagraphResult} from './paragraphOf';
+import {neighbours, readingOrder, type ParagraphCandidate, type ParagraphResult} from './paragraphOf';
 
 /**
  * A page's comments and images as the Review shows them (technical-design-comments-images.md
@@ -97,4 +97,39 @@ export function movedNote(entry: PenEditEntry, now: Rect): PenEditEntry | null {
     rect: shiftRect(entry.rect, dx, dy),
     strokeRects: entry.strokeRects.map(rect => shiftRect(rect, dx, dy)),
   };
+}
+
+/** What ‹ or › does: choose a paragraph, read a page first, or nothing (the note's start or end). */
+export type ParagraphStep<T extends ParagraphCandidate> = {target: T} | {load: number} | {none: true};
+
+/**
+ * ‹ Paragraph above · Paragraph below › from the paragraph a note belongs to (`uuid` on `page`,
+ * or none): the neighbour on that page (same region and file); past the page edge, the last
+ * paragraph of the previous page or the first of the next (§4), whose page is read on demand
+ * (`load`). `pages`: the paragraphs of the pages known so far.
+ */
+export function stepParagraph<T extends ParagraphCandidate>(
+  from: {page: number; uuid: string | null},
+  direction: 'above' | 'below',
+  pages: Map<number, T[]>,
+  pageCount: number,
+): ParagraphStep<T> {
+  const here = pages.get(from.page) ?? [];
+  if (from.uuid && here.some(item => item.uuid === from.uuid)) {
+    const next = neighbours(from.uuid, here)[direction];
+    if (next) {
+      return {target: next as T};
+    }
+  }
+  const page = from.page + (direction === 'above' ? -1 : 1);
+  if (page < 0 || page >= pageCount) {
+    return {none: true};
+  }
+  const there = pages.get(page);
+  if (!there) {
+    return {load: page};
+  }
+  const ordered = [...there].sort(readingOrder);
+  const target = direction === 'above' ? ordered[ordered.length - 1] : ordered[0];
+  return target ? {target} : {none: true};
 }

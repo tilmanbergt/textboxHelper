@@ -83,6 +83,13 @@ export interface ManuscriptReview {
    */
   convert: (page: number, id: string, kind: SidemarkKind) => void;
   /**
+   * A comment's or image's action (technical-design-comments-images.md §5.2): written at once,
+   * then the page is read again. `failure` is shown if the write fails.
+   */
+  writeNote: (page: number, write: () => Promise<void>, failure: string) => void;
+  /** Read on a comment: its handwriting is recognized now (notes are never recognized unasked). */
+  readNote: (id: string, page: number) => void;
+  /**
    * Here on a place that stayed open (technical-design-mark-dialogue.md §2.7): a pen edit stores
    * it (`confirmed`, with its edges) and the page is read again; an unclear plain mark becomes the
    * change of the reading chosen (`option`), kept while the review is open.
@@ -298,8 +305,15 @@ export function useManuscriptReview(): ManuscriptReview {
     }
     return result;
   }, [analyses]);
-  const penOrder = useMemo(() => [...penPages.keys()], [penPages]);
-  usePenRecognitionQueue(penOrder, selectedPenId, penStates, penPages, busy || loading, updatePenState);
+  // Comments asked to be read (Read): recognized like tagged text, first.
+  const [notesToRead, setNotesToRead] = useState<Map<string, number>>(new Map());
+  const recognizable = useMemo(() => new Map([...notesToRead, ...penPages]), [notesToRead, penPages]);
+  const penOrder = useMemo(() => [...recognizable.keys()], [recognizable]);
+  usePenRecognitionQueue(penOrder, selectedPenId, penStates, recognizable, busy || loading, updatePenState);
+  const readNote = useCallback((id: string, page: number) => {
+    setNotesToRead(current => new Map([...current, [id, page]]));
+    setPenStates(current => (current[id] ? {...current, [id]: {...current[id], status: 'waiting', text: '', correctedText: current[id].correctedText}} : current));
+  }, []);
 
   const store = useCallback((id: string, write: () => Promise<void>, state: PenTextState) => {
     updatePenState(id, state);
@@ -668,6 +682,8 @@ export function useManuscriptReview(): ManuscriptReview {
     setPunctChar,
     placeHere,
     convert,
+    writeNote: storeAndReread,
+    readNote,
     loading,
     busy,
     applied,

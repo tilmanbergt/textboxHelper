@@ -18,7 +18,8 @@ import {
   moveToEntry,
   type ContentsEntry,
 } from '../../../domain/outlineContents';
-import {OUTLINE_FILTERS, type OutlineFilter} from '../../../domain/outlineModel';
+import {OUTLINE_FILTERS, type OutlineBlock, type OutlineFilter} from '../../../domain/outlineModel';
+import {notesStayLine, type NoteCount} from '../../../domain/notes/outlineNotes';
 import {plannedOrder, plannedSummary, type ChangeMark} from '../../../domain/outlinePlan';
 import {plural} from '../../../domain/plural';
 import EmptyState from '../../../ui/EmptyState';
@@ -175,6 +176,7 @@ export default function OutlineTab({outline, disabled, onReviewPage, onGoToPage}
             <Text style={styles.bold}>Planned: </Text>
             {plannedSummary(blocks, plan, planned ?? plannedOrder(blocks, plan))}
             {outline.checking ? ' · checking the pages…' : checkNote(outline)}
+            {notesNote(blocks, marks)}
           </Text>
           <TextLink label="Undo last" onPress={outline.undoLastChange} disabled={disabled} />
         </View>
@@ -199,6 +201,17 @@ function entryHeader(entry: ContentsEntry, paragraphs: number): string {
 }
 
 /** What the check found: the pages rebuilt, or what stands in the way. */
+/**
+ * A block with comments or images that moves or is set aside: they stay where they were drawn in
+ * this version (technical-design-comments-images.md §6).
+ */
+function notesNote(blocks: OutlineBlock[], marks: Map<string, ChangeMark>): string {
+  const moving = [...marks].filter(([, mark]) => mark === 'moved' || mark === 'aside').map(([key]) => key);
+  const counts = new Map(blocks.filter(block => block.notes).map(block => [block.key, block.notes as NoteCount]));
+  const line = notesStayLine(moving, counts);
+  return line ? ` · ${line}` : '';
+}
+
 function checkNote(outline: Outline): string {
   const check = outline.check;
   if (!check) {

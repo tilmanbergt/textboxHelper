@@ -182,7 +182,11 @@ export const REVIEW_HELP: HelpBlock[] = [
   },
   {
     title: 'To decide',
-    text: 'The second tab: a numbered mark whose place stayed open (move it with ‹ › and tap Here), tagged text with a ? (Select mark, or Insert right here), and strokes on the text that read as no clear mark (read them as one of the marks offered, Ignore, or Remove). Select mark: draw the mark (or lasso the one you drew), lasso only the mark and tap Insertion or Replacement within 5 minutes.',
+    text: 'The third tab: a numbered mark whose place stayed open (move it with ‹ › and tap Here), tagged text with a ? (Select mark, Insert right here, or keep it as a Comment or an Image), strokes on the text that read as no clear mark (read them as one of the marks offered, Ignore, or Remove), and a comment or image on a page without a paragraph. Select mark: draw the mark (or lasso the one you drew), lasso only the mark and tap Insertion or Replacement within 5 minutes.',
+  },
+  {
+    title: 'Comments and images',
+    text: 'Lasso handwriting beside the text and tap Comment or Image, then choose. A comment gets a speech bubble with C, an image a double square frame; neither has a number, and Apply never changes them. Each belongs to the paragraph beside it. The Notes tab lists them: Read a comment, correct it, choose its paragraph with ‹ ›, tick it Done, or Use as text to make it tagged text again; for an image choose Before or After its paragraph. Drop takes the sign off; the handwriting stays. Images are written to the file in a later version.',
   },
   {
     title: 'A comma, a space, a letter',

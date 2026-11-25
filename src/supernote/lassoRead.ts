@@ -43,7 +43,8 @@ async function timed<T>(timings: Record<string, number>, name: string, call: () 
   }
 }
 
-async function readStroke(element: Element): Promise<StoredStroke | null> {
+/** One stroke element as stored with a pen edit: its points, pressures and pen. */
+export async function readStoredStroke(element: Element): Promise<StoredStroke | null> {
   if (!element.stroke?.points) {
     return null;
   }
@@ -165,7 +166,7 @@ export async function readLasso(
         continue;
       }
       try {
-        const stroke = await readStroke(element);
+        const stroke = await readStoredStroke(element);
         if (stroke && stroke.points.length > 0) {
           snap.strokes.push(stroke);
           snap.strokeRects.push(buildRecognizeRect(element.recognizeResult) ?? pointBounds(stroke.points) ?? {left: 0, top: 0, right: 0, bottom: 0});

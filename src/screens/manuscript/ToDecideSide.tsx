@@ -8,6 +8,8 @@
  *   (technical-design-comments-images.md §5.3), Drop.
  * - Unclear: its picture, the words under it, why; one button per reading pass 1 found, then that
  *   reading's edges, result and Here; Ignore, and Remove for strokes on the text.
+ * - A comment or image without a paragraph on its page (technical-design-comments-images.md
+ *   §5.3): where it is, ‹ Paragraph above · Paragraph below › from the pages beside it, Drop.
  */
 import React, {useEffect, useState} from 'react';
 import {StyleSheet, Text, View} from 'react-native';
@@ -39,6 +41,8 @@ interface Props {
   onPlaceHere: () => void;
   /** "?" kept as a comment or an image. */
   onKeepAs: (kind: NoteKind) => void;
+  /** A note without a paragraph: choose the one before or after it on the pages beside it. */
+  onStepParagraph: (direction: 'above' | 'below') => void;
   onIgnore: () => void;
   /** Null when there is nothing to drop or remove. */
   onDrop: (() => void) | null;
@@ -59,6 +63,7 @@ export default function ToDecideSide({
   onSelectMark,
   onPlaceHere,
   onKeepAs,
+  onStepParagraph,
   onIgnore,
   onDrop,
   dropConfirm,
@@ -81,7 +86,9 @@ export default function ToDecideSide({
   return (
     <View style={styles.side}>
       <View>
-        <Text style={styles.title}>{item.kind === 'noMark' ? `${item.summary}: no mark` : item.summary}</Text>
+        <Text style={styles.title}>
+          {item.kind === 'noMark' ? `${item.summary}: no mark` : item.kind === 'noParagraph' ? `${item.summary} without a paragraph` : item.summary}
+        </Text>
         <Text style={styles.meta}>{where}</Text>
       </View>
       {item.kind === 'noMark' && pen ? (
@@ -94,6 +101,12 @@ export default function ToDecideSide({
         <View style={styles.mapRow}>
           <PageMap rects={pageRects} frame={item.rect} />
           <Text style={styles.hint}>The text is kept with a ? and waits here for its mark.</Text>
+        </View>
+      ) : null}
+      {item.kind === 'noParagraph' ? (
+        <View style={styles.mapRow}>
+          <PageMap rects={pageRects} frame={item.rect} />
+          <Text style={styles.hint}>It belongs to a paragraph; this page has none.</Text>
         </View>
       ) : null}
       {item.kind === 'unclear' && item.options && item.options.length > 0 ? (
@@ -141,6 +154,12 @@ export default function ToDecideSide({
           ) : null}
           {item.kind === 'placeOpen' && item.canPlaceHere ? (
             <PillButton size="small" label="Insert right here" onPress={onPlaceHere} disabled={busy} />
+          ) : null}
+          {item.kind === 'noParagraph' ? (
+            <>
+              <PillButton size="small" label="‹ Paragraph above" onPress={() => onStepParagraph('above')} disabled={busy} />
+              <PillButton size="small" label="Paragraph below ›" onPress={() => onStepParagraph('below')} disabled={busy} />
+            </>
           ) : null}
           {item.kind === 'unclear' && item.ignore ? <PillButton size="small" label="Ignore" onPress={onIgnore} disabled={busy} /> : null}
           {onDrop ? (

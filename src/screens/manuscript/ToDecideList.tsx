@@ -1,7 +1,9 @@
 /**
  * The rows of To decide (technical-design-mark-dialogue.md §5.3): a number ring for a linked mark
  * whose place stayed open, a "?" ring for text without a mark, an empty dashed box for an unclear
- * mark; its kind; the words (or the recognized text, or "handwriting"); page and paragraph.
+ * mark, the bubble or frame of a comment or image without a paragraph
+ * (technical-design-comments-images.md §5.3); its kind; the words (or the recognized text, or
+ * "handwriting"); page and paragraph.
  */
 import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
@@ -9,17 +11,21 @@ import type {DecideEntry} from '../../domain/manuscriptPages';
 import type {PenTextState} from '../../domain/markerTypes';
 import {penEditNumberText} from '../../domain/penEditTags';
 import EmptyState from '../../ui/EmptyState';
+import NoteSign from '../../ui/NoteSign';
 import PagedSection from '../../ui/PagedSection';
 import {COLORS, FONT, LINE_HEIGHT, RADII, SPACING} from '../../ui/theme';
 
 /** A row: border, padding, the kind line, two lines of words, the meta line. */
 const ROW_HEIGHT = 2 * 2 + 2 * SPACING.sm + LINE_HEIGHT.small * 2 + LINE_HEIGHT.medium * 2;
 
-const KIND_LABELS = {placeOpen: 'Place open', noMark: 'No mark', unclear: 'Unclear mark'} as const;
+const KIND_LABELS = {placeOpen: 'Place open', noMark: 'No mark', unclear: 'Unclear mark', noParagraph: 'No paragraph'} as const;
 
 /** What a row says under its kind: the words, the text written, or what it may be. */
 export function decideText(entry: DecideEntry, penStates: Record<string, PenTextState>): string {
   const {item} = entry;
+  if (item.kind === 'noParagraph') {
+    return `${item.summary} without a paragraph`;
+  }
   if (item.kind === 'noMark') {
     const state = item.penEditId ? penStates[item.penEditId] : undefined;
     const text = state ? (state.correctedText ?? state.text).trim() : '';
@@ -61,6 +67,8 @@ export default function ToDecideList({entries, selectedKey, onSelect, penStates,
             style={[styles.row, selected && styles.rowSelected]}>
             {item.kind === 'unclear' ? (
               <View style={styles.box} />
+            ) : item.kind === 'noParagraph' ? (
+              <NoteSign kind={item.summary === 'Image' ? 'image' : 'comment'} />
             ) : (
               <Text style={styles.ring}>{penEditNumberText(item.kind === 'noMark' ? null : item.number ?? null)}</Text>
             )}

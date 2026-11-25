@@ -6,7 +6,7 @@ import {updatePenEdit, type PenEditEntry} from '../domain/penEditModel';
 import {isNoteKind} from '../domain/penEditTags';
 import {isNormalTextElement, sortTextElements} from '../domain/textboxEditPlan';
 import type {Rect} from '../domain/textboxModel';
-import {changePenEditIndex, penEditPictureUri} from '../storage/penEditStore';
+import {changePenEditIndex, penEditPictureUri, readPenEditIndex} from '../storage/penEditStore';
 import {readNotePageCount, readPageElements, recycleElements} from '../supernote/noteElements';
 
 /**
@@ -121,4 +121,10 @@ export async function readNotesOfPage(
   }
   console.log('[NotesRead] page', JSON.stringify({page, notes: rows.length, stored: rows.filter(row => 'by' in row.paragraph && row.paragraph.by === 'stored').length, moved: moved.length}));
   return {notes: rows, paragraphs};
+}
+
+/** The note's comments and images as the index has them (the Outline counts them, §6). */
+export async function readNoteEntries(notePath: string): Promise<PenEditEntry[]> {
+  const {index} = await readPenEditIndex();
+  return index.entries.filter(entry => entry.notePath === notePath && entry.state === 'active' && isNoteKind(entry.kind));
 }

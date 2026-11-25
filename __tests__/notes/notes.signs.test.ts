@@ -10,7 +10,9 @@ import {
   snippetSign,
   type PenEditKind,
 } from '../../src/domain/penEditTags';
-import type {Point, Rect} from '../../src/domain/textboxModel';
+import {isNormalTextElement, isPenEditNumberElement} from '../../src/domain/textboxEditPlan';
+import {MAIN_LAYER, TEXT_TYPE_NORMAL, type Point, type Rect} from '../../src/domain/textboxModel';
+import {penEditUserData} from '../../src/domain/penEditTags';
 
 /**
  * Are the signs the right shapes and places (technical-design-comments-images.md §3.2)? A comment
@@ -86,5 +88,18 @@ describe('notes.signs: the sign at tagged handwriting', () => {
     expect(looksLikePenEditNumber('C', 28)).toBe(true);
     expect(looksLikePenEditNumber('Cat', 28)).toBe(false);
     expect(looksLikePenEditNumber('C', 36)).toBe(false);
+  });
+});
+
+describe('notes.signs: the "C" is never text', () => {
+  const sign = (userData: string | null) =>
+    ({type: TEXT_TYPE_NORMAL, layerNum: MAIN_LAYER, userData, textBox: {textContentFull: 'C', fontSize: 28, textRect: box}}) as never;
+
+  it.each([
+    ['with its tag', penEditUserData('pe-20261125-100000-001', 'snippetnum')],
+    ['when the host dropped its tag', null],
+  ])('the comment sign\'s textbox %s is skipped by every textbox tool, the export and the write-back', (_name, userData) => {
+    expect(isPenEditNumberElement(sign(userData))).toBe(true);
+    expect(isNormalTextElement(sign(userData))).toBe(false);
   });
 });

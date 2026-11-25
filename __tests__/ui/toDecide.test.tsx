@@ -26,7 +26,7 @@ const base: ToDecideItem = {kind: 'unclear', key: 'k', summary: '', reason: 'why
 const at = {uuid: 'tb1', numInPage: 1, lineIndex: 0, start: 4, end: 7};
 
 function render(item: ToDecideItem) {
-  const calls = {here: jest.fn(), selectMark: jest.fn(), placeHere: jest.fn(), keepAs: jest.fn(), ignore: jest.fn(), drop: jest.fn()};
+  const calls = {here: jest.fn(), selectMark: jest.fn(), placeHere: jest.fn(), keepAs: jest.fn(), step: jest.fn(), ignore: jest.fn(), drop: jest.fn()};
   let tree!: renderer.ReactTestRenderer;
   act(() => {
     tree = renderer.create(
@@ -43,6 +43,7 @@ function render(item: ToDecideItem) {
         onSelectMark={calls.selectMark}
         onPlaceHere={calls.placeHere}
         onKeepAs={calls.keepAs}
+        onStepParagraph={calls.step}
         onIgnore={calls.ignore}
         onDrop={calls.drop}
         dropConfirm={null}
@@ -78,6 +79,16 @@ describe('To decide sides', () => {
     const labels = tree.root.findAll(node => node.type === Text).map(node => String(node.props.children));
     expect(labels).not.toContain('Comment');
     expect(labels).not.toContain('Image');
+  });
+
+  it('a comment without a paragraph: ‹ Paragraph above · Paragraph below ›, Drop', () => {
+    const {tree, calls} = render({...base, kind: 'noParagraph', summary: 'Comment', reason: 'No paragraph on this page.', penEditId: 'pe'});
+    expect(JSON.stringify(tree.toJSON())).toContain('Comment without a paragraph');
+    press(tree, '‹ Paragraph above');
+    press(tree, 'Paragraph below ›');
+    press(tree, 'Drop');
+    expect(calls.step.mock.calls).toEqual([['above'], ['below']]);
+    expect(calls.drop).toHaveBeenCalledTimes(1);
   });
 
   it('unclear: a reading offered, its place, then Here; Ignore; Remove strokes', () => {

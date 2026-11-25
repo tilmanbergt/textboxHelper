@@ -1,3 +1,4 @@
+import {stepParagraph} from '../../src/domain/notes/noteRows';
 import {neighbours, type ParagraphCandidate} from '../../src/domain/notes/paragraphOf';
 import {box} from './build';
 
@@ -30,5 +31,25 @@ describe('notes.neighbours: ‹ Paragraph above · Paragraph below ›', () => {
   it.each(CASES.map(item => [item.name, item] as const))('%s', (_name, item) => {
     const {above, below} = neighbours(item.from, item.textboxes);
     expect([above?.uuid ?? null, below?.uuid ?? null]).toEqual(item.expect);
+  });
+});
+
+describe('notes.neighbours: ‹ › from a note, reading the next page on demand', () => {
+  const pages = (...known: number[]) =>
+    new Map<number, ParagraphCandidate[]>([[0, page0], [1, page1]].filter(([page]) => known.includes(page as number)) as Array<[number, ParagraphCandidate[]]>);
+  type Step = {name: string; from: {page: number; uuid: string | null}; dir: 'above' | 'below'; known: number[]; count: number; expect: string};
+  const STEPS: Step[] = [
+    {name: 'on the page', from: {page: 0, uuid: 'p1'}, dir: 'below', known: [0], count: 2, expect: 'p2'},
+    {name: 'past the edge, page not read yet: read it', from: {page: 0, uuid: 'p2'}, dir: 'below', known: [0], count: 2, expect: 'load 1'},
+    {name: 'past the edge, page read: its first paragraph', from: {page: 0, uuid: 'p2'}, dir: 'below', known: [0, 1], count: 2, expect: 'q1'},
+    {name: 'up past the edge: the last paragraph of the page before', from: {page: 1, uuid: 'q1'}, dir: 'above', known: [0, 1], count: 2, expect: 'p2'},
+    {name: 'no paragraph on its page: the page before\'s last', from: {page: 1, uuid: null}, dir: 'above', known: [0, 1], count: 2, expect: 'p2'},
+    {name: 'at the start of the note', from: {page: 0, uuid: 'h'}, dir: 'above', known: [0], count: 2, expect: 'none'},
+    {name: 'at the end of the note', from: {page: 1, uuid: 'q2'}, dir: 'below', known: [0, 1], count: 2, expect: 'none'},
+  ];
+  it.each(STEPS.map(item => [item.name, item] as const))('%s', (_name, item) => {
+    const step = stepParagraph(item.from, item.dir, pages(...item.known), item.count);
+    const said = 'target' in step ? step.target.uuid : 'load' in step ? `load ${step.load}` : 'none';
+    expect(said).toBe(item.expect);
   });
 });
