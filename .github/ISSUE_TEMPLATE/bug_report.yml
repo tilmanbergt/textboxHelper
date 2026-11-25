@@ -1,0 +1,67 @@
+name: Bug report
+description: Something in the plugin doesn't work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The more exact the steps, the faster it can be fixed.
+        A question rather than a bug? Use **Feature request or question**.
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version
+      description: Supernote Settings → Apps → Plugins, e.g. "0.3.0" or "0.3.0-beta"
+      placeholder: 0.3.0
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device
+      description: The plugin is developed on the A5 X; other devices are beta.
+      options:
+        - A5 X
+        - A6 X
+        - A5 X2 (Manta)
+        - A6 X2 (Nomad)
+        - Other (write in the description)
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: Supernote Settings → About
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a note with two textboxes
+        2. Strike a word, open Manuscript
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead?
+      description: The exact message shown, and photos of the screen - they help a lot with marks and layout.
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: Diagnostics file
+      description: |
+        If your version has **Report a problem**, attach the file it saves to EXPORT. Otherwise, for edit marks:
+        Manuscript → Settings → Diagnostics → Save Diagnostics. Please look through the file first.

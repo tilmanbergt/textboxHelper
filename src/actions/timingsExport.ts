@@ -1,5 +1,5 @@
-import pluginConfig from '../../PluginConfig.json';
 import {countEvents, summarizePerf} from '../domain/perfLog';
+import {BUILD_INFO} from '../generated/buildInfo';
 import {writeJsonExportFile} from '../storage/exportFile';
 import {jsContextAgeMs, perfLog, recordingStartedAt} from '../utils/perf';
 import {cacheState} from './manuscriptCache';
@@ -19,7 +19,8 @@ export async function saveTimings(): Promise<string> {
   return writeJsonExportFile(fileName, {
     kind: 'textboxhelper-timings',
     version: 1,
-    plugin: pluginConfig.versionName,
+    // The build label (0.3.0-alpha+a1b2c3d): which build recorded the timings.
+    plugin: BUILD_INFO.label,
     createdAt,
     recordingSince: new Date(recordingStartedAt()).toISOString(),
     // How long the plugin's JS has been running: whether the cache can survive between openings.

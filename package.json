@@ -1,6 +1,7 @@
 {
   "name": "textboxhelper",
   "version": "0.2.2",
+  "nextVersion": "0.3.0",
   "private": true,
   "scripts": {
     "android": "react-native run-android",
@@ -9,8 +10,12 @@
     "test": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit",
     "marks": "node scripts/marks.mjs",
-    "postinstall": "node scripts/gen-mark-images.mjs",
-    "check": "node scripts/gen-mark-images.mjs && node scripts/marks.mjs --check && node scripts/test-marks.mjs && tsc --noEmit && eslint . --max-warnings 0 && jest --passWithNoTests"
+    "gen": "node scripts/version.mjs && node scripts/gen-mark-images.mjs",
+    "postinstall": "npm run gen",
+    "next-version": "node scripts/version.mjs --set-next",
+    "test-notes": "node scripts/test-notes.mjs --out build/TESTING.md",
+    "test:scripts": "node scripts/test-marks.mjs && node scripts/test-versioning.mjs && node scripts/test-ci-build.mjs && node scripts/test-test-notes.mjs",
+    "check": "npm run gen && node scripts/marks.mjs --check && npm run test:scripts && tsc --noEmit && eslint . --max-warnings 0 && jest --passWithNoTests"
   },
   "dependencies": {
     "docx": "^9.6.1",
