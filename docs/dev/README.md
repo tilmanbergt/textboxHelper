@@ -72,7 +72,7 @@ To change a picture: edit the spec (or `scripts/lib/markDrawing.mjs` for every p
 | `src/screens/` | The views and dialogs of the plugin window. |
 | `src/ui/` | Shared building blocks of the screens: `ScreenFrame`, buttons, tabs, paging (`PagedSection`, `PagedText`), the help (`HelpOverlay`, `MarkHelp`), `theme.ts`; `generated/` holds the bundled help pictures (not committed). |
 | `__tests__/domain/`, `__tests__/ui/` | Jest tests, one file per domain module or group; `ui/` for the help screen and its pictures. |
-| `scripts/` | `marks.mjs`, `gen-mark-images.mjs`, `test-marks.mjs`: drawing, bundling and checking the help pictures. `version.mjs` and `lib/versioning.mjs` (tested by `test-versioning.mjs`): build labels, build info and the release helpers. `ci-build.mjs`, `lib/ciBuild.mjs` (`test-ci-build.mjs`): steps of the GitHub builds. `test-notes.mjs`, `lib/testNotes.mjs` (`test-test-notes.mjs`): TESTING.md. |
+| `scripts/` | `marks.mjs`, `gen-mark-images.mjs`, `test-marks.mjs`: drawing, bundling and checking the help pictures. `version.mjs` and `lib/versioning.mjs` (tested by `test-versioning.mjs`): build labels, build info and the release helpers. `ci-build.mjs`, `lib/ciBuild.mjs` (`test-ci-build.mjs`): steps of the GitHub builds. `test-notes.mjs`, `lib/testNotes.mjs` (`test-test-notes.mjs`): TESTING.md. `release.ps1`: the release (`RELEASING.md` §5). |
 | `.github/workflows/` | `check.yml`: checks and a test build on every push. `beta.yml`: a beta pre-release by button. |
 | `src/generated/` | `buildInfo.ts`: version, label and commit of the build (written by `scripts/version.mjs`, not committed). |
 | `docs/user/marks/`, `docs/user/images/marks/` | The help pictures' spec and the drawn PNGs. |
