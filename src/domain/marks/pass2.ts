@@ -4,17 +4,29 @@ import {spaceRefusal} from '../spaceMark';
 import type {PenEditMark} from '../penEditModel';
 import type {Rect} from '../textboxModel';
 import {intersects, type MarkStroke} from './markStroke';
-import {findCarets, loopFor, loopReading, readArc, readAtCaret, readParagraphMark, readSlash, strikeReading, verticalsFor} from './pass1';
+import {
+  circleForVerticals,
+  findCarets,
+  loopFor,
+  loopReading,
+  readArc,
+  readAtCaret,
+  readParagraphMark,
+  readSlash,
+  replaceVerticalsReading,
+  strikeReading,
+  verticalsFor,
+} from './pass1';
 import type {Place, PlaceAt} from './place';
 import {gapBetween, placeArc, type ArcPlace} from './place/closeUp';
 import {locateCaret, type CaretInsertMode, type CaretTarget} from './place/point';
 import {placeSlash, type SlashPlace} from './place/slash';
 import {byReadingOrder, onLine, placeStrike, strikeSpan, type StrikeWord} from './place/strike';
 import {pairSwapPieces, placeSwapPiece, type PlacedPiece, type SwapZones} from './place/swap';
-import type {Reading} from './reading';
+import {rectsWithRole, type Reading} from './reading';
 import type {CaretDirection, CaretShape} from './shapes/caret';
 import {isSwapCandidate} from './shapes/swap';
-import {anchorRect, isReplaceLoopRect, strikeShapeRefusal} from './shapes/strike';
+import {isShortStrikeRect, strikeShapeRefusal} from './shapes/strike';
 import type {CaretTextbox, TextboxView} from './textboxView';
 
 /**
@@ -202,11 +214,12 @@ export function placeReading(reading: Reading, views: TextboxView[], want: Want 
       return refuse('A swap is placed with its pieces, page-wide.', onAnyText(reading.rects[0], views));
     default: {
       const stroke: MarkStroke = {id: reading.strokes[0], numInPage: 0, rect: reading.rects[0], points: null, straightLine: false};
-      const placed = placeStrike(stroke, views, strikeShapeRefusal(stroke.rect), want);
+      const verticals = reading.kind === 'strikeVerticals' || reading.kind === 'replaceVerticals' ? rectsWithRole(reading, 'modifier') : null;
+      // A short strike counts with a vertical at each end (pass 1 read it so).
+      const placed = placeStrike(stroke, views, verticals ? null : strikeShapeRefusal(stroke.rect), want, verticals);
       if (!placed.ok) {
         return refuse(placed.reason, placed.removable);
       }
-      const verticals = reading.kind === 'strikeVerticals' ? reading.rects.slice(1) : null;
       const span = strikeSpan(placed.words, stroke.rect, verticals);
       return {ok: true, ...at(placed.view, placed.lineIndex, span.start, span.end)};
     }
@@ -641,12 +654,18 @@ function resolveStrikes(
   const lockedViews = new Set<string>();
   const candidates: Candidate[] = [];
   const freeItems = page.filter(item => !consumed.has(item.id));
+  // The modifiers a strike may take: every free stroke (straight lines too).
+  const pool = freeItems.map(item => item.stroke).filter((stroke): stroke is MarkStroke => !!stroke);
   for (const item of freeItems) {
     if (!item.stroke) {
       refused.push({first: item, strokes: [item], reason: NO_GEOMETRY, removable: null, readings: [], strike: true});
       continue;
     }
-    const placed = placeStrike(item.stroke, views, strikeShapeRefusal(item.stroke.rect), want);
+    // A vertical at each end: exact bounds, also over a part of a word or a short strike (§13.4).
+    const ends = verticalsFor(item.stroke, pool);
+    const exact = ends.length === 2 ? ends.map(stroke => stroke.rect) : null;
+    const shapeRefusal = exact && isShortStrikeRect(item.stroke.rect) ? null : strikeShapeRefusal(item.stroke.rect);
+    const placed = placeStrike(item.stroke, views, shapeRefusal, want, exact);
     log(placed.ok ? 'markerCandidate' : 'markerRejected', {
       markerNumInPage: item.numInPage,
       rect: item.stroke.rect,
@@ -659,7 +678,7 @@ function resolveStrikes(
     if (placed.locked) {
       lockedViews.add(placed.locked.uuid);
     }
-    const shapeOk = strikeShapeRefusal(item.stroke.rect) === null;
+    const shapeOk = shapeRefusal === null;
     refused.push({
       first: item,
       strokes: [item],
@@ -671,9 +690,7 @@ function resolveStrikes(
   }
   candidates.sort(byMarkerPosition);
 
-  // The modifiers a strike may take: every free stroke (straight lines too).
-  const pool = freeItems.map(item => item.stroke).filter((stroke): stroke is MarkStroke => !!stroke);
-  type Info = {pair: MarkStroke[]; numberCircle?: MarkStroke; ignoredReason?: string};
+  type Info = {pair: MarkStroke[]; circle?: MarkStroke; ignoredReason?: string};
   const info = new Map<string, Info>();
   const textboxes = [...new Map(candidates.map(candidate => [candidate.view.uuid, candidate.view])).values()].sort(byReadingOrder);
   for (const view of textboxes) {
@@ -685,25 +702,26 @@ function resolveStrikes(
         const verticals = verticalsFor(candidate.stroke, pool.filter(other => onLine(candidate.line, other.rect)));
         const loop = verticals.length === 2 ? null : loopFor(candidate.stroke, pool);
         const pair = verticals.length === 2 ? verticals : loop ? [loop] : [];
-        return {candidate, pair};
-      })
-      .map(entry => ({...entry, numberCircle: entry.pair.length === 2 ? numberCircleAt(entry.pair[1], pool, entry.pair) : undefined}));
+        const circle = verticals.length === 2 ? circleForVerticals(candidate.stroke, verticals, pool) ?? undefined : undefined;
+        return {candidate, pair, circle};
+      });
     for (const entry of entries) {
       if (entry.pair.length === 0 || entry.pair.some(stroke => used.has(stroke.id))) {
         continue;
       }
       entry.pair.forEach(stroke => used.add(stroke.id));
-      if (entry.numberCircle) {
-        used.add(entry.numberCircle.id);
+      if (entry.circle) {
+        used.add(entry.circle.id);
       }
-      // Two verticals mark exact places: without text they delete exactly what is between them
-      // (technical-design-fine-marks.md §3.2). A loop takes the text tagged after it, and a linked
-      // mark is placed apart (`marks/linked.ts`): here a loop has nothing to do.
-      const verticals = entry.pair.length === 2;
+      // Verticals at the ends mark exact places: alone they delete exactly what is between them
+      // (technical-design-fine-marks.md §3.2). A loop, or verticals with a circle, take the text
+      // tagged after them, and a linked mark is placed apart (`marks/linked.ts`): here they have
+      // nothing to do.
+      const exactDelete = entry.pair.length === 2 && !entry.circle;
       info.set(entry.candidate.stroke.id, {
         pair: entry.pair,
-        ...(entry.numberCircle ? {numberCircle: entry.numberCircle} : {}),
-        ...(verticals ? {} : {ignoredReason: REPLACE_WITHOUT_TEXT}),
+        ...(entry.circle ? {circle: entry.circle} : {}),
+        ...(exactDelete ? {} : {ignoredReason: REPLACE_WITHOUT_TEXT}),
       });
     }
   }
@@ -714,12 +732,18 @@ function resolveStrikes(
     const strike = {id: candidate.stroke.id, numInPage: candidate.stroke.numInPage};
     const entry = info.get(candidate.stroke.id);
     if (entry?.ignoredReason) {
+      const taken = [...entry.pair, ...(entry.circle ? [entry.circle] : [])];
       refused.push({
         first: strike,
-        strokes: [strike, ...entry.pair.map(stroke => ({id: stroke.id, numInPage: stroke.numInPage}))],
+        strokes: [strike, ...taken.map(stroke => ({id: stroke.id, numInPage: stroke.numInPage}))],
         reason: entry.ignoredReason,
-        removable: [strike.numInPage, ...entry.pair.map(stroke => stroke.numInPage)],
-        readings: entry.pair.length === 1 ? [loopReading(candidate.stroke, entry.pair[0])] : [],
+        removable: [strike.numInPage, ...taken.map(stroke => stroke.numInPage)],
+        readings:
+          entry.pair.length === 1
+            ? [loopReading(candidate.stroke, entry.pair[0])]
+            : entry.circle
+            ? [replaceVerticalsReading(candidate.stroke, entry.pair, entry.circle)]
+            : [],
       });
       continue;
     }
@@ -739,19 +763,9 @@ function resolveStrikes(
       lineIndex: candidate.lineIndex,
       words,
       span: strikeSpan(words, candidate.stroke.rect, pair.length === 2 ? pair.map(stroke => stroke.rect) : null),
-      consumed: [strike.numInPage, ...pair.map(stroke => stroke.numInPage), ...(entry?.numberCircle ? [entry.numberCircle.numInPage] : [])],
+      consumed: [strike.numInPage, ...pair.map(stroke => stroke.numInPage)],
     });
   }
   return {marks, refused, lockedViews: [...lockedViews]};
-}
-
-/**
- * The user's own circle for the number at a replace mark's right vertical: the loop test measured
- * from the vertical's top (technical-design-fine-marks.md §2.2).
- */
-function numberCircleAt(rightVertical: MarkStroke, pool: MarkStroke[], taken: MarkStroke[]): MarkStroke | undefined {
-  const rect = rightVertical.rect;
-  const anchor = anchorRect((rect.left + rect.right) / 2, rect.top);
-  return pool.find(other => !taken.includes(other) && isReplaceLoopRect(anchor, other.rect));
 }
 

@@ -63,6 +63,7 @@ export type ToDecideItem = {
 const KIND_NAMES: Record<MarkKind, string> = {
   strike: 'Strike',
   strikeVerticals: 'Strike with two lines',
+  replaceVerticals: 'Strike with two lines and a circle',
   replaceLoop: 'Strike with a loop',
   slash: 'Slash',
   caret: 'Caret',

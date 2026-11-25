@@ -1,14 +1,15 @@
 import type {PenEditMark} from '../penEditModel';
 import type {Rect} from '../textboxModel';
 import {unionRect, type MarkStroke} from './markStroke';
-import {caretReading, loopReading, slashReading, strikeReading, verticalsReading} from './pass1';
+import {caretReading, loopReading, replaceVerticalsReading, slashReading, strikeReading, verticalsReading} from './pass1';
 import {rectsWithRole, type Reading} from './reading';
 import {analyzeSlash, type SlashShape} from './shapes/slash';
 
 /**
  * A reading as the pen-edit index stores it (technical-design-mark-dialogue.md §2.2): the stored
  * `PenEditMark` stays the format, so no index migration. Only marks that take text are stored: a
- * strike (chosen with Select mark), a strike with a loop, a slash, a caret; null for the others.
+ * strike (chosen with Select mark), a strike with a loop, a strike with verticals and a circle
+ * (the circle as the number's place), a slash, a caret; null for the others.
  */
 export function storedMarkOf(reading: Reading): PenEditMark | null {
   const marks = rectsWithRole(reading, 'mark');
@@ -20,6 +21,14 @@ export function storedMarkOf(reading: Reading): PenEditMark | null {
         kind: 'replace',
         strikeRect: {...marks[0]},
         modifierRects: rectsWithRole(reading, 'modifier').map(rect => ({...rect})),
+      };
+    case 'replaceVerticals':
+      return {
+        kind: 'replace',
+        strikeRect: {...marks[0]},
+        modifierRects: rectsWithRole(reading, 'modifier').map(rect => ({...rect})),
+        bounds: 'exact',
+        ...(number ? {numberRect: {...number}} : {}),
       };
     case 'slash':
       return {
@@ -114,7 +123,7 @@ export function readingOfStoredMark(mark: PenEditMark, strokes: MarkStroke[]): R
     return slashReading(strike, shape, circle);
   }
   if (modifiers.length === 2) {
-    return verticalsReading(strike, modifiers);
+    return circle ? replaceVerticalsReading(strike, modifiers, circle) : verticalsReading(strike, modifiers);
   }
   if (modifiers.length === 1) {
     return loopReading(strike, modifiers[0]);

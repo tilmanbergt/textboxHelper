@@ -19,9 +19,10 @@ import {analyzeSlash, isSlashCandidateRect, type SlashShape} from './shapes/slas
 import {findCrossAtCaret, type ShortStroke} from './shapes/space';
 import {
   anchorRect,
-  closestVerticalPair,
+  endVerticals,
   isReplaceLoopRect,
   isReplaceVertical,
+  isShortStrikeRect,
   isStrikeLike,
   nearestLoop,
   strikeShapeRefusal,
@@ -49,6 +50,7 @@ type Part = {stroke: MarkStroke; role: StrokeRole};
 const NEED: Record<MarkKind, Need> = {
   strike: 'part',
   strikeVerticals: 'part',
+  replaceVerticals: 'part',
   replaceLoop: 'part',
   slash: 'part',
   caret: 'point',
@@ -110,6 +112,18 @@ export function verticalsReading(strike: MarkStroke, verticals: MarkStroke[]): R
     [{stroke: strike, role: 'mark'}, ...verticals.map(stroke => ({stroke, role: 'modifier' as const}))],
     verticals.map(vertical => ({x: center(vertical.rect).x, y, snap: 'char' as const})),
     strokeShape(strike),
+  );
+}
+
+/** A strike with a vertical at each end and a circle: exactly between them, replaced by the tagged text; the circle holds the number. */
+export function replaceVerticalsReading(strike: MarkStroke, verticals: MarkStroke[], circle: MarkStroke): Reading {
+  const y = center(strike.rect).y;
+  return makeReading(
+    'replaceVerticals',
+    [{stroke: strike, role: 'mark'}, ...verticals.map(stroke => ({stroke, role: 'modifier' as const})), {stroke: circle, role: 'number'}],
+    verticals.map(vertical => ({x: center(vertical.rect).x, y, snap: 'char' as const})),
+    strokeShape(strike),
+    {numberPlace: {...circle.rect}},
   );
 }
 
@@ -305,7 +319,11 @@ export function readSlash(stroke: MarkStroke, free: MarkStroke[], caretLegs: Set
     return null;
   }
   const slash = analyzeSlash(stroke.points);
-  if (!slash || free.some(other => other !== stroke && isStrikeLike(other.rect) && intersectsRect(other.rect, stroke.rect))) {
+  // A vertical at a strike's end (or across it) belongs to the strike.
+  const atStrike = (other: MarkStroke) =>
+    (isStrikeLike(other.rect) || isShortStrikeRect(other.rect)) &&
+    (intersectsRect(other.rect, stroke.rect) || isReplaceVertical(other.rect, stroke.rect));
+  if (!slash || free.some(other => other !== stroke && atStrike(other))) {
     return null;
   }
   const topX = (slash.rect.left + slash.rect.right) / 2;
@@ -316,12 +334,39 @@ function intersectsRect(a: Rect, b: Rect): boolean {
   return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
 }
 
-/** The verticals across a strike among the candidates (straight lines too): the closest pair, or []. */
+/** The verticals at a strike's two ends among the candidates (straight lines too), left to right, or []. */
 export function verticalsFor(strike: MarkStroke, candidates: MarkStroke[]): MarkStroke[] {
-  return closestVerticalPair(
+  return endVerticals(
+    strike.rect,
     candidates.filter(other => other.id !== strike.id && isReplaceVertical(strike.rect, other.rect)),
     stroke => stroke.rect,
   );
+}
+
+/**
+ * The circle that makes a strike with verticals a replace mark (technical-design-mark-dialogue.md
+ * §13.4): a loop after the strike or above it, or a circle at the right vertical's top; null when
+ * there is none.
+ */
+export function circleForVerticals(strike: MarkStroke, verticals: MarkStroke[], candidates: MarkStroke[]): MarkStroke | null {
+  const others = candidates.filter(other => !verticals.includes(other));
+  const right = verticals[verticals.length - 1];
+  const top = right ? anchorRect((right.rect.left + right.rect.right) / 2, right.rect.top) : null;
+  return (
+    loopFor(strike, others) ??
+    (top ? others.find(other => other.id !== strike.id && !other.straightLine && isReplaceLoopRect(top, other.rect)) ?? null : null)
+  );
+}
+
+/** A strike among the candidates: long and flat, or short with a vertical at each end (one letter). */
+export function isStrikeStroke(stroke: MarkStroke, candidates: MarkStroke[]): boolean {
+  return isStrikeLike(stroke.rect) || (isShortStrikeRect(stroke.rect) && verticalsFor(stroke, candidates).length === 2);
+}
+
+/** A strike with its verticals (exact bounds), with a circle too (exact replace mark). */
+function exactReading(stroke: MarkStroke, verticals: MarkStroke[], candidates: MarkStroke[]): Reading {
+  const circle = circleForVerticals(stroke, verticals, candidates);
+  return circle ? replaceVerticalsReading(stroke, verticals, circle) : verticalsReading(stroke, verticals);
 }
 
 /** The loop after a strike among the candidates, or null. */
@@ -339,13 +384,13 @@ export function loopFor(strike: MarkStroke, candidates: MarkStroke[]): MarkStrok
  * the stroke is no strike.
  */
 export function readStrike(stroke: MarkStroke, candidates: MarkStroke[]): {reading: Reading} | {reason: string} {
-  const refusal = strikeShapeRefusal(stroke.rect);
+  const verticals = verticalsFor(stroke, candidates);
+  const refusal = verticals.length === 2 && isShortStrikeRect(stroke.rect) ? null : strikeShapeRefusal(stroke.rect);
   if (refusal) {
     return {reason: refusal};
   }
-  const verticals = verticalsFor(stroke, candidates);
   if (verticals.length === 2) {
-    return {reading: verticalsReading(stroke, verticals)};
+    return {reading: exactReading(stroke, verticals, candidates)};
   }
   const loop = loopFor(stroke, candidates);
   return {reading: loop ? loopReading(stroke, loop) : strikeReading(stroke)};
@@ -400,7 +445,7 @@ export function readMarks(strokes: MarkStroke[]): Pass1Group[] {
     }
   }
   const strikes = free()
-    .filter(stroke => isStrikeLike(stroke.rect))
+    .filter(stroke => isStrikeStroke(stroke, free()))
     .sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
   for (const stroke of strikes) {
     if (used.has(stroke.id)) {
@@ -421,9 +466,9 @@ export function readMarks(strokes: MarkStroke[]): Pass1Group[] {
 /**
  * Select mark (technical-design-pen-edits-2.md §4.2): the strokes the user lassoed as one mark.
  * A caret first, as its shape is the more specific (one stroke, or two in writing order meeting
- * at the tip; a step with its second upright); else the widest strike: with two verticals it is
- * an exact delete and takes no text (also with a loop, as in the review and the look-back); with
- * its loop a replace mark; alone it counts too (the user said it is a mark). With no strike, a slash, with its own circle for the number when
+ * at the tip; a step with its second upright); else the widest strike: with a vertical at each
+ * end and a circle an exact replace mark, with the verticals alone an exact delete that takes no
+ * text; with its loop a replace mark; alone it counts too (the user said it is a mark). With no strike, a slash, with its own circle for the number when
  * lassoed along. Strokes that belong to no mark stay out of it.
  */
 export function readDeclared(strokes: MarkStroke[]): Pass1Group {
@@ -447,11 +492,15 @@ export function readDeclared(strokes: MarkStroke[]): Pass1Group {
     }
   }
   const strike = ordered
-    .filter(stroke => isStrikeLike(stroke.rect))
+    .filter(stroke => isStrikeStroke(stroke, ordered))
     .sort((a, b) => b.rect.right - b.rect.left - (a.rect.right - a.rect.left))[0];
   if (strike) {
-    if (verticalsFor(strike, ordered).length === 2) {
-      return {strokes: ordered.map(stroke => stroke.id), readings: [], reason: VERTICALS_NO_TEXT_REASON};
+    const verticals = verticalsFor(strike, ordered);
+    if (verticals.length === 2) {
+      const circle = circleForVerticals(strike, verticals, ordered);
+      return circle
+        ? group(replaceVerticalsReading(strike, verticals, circle))
+        : {strokes: ordered.map(stroke => stroke.id), readings: [], reason: VERTICALS_NO_TEXT_REASON};
     }
     const loop = loopFor(strike, ordered);
     return group(loop ? loopReading(strike, loop) : strikeReading(strike));
@@ -477,17 +526,24 @@ const newestFirst = (window: MarkStroke[]) => [...window].sort((a, b) => b.numIn
 
 /**
  * The newest replace mark in the window: a strike (long flat stroke or straight line) with a loop
- * after it; a strike with two verticals is an exact delete and is skipped. With `slash`, a slash
+ * after it, or with a vertical at each end and a circle (exactly between them); a strike with
+ * verticals and no circle is an exact delete and is skipped. With `slash`, a slash
  * through one letter written last (or right before its own circle for the number); a window whose
  * strike has a vertical across it holds an unfinished mark, whose vertical is no slash.
  */
 export function readLookBackReplace(window: MarkStroke[], taken: Rect[], options: {slash: boolean} = {slash: true}): Reading | null {
   const ordered = newestFirst(window);
   for (const strike of ordered) {
-    if (isTakenStrike(strike.rect, taken) || !isStrikeLike(strike.rect)) {
+    if (isTakenStrike(strike.rect, taken) || !isStrikeStroke(strike, ordered)) {
       continue;
     }
-    if (verticalsFor(strike, ordered).length === 2) {
+    const verticals = verticalsFor(strike, ordered);
+    if (verticals.length === 2) {
+      // Without a circle the verticals are an exact delete, which takes no text.
+      const circle = circleForVerticals(strike, verticals, ordered);
+      if (circle) {
+        return replaceVerticalsReading(strike, verticals, circle);
+      }
       continue;
     }
     const loop = loopFor(strike, ordered);
@@ -500,7 +556,7 @@ export function readLookBackReplace(window: MarkStroke[], taken: Rect[], options
   }
   const unfinished = ordered.some(
     strike =>
-      isStrikeLike(strike.rect) &&
+      (isStrikeLike(strike.rect) || isShortStrikeRect(strike.rect)) &&
       ordered.some(other => other !== strike && isReplaceVertical(strike.rect, other.rect)),
   );
   if (unfinished) {

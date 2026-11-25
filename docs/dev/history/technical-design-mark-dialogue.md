@@ -573,3 +573,23 @@ marker 11", "Ignored marker 12", … today).
 S4 waits for the answers.
 
 **Answers (Tilman):** the recommendations for Q5, Q6 and Q7.
+
+### 13.4 Verticals mark the ends (Tilman, after the device test of S6)
+
+The device page showed two limits of the strike with two verticals: "kind|ness|" was refused
+because the strike covered less than half the word (the whole-word strike's rule), and "|things|"
+was no pair because the verticals stood 85 px apart (at most 56 px, from the time two verticals
+close together in the middle of a strike made a replace mark). Decision:
+
+- **Verticals mark the two ends of the strike**, one near each end (0.15 strike widths, at least
+  20 px, at most 40 px), however far apart: from one letter to several words. Verticals inside a
+  strike, away from its ends, mark nothing (the strike takes whole words).
+- With a vertical at each end the strike takes the words between them however little of each it
+  covers; a flat stroke too short for a strike alone (10–30 px) counts between two verticals.
+- **Verticals with a circle** (a loop after or above the strike, or a circle at the right
+  vertical's top) make an **exact replace mark** (`replaceVerticals`): the tagged text replaces
+  exactly what is between them, and the circle holds the number. This revises Q2 for the circle;
+  verticals alone still delete and take no text. Without tagged text the mark is listed as a
+  replace mark without new text.
+- Stored entries keep their format: two `modifierRects` with a `numberRect` read as
+  `replaceVerticals`, two without it as before.

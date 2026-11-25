@@ -1,6 +1,6 @@
 import {DUPLICATE_STRIKE, resolvePage, type PageMark, type PageResult} from '../../src/domain/marks/pass2';
 import type {TextboxView} from '../../src/domain/marks/textboxView';
-import {arc, at, caret, circle, cross, loop, page, slash, strike, swap, textbox, view, type Drawn} from './build';
+import {arc, at, caret, circle, cross, loop, page, slash, strike, swap, textbox, verticals, view, type Drawn} from './build';
 
 /**
  * Passes 1 and 2 together on a page (technical-design-mark-dialogue.md §2.6, §13.1 Q3): which
@@ -16,6 +16,7 @@ import {arc, at, caret, circle, cross, loop, page, slash, strike, swap, textbox,
 const A = textbox('the big red car and more words here', {left: 100, top: 200, width: 1000});
 const x = (offset: number) => at(A, offset).x;
 const MID = at(A, 0).mid;
+const vertical = (cx: number): Drawn => [[{x: cx, y: MID - 20}, {x: cx + 1, y: MID + 20}]];
 
 /** A mark as the table writes it: its kind, its strokes' numbers, and [start, end) in the text. */
 function summary(mark: PageMark): string {
@@ -76,13 +77,51 @@ const TABLES: Record<string, Case[]> = {
   ],
   part: [
     {
-      name: 'the two closest verticals on the strike line make its exact bounds; a third is left',
+      name: 'verticals inside the strike, away from its ends, mark nothing: the strike takes whole words (§13.4)',
       strokes: [strike(x(4), x(15), MID), [[{x: x(8) + 1, y: MID - 20}, {x: x(8) + 2, y: MID + 20}]], [[{x: x(10), y: MID - 20}, {x: x(10) + 1, y: MID + 20}]], [[{x: x(11) - 1, y: MID - 20}, {x: x(11), y: MID + 20}]]],
-      marks: ['delete 1+3+4 [10, 11)'],
+      marks: ['delete 1 [4, 15)'],
       refused: [
         '2: The marker is too short to classify reliably (remove 2)',
         '3: The marker is too short to classify reliably (remove 3)',
         '4: The marker is too short to classify reliably (remove 4)',
+      ],
+    },
+    {
+      name: 'a line at each end of a strike over less than half a word: exactly that part ("wo|rds|")',
+      strokes: [vertical(x(28)), strike(x(28) + 1, x(30) - 1, MID), vertical(x(30))],
+      marks: ['delete 2+1+3 [28, 30)'],
+      refused: [
+        '1: The marker is too short to classify reliably (remove 1)',
+        '3: The marker is too short to classify reliably (remove 3)',
+      ],
+    },
+    {
+      name: 'lines at the ends far apart (seven letters, over two words): exactly between them',
+      strokes: [strike(x(26) - 3, x(33) + 3, MID), verticals(x(26) + 1, x(33) - 1, MID)],
+      marks: ['delete 1+2+3 [26, 33)'],
+      refused: [
+        '2: The marker is too short to classify reliably (remove 2)',
+        '3: The marker is too short to classify reliably (remove 3)',
+      ],
+    },
+    {
+      name: 'one letter: a short strike between two lines',
+      strokes: [strike(x(9) + 2, x(10) - 2, MID), verticals(x(9) + 1, x(10) - 1, MID)],
+      marks: ['delete 1+2+3 [9, 10)'],
+      refused: [
+        '2: The marker is too short to classify reliably (remove 2)',
+        '3: The marker is too short to classify reliably (remove 3)',
+      ],
+    },
+    {
+      name: 'lines at the ends and a circle without tagged text: a replace mark without new text',
+      strokes: [strike(x(4) - 3, x(7) + 3, MID), verticals(x(4) + 1, x(7) - 1, MID), loop(x(7) + 24, MID)],
+      marks: [],
+      refused: [
+        '2: The marker is too short to classify reliably (remove 2)',
+        '3: The marker is too short to classify reliably (remove 3)',
+        '4: The marker is too short to classify reliably (remove 4)',
+        '1: Replace mark without new text (remove 1+2+3+4)',
       ],
     },
     {

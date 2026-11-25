@@ -76,8 +76,8 @@ const TABLES: Record<string, Case[]> = {
       expect: {at: ['tb1', 4, 11]},
     },
     {
-      name: 'verticals inside a word: exactly between them',
-      strokes: [strike(x(2, BIGGER) + 2, x(8, BIGGER) - 2, MID), verticals(x(4, BIGGER) + 1, x(6, BIGGER) - 1, MID)],
+      name: 'verticals at the ends of a strike inside a word: exactly between them',
+      strokes: [strike(x(4, BIGGER) - 2, x(6, BIGGER) + 2, MID), verticals(x(4, BIGGER) + 1, x(6, BIGGER) - 1, MID)],
       boxes: [view(BIGGER)],
       expect: {at: ['tb1', 4, 6]},
     },

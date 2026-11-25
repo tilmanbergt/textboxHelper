@@ -68,7 +68,8 @@ const BIGGER = textbox('a bigger word', {left: 100, top: 400, width: 1000, uuid:
 
 const replaceVerticals: PageSpec = {
   name: 'replace-verticals',
-  about: 'Strike with two verticals and no text: exactly what is between them goes, a whole word and letters inside a word.',
+  about:
+    'Strike with two verticals and no text: at the ends of the strike over "red" exactly what is between them goes; inside the strike over "bigger", away from its ends, they mark nothing and the strike takes the word (§13.4).',
   textboxes: [A, BIGGER],
   strokes: [
     strike(x(8) - 6, x(11) + 6, MID),
@@ -76,6 +77,34 @@ const replaceVerticals: PageSpec = {
     strike(x(2, BIGGER) + 2, x(8, BIGGER) - 2, at(BIGGER, 2).mid),
     verticals(x(4, BIGGER) + 1, x(6, BIGGER) - 1, at(BIGGER, 2).mid),
   ],
+};
+
+// The device page of §13.4: "kind|ness|" (the lines over less than half the word) and "|things|"
+// (the lines far apart), one letter, and an exact replacement with its circle.
+const K = textbox('To live from such simplicity is already a kindness of room for things to appear', {left: 100, top: 200, width: 1200});
+
+const verticalsEnds: PageSpec = {
+  name: 'verticals-ends',
+  about:
+    'Lines at the ends of a strike mark exact bounds however far apart: part of a word, a whole word, one letter (a short strike); with a circle and tagged text the part is replaced.',
+  textboxes: [K],
+  strokes: [
+    verticals(x(46, K), x(50, K), at(K, 46).mid),
+    strike(x(46, K) + 1, x(50, K) - 1, at(K, 46).mid),
+    strike(x(63, K) + 2, x(69, K) - 2, at(K, 63).mid),
+    verticals(x(63, K) - 1, x(69, K) - 4, at(K, 63).mid),
+    strike(x(4, K) + 2, x(5, K) - 2, at(K, 4).mid),
+    verticals(x(4, K) + 1, x(5, K) - 1, at(K, 4).mid),
+    {
+      name: 'r1',
+      drawn: [
+        ...strike(x(22, K) - 3, x(28, K) + 3, at(K, 22).mid),
+        ...verticals(x(22, K) + 1, x(28, K) - 1, at(K, 22).mid),
+        ...circle(x(28, K) + 24, at(K, 22).mid, 12),
+      ],
+    },
+  ],
+  penEdits: [{number: 1, kind: 'replacement', text: 'le', handwriting: below('le', 0), after: 'r1', mark: {kind: 'replace', item: 'r1', exact: true}}],
 };
 
 const replaceLinked: PageSpec = {
@@ -276,6 +305,7 @@ export const GOLDEN_PAGES: PageSpec[] = [
   strikes,
   strikeLines,
   replaceVerticals,
+  verticalsEnds,
   replaceLinked,
   slashes,
   slashLinked,

@@ -6,7 +6,7 @@
 export const NO_MARK_REASON = 'None of these strokes reads as a mark: a strike with a loop, a slash, or a caret.';
 
 export const VERTICALS_NO_TEXT_REASON =
-  'Two verticals across a strike mark exactly what to delete; they take no new text. For new text, draw a small loop after the strike.';
+  'Two short lines at the ends of a strike mark exactly what to delete; they take no new text. For new text, draw a small circle after the strike too.';
 
 export const MARK_STROKES_UNREADABLE = 'The selected strokes could not be read.';
 

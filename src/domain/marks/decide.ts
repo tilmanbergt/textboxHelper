@@ -71,7 +71,7 @@ export function decideOptions(readings: Reading[], views: TextboxView[], numbers
       ? place
       : reading.kind === 'slash'
       ? guessLetter(rect, views)
-      : reading.kind === 'strike' || reading.kind === 'strikeVerticals'
+      : reading.kind === 'strike' || reading.kind === 'strikeVerticals' || reading.kind === 'replaceVerticals'
       ? guessPart(rect, views)
       : place.guess;
     const view = at ? views.find(item => item.uuid === at.uuid) : undefined;

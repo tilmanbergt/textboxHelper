@@ -1,5 +1,5 @@
 {
-  "about": "Strike with two verticals and no text: exactly what is between them goes, a whole word and letters inside a word.",
+  "about": "Strike with two verticals and no text: at the ends of the strike over \"red\" exactly what is between them goes; inside the strike over \"bigger\", away from its ends, they mark nothing and the strike takes the word (§13.4).",
   "changes": [
     {
       "kind": "delete",
@@ -19,22 +19,45 @@
     },
     {
       "kind": "delete",
-      "summary": "Delete \"bi[gg]er\"",
+      "summary": "Delete \"bigger\"",
       "detail": "Textbox 2, line 1 - 1 word",
       "textbox": 2,
       "line": 0,
-      "textStart": 4,
+      "textStart": 2,
       "words": [
-        "bi[gg]er"
+        "bigger"
       ],
       "strokes": [
-        6,
-        7,
-        8
+        6
       ]
     }
   ],
-  "toDecide": [],
+  "toDecide": [
+    {
+      "kind": "unclear",
+      "summary": "Strokes over the text",
+      "reason": "The marker is too short to classify reliably.",
+      "strokes": [
+        7
+      ],
+      "removable": [
+        7
+      ],
+      "words": "bigger"
+    },
+    {
+      "kind": "unclear",
+      "summary": "Strokes over the text",
+      "reason": "The marker is too short to classify reliably.",
+      "strokes": [
+        8
+      ],
+      "removable": [
+        8
+      ],
+      "words": "bigger"
+    }
+  ],
   "after": [
     {
       "textbox": 1,
@@ -42,7 +65,7 @@
     },
     {
       "textbox": 2,
-      "text": "a bier word"
+      "text": "a word"
     }
   ],
   "newParagraphs": [],

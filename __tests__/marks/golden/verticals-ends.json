@@ -1,0 +1,81 @@
+{
+  "about": "Lines at the ends of a strike mark exact bounds however far apart: part of a word, a whole word, one letter (a short strike); with a circle and tagged text the part is replaced.",
+  "changes": [
+    {
+      "kind": "delete",
+      "summary": "Delete \"l[i]ve\"",
+      "detail": "Textbox 1, line 1 - 1 word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 4,
+      "words": [
+        "l[i]ve"
+      ],
+      "strokes": [
+        8,
+        9,
+        10
+      ]
+    },
+    {
+      "kind": "delete",
+      "summary": "Delete \"kind[ness]\"",
+      "detail": "Textbox 1, line 1 - 1 word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 46,
+      "words": [
+        "kind[ness]"
+      ],
+      "strokes": [
+        4,
+        2,
+        3
+      ]
+    },
+    {
+      "kind": "delete",
+      "summary": "Delete \"things\"",
+      "detail": "Textbox 1, line 2 - 1 word",
+      "textbox": 1,
+      "line": 1,
+      "textStart": 63,
+      "words": [
+        "things"
+      ],
+      "strokes": [
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "kind": "replace",
+      "summary": "Replace \"simp[licity]\" -> \"le\"",
+      "detail": "Textbox 1, line 1 - 1 word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 22,
+      "words": [
+        "simp[licity]"
+      ],
+      "strokes": [
+        11,
+        12,
+        13,
+        14
+      ],
+      "penEdit": 1
+    }
+  ],
+  "toDecide": [],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "To lve from such simple is already a kind of room for to appear"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

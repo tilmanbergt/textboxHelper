@@ -46,9 +46,19 @@ export const TABLES: Record<string, Case[]> = {
       expect: [{kinds: ['strikeVerticals'], strokes: ['s1', 's2', 's3'], anchors: [[190.5, Y + 1], [240.5, Y + 1]]}],
     },
     {
-      name: 'verticals too far apart are no pair: the strike alone',
-      strokes: [strike(180, 300, Y), verticals(190, 290, Y)],
+      name: 'verticals at the ends of a long strike, far apart: exact bounds (§13.4)',
+      strokes: [strike(180, 400, Y), verticals(186, 392, Y)],
+      expect: [{kinds: ['strikeVerticals'], strokes: ['s1', 's2', 's3'], anchors: [[186.5, Y + 1], [392.5, Y + 1]]}],
+    },
+    {
+      name: 'verticals inside a strike, away from its ends, are no pair: the strike alone',
+      strokes: [strike(180, 400, Y), verticals(260, 320, Y)],
       expect: [{kinds: ['strike'], strokes: ['s1']}],
+    },
+    {
+      name: 'a short strike between two verticals: one letter',
+      strokes: [strike(196, 212, Y), verticals(195, 213, Y)],
+      expect: [{kinds: ['strikeVerticals'], strokes: ['s1', 's2', 's3']}],
     },
     {
       name: 'a loop after the strike: a replace mark',
@@ -61,9 +71,9 @@ export const TABLES: Record<string, Case[]> = {
       expect: [{kinds: ['replaceLoop'], strokes: ['s1', 's2']}],
     },
     {
-      name: 'verticals win over a loop',
+      name: 'verticals and a loop: an exact replace mark, the loop holds the number',
       strokes: [strike(180, 250, Y), verticals(190, 240, Y), loop(270, Y)],
-      expect: [{kinds: ['strikeVerticals'], strokes: ['s1', 's2', 's3']}],
+      expect: [{kinds: ['replaceVerticals'], strokes: ['s1', 's2', 's3', 's4'], anchors: [[190.5, Y + 1], [240.5, Y + 1]]}],
     },
   ],
   slash: [

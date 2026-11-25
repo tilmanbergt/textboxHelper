@@ -9,9 +9,10 @@ import type {SlashShape} from './shapes/slash';
  * The output of pass 1 (technical-design-mark-dialogue.md §2.2): what a group of strokes is, read
  * from the strokes alone. Pass 2 places a reading in the text.
  *
- * Kinds: a `strike` (whole words; with tagged text a replacement), a strike with two verticals
- * (`strikeVerticals`: exactly between them, deleted only — verticals never make a replacement),
- * a strike with a loop (`replaceLoop`: replaced by the tagged text), a `slash` through one letter,
+ * Kinds: a `strike` (whole words; with tagged text a replacement), a strike with a vertical at
+ * each end (`strikeVerticals`: exactly between them, deleted), the same with a circle
+ * (`replaceVerticals`: exactly between them, replaced by the tagged text, the circle holds the
+ * number), a strike with a loop (`replaceLoop`: whole words replaced by the tagged text), a `slash` through one letter,
  * the carets (`caret` V ∧, `sideways` < >, `step` _|‾ with or without its second upright), the
  * insert-space mark (`space`), a punctuation circle (`punct`), a `closeUp` arc and a `swap`
  * piece (read against a line only in pass 2, technical-design-mark-dialogue.md §13.1 Q1).
@@ -20,6 +21,7 @@ import type {SlashShape} from './shapes/slash';
 export type MarkKind =
   | 'strike'
   | 'strikeVerticals'
+  | 'replaceVerticals'
   | 'replaceLoop'
   | 'slash'
   | 'caret'

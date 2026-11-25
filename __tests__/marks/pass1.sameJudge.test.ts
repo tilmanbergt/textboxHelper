@@ -15,7 +15,7 @@ import {TABLES} from './pass1.cases';
  * a strike with verticals takes text in none of them (§13.1 Q2).
  */
 
-const TAKES_TEXT: MarkKind[] = ['strike', 'replaceLoop', 'slash', 'caret', 'sideways', 'step'];
+const TAKES_TEXT: MarkKind[] = ['strike', 'replaceLoop', 'replaceVerticals', 'slash', 'caret', 'sideways', 'step'];
 const NONE = {strikes: [], carets: []};
 
 /** The window as the look-back has it: rects for all, points only where it reads them. */

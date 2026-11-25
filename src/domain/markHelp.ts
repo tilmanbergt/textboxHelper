@@ -73,8 +73,8 @@ export const MARK_HELP: MarkHelpEntry[] = [
     needsText: false,
     draw: 'Strike the letters and draw a short line across each end of the strike, exactly where the deletion starts and ends. Nothing to write: exactly what is between the lines goes.',
     keep: [
-      'The short lines mark exact places, even inside a word; a strike alone or with a circle takes whole words.',
-      'They take no new text: to change letters, slash each one or strike the word with a circle.',
+      'The short lines mark exact places, from one letter to several words, even inside a word; a strike alone takes whole words.',
+      'To replace exactly that part, add a small circle after the strike and tag the new text: the number goes into the circle.',
     ],
   },
   {

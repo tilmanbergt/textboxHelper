@@ -130,9 +130,9 @@ export function placeLinked(
   }
   const strike = {id: reading.strokes[0], numInPage: refs[0]?.numInPage ?? 0, rect: strikeRect, points: null, straightLine: false};
   // A linked strike's shape was taken when it was tagged: only its place is checked here.
-  const placed = placeStrike(strike, views, null, want);
+  const verticals = reading.kind === 'strikeVerticals' || reading.kind === 'replaceVerticals' ? rectsWithRole(reading, 'modifier') : null;
+  const placed = placeStrike(strike, views, null, want, verticals);
   if (placed.ok) {
-    const verticals = reading.kind === 'strikeVerticals' ? rectsWithRole(reading, 'modifier') : null;
     return {
       kind: 'placed',
       mark: {

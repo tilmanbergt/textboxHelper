@@ -98,8 +98,8 @@ Handwritten edit markers on textboxes: a delete marker is a line through words; 
 is a delete line plus a small loop; a < or >, or a step mark with a second
 upright (_||‾), breaks a paragraph; a ∧ or V with a cross inserts a space; the swap mark (a line
 above one part and below the next, joined by a vertical, in one stroke or in three pieces across
-lines) swaps two parts. The fine marks work letter by letter: a strike with two verticals deletes
-exactly what is between them and takes no text, a slash marks one letter, an arc under or over a
+lines) swaps two parts. The fine marks work letter by letter: a strike with a vertical at each end deletes
+exactly what is between them (with a circle too, the tagged text replaces it), a slash marks one letter, an arc under or over a
 gap closes it, two arcs close a gap at a line end or join two paragraphs (`domain/paragraphJoin.ts`),
 and a ∧ or V with a filled circle between its legs puts in the punctuation drawn in it
 (`domain/punctText.ts` places it by its type; what the plugin can't read waits for the user's pick

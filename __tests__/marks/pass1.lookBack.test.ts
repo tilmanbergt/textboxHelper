@@ -73,11 +73,12 @@ describe('look-back: replace marks', () => {
     expect(readLookBackReplace([strike('k', 7, true), loop('l', 8)], [])).toMatchObject({kind: 'replaceLoop', strokes: ['k', 'l']});
   });
 
-  it('takes no strike with two verticals: they mark an exact delete, which takes no text', () => {
-    const window = [strike('k', 7), vertical('v1', 8, 400), vertical('v2', 9, 430)];
+  it('takes no strike with verticals at its ends: they mark an exact delete, which takes no text', () => {
+    const window = [strike('k', 7), vertical('v1', 8, 302), vertical('v2', 9, 516)];
     expect(readLookBackReplace(window, [])).toBeNull();
     expect(readLookBack(window, NONE)).toBeNull();
-    // The device test page (recognize rects alone): no mark either.
+    // An earlier device test page (recognize rects alone): verticals inside the strike mark
+    // nothing, and without a loop the strike is no replace mark.
     const device = [
       fromRect('strike', 29, {left: 600, top: 808, right: 972, bottom: 820}),
       fromRect('v1', 30, {left: 790, top: 789, right: 807, bottom: 833}),
@@ -85,8 +86,12 @@ describe('look-back: replace marks', () => {
       fromRect('n', 25, {left: 594, top: 1279, right: 605, bottom: 1286}),
     ];
     expect(readLookBackReplace(device, [])).toBeNull();
-    // Nor with the user's own circle above the right vertical.
-    expect(readLookBack([...window, ring('c', 10, 431, 455)], NONE)).toBeNull();
+  });
+
+  it('takes a strike with verticals at its ends and a circle: exactly between them (§13.4)', () => {
+    const reading = readLookBack([strike('k', 7), vertical('v1', 8, 302), vertical('v2', 9, 516), ring('c', 10, 517, 455)], NONE);
+    expect(reading).toMatchObject({kind: 'replaceVerticals', strokes: ['k', 'v1', 'v2', 'c']});
+    expect(storedMarkOf(reading as Reading)).toMatchObject({kind: 'replace', bounds: 'exact', modifierRects: [expect.anything(), expect.anything()], numberRect: expect.anything()});
   });
 
   it('takes the newest mark and skips strikes already paired', () => {
@@ -218,13 +223,23 @@ describe('Select mark', () => {
     });
   });
 
-  it('refuses a strike with two crossing lines: an exact delete takes no text', () => {
+  it('refuses a strike with a line across each end: an exact delete takes no text', () => {
     const group = readDeclared([
       stroke('s', 1, [[300, 500], [420, 502], [520, 501]]),
-      stroke('a', 2, [[400, 480], [402, 522]]),
-      stroke('b', 3, [[430, 480], [432, 522]]),
+      stroke('a', 2, [[302, 480], [304, 522]]),
+      stroke('b', 3, [[516, 480], [518, 522]]),
     ]);
     expect(group).toMatchObject({readings: [], reason: VERTICALS_NO_TEXT_REASON});
+  });
+
+  it('takes a strike with a line across each end and a circle as an exact replace mark', () => {
+    const group = readDeclared([
+      stroke('s', 1, [[300, 500], [420, 502], [520, 501]]),
+      stroke('a', 2, [[302, 480], [304, 522]]),
+      stroke('b', 3, [[516, 480], [518, 522]]),
+      ring('c', 4, 545, 500),
+    ]);
+    expect(group.readings[0]).toMatchObject({kind: 'replaceVerticals', strokes: ['s', 'a', 'b', 'c']});
   });
 
   it('accepts a strike alone: the user said it is a mark', () => {

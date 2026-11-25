@@ -3,12 +3,12 @@ import type {Rect} from '../../textboxModel';
 
 /**
  * The strike family, read from stroke rects alone (technical-design-mark-dialogue.md §2.3): a
- * strike (long and flat, or a straight line), the two short verticals across it that mark exact
- * bounds (technical-design-fine-marks.md §3), and the small loop after it that makes it a replace
- * mark (technical-design-pen-edits.md As built). Verticals never make a replace mark
- * (technical-design-mark-dialogue.md §13.1 Q2): with them a strike deletes exactly what is
- * between them. Rects only, so the look-back (recognize rects) and the review (stroke bounds)
- * read the same.
+ * strike (long and flat, or a straight line), the two short verticals at its ends that mark exact
+ * bounds (technical-design-fine-marks.md §3, technical-design-mark-dialogue.md §13.4), and the
+ * small loop after it that makes it a replace mark (technical-design-pen-edits.md As built). The
+ * verticals alone delete exactly what is between them; with a loop the tagged text replaces it.
+ * Verticals inside a strike, away from its ends, are no pair. Rects only, so the look-back
+ * (recognize rects) and the review (stroke bounds) read the same.
  */
 
 /** A strike is at least this wide (pixels). */
@@ -18,10 +18,11 @@ export const MAX_MARKER_HEIGHT_RATIO = 0.55;
 
 /** A vertical across a strike is at least this tall. */
 export const REPLACE_MODIFIER_MIN_HEIGHT = 18;
-/** The two verticals stand at most this far apart. */
-export const REPLACE_MODIFIER_PAIR_MAX_GAP = 56;
-/** A vertical's middle is at most this far (or 0.45 strike widths) from the strike's middle. */
-export const REPLACE_MODIFIER_MAX_CENTER_DISTANCE = 48;
+/** A vertical stands this near a strike's end (pixels): 0.15 strike widths, at least 20, at most 40. */
+const END_SLACK_MIN = 20;
+const END_SLACK_MAX = 40;
+/** A short strike, between two verticals only (one letter): at least this wide (pixels). */
+export const SHORT_STRIKE_MIN_WIDTH = 10;
 
 /** Size range of the small loop drawn after a strike to mark a replace (page pixels). */
 export const REPLACE_LOOP_MIN_SIZE = 16;
@@ -45,38 +46,57 @@ export function isStrikeLike(rect: Rect): boolean {
 }
 
 /**
- * A vertical across a strike (by its rect): tall and narrow, crossing the strike's middle height,
- * its middle within the strike's length (15 % slack) and near the strike's middle. Whether it also
- * stands on the strike's line of text is pass 2's.
+ * A flat stroke too short for a strike alone (one or two letters): a strike only with a vertical
+ * at each end (`endVerticals`).
+ */
+export function isShortStrikeRect(rect: Rect): boolean {
+  const width = rectWidth(rect);
+  return width >= SHORT_STRIKE_MIN_WIDTH && width < MIN_MARKER_WIDTH && rectHeight(rect) <= Math.max(8, width * MAX_MARKER_HEIGHT_RATIO);
+}
+
+/** How near a strike's end a vertical stands to mark it. */
+function endSlack(strike: Rect): number {
+  return Math.min(END_SLACK_MAX, Math.max(END_SLACK_MIN, rectWidth(strike) * 0.15));
+}
+
+/**
+ * A vertical across a strike (by its rect): tall and narrow (steeper than ~70°), crossing the
+ * strike's middle height, its middle within the strike's length (with the end slack). Whether it
+ * marks an end is `endVerticals`'; whether it stands on the strike's line of text is pass 2's.
  */
 export function isReplaceVertical(strike: Rect, vertical: Rect): boolean {
   const height = rectHeight(vertical);
-  if (height < REPLACE_MODIFIER_MIN_HEIGHT || height <= rectWidth(vertical)) {
+  if (height < REPLACE_MODIFIER_MIN_HEIGHT || rectWidth(vertical) > Math.max(8, height * 0.4)) {
     return false;
   }
   const strikeCenter = rectCenter(strike);
   const center = rectCenter(vertical);
-  const strikeWidth = rectWidth(strike);
-  const margin = Math.max(16, strikeWidth * 0.15);
+  const slack = endSlack(strike);
   return (
-    center.x >= strike.left - margin &&
-    center.x <= strike.right + margin &&
-    Math.abs(center.x - strikeCenter.x) <= Math.max(REPLACE_MODIFIER_MAX_CENTER_DISTANCE, strikeWidth * 0.45) &&
+    center.x >= strike.left - slack &&
+    center.x <= strike.right + slack &&
     vertical.top <= strikeCenter.y &&
     vertical.bottom >= strikeCenter.y
   );
 }
 
-/** The closest two of the verticals within the allowed gap, left to right; [] when none. */
-export function closestVerticalPair<T>(verticals: T[], rectOf: (item: T) => Rect): T[] {
+/**
+ * The verticals that mark a strike's two ends, left to right (technical-design-mark-dialogue.md
+ * §13.4): one near each end, the pair nearest to both ends; [] when there is none. Verticals
+ * inside the strike, away from its ends, mark nothing.
+ */
+export function endVerticals<T>(strike: Rect, verticals: T[], rectOf: (item: T) => Rect): T[] {
+  const slack = endSlack(strike);
+  const x = (item: T) => rectCenter(rectOf(item)).x;
   let best: T[] = [];
-  let bestGap = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < verticals.length - 1; i += 1) {
-    for (let j = i + 1; j < verticals.length; j += 1) {
-      const gap = Math.abs(rectCenter(rectOf(verticals[i])).x - rectCenter(rectOf(verticals[j])).x);
-      if (gap <= REPLACE_MODIFIER_PAIR_MAX_GAP && gap < bestGap) {
-        bestGap = gap;
-        best = [verticals[i], verticals[j]].sort((a, b) => rectCenter(rectOf(a)).x - rectCenter(rectOf(b)).x);
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const left of verticals) {
+    for (const right of verticals) {
+      const toStart = Math.abs(x(left) - strike.left);
+      const toEnd = Math.abs(x(right) - strike.right);
+      if (left !== right && x(right) - x(left) >= 4 && toStart <= slack && toEnd <= slack && toStart + toEnd < bestDistance) {
+        bestDistance = toStart + toEnd;
+        best = [left, right];
       }
     }
   }

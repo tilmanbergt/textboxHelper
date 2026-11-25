@@ -75,6 +75,7 @@ export function placeStrike(
   views: TextboxView[],
   shapeRefusal: string | null,
   want: (view: TextboxView) => void = () => undefined,
+  verticals: Rect[] | null = null,
 ): StrikePlace {
   const landing = landingView(stroke.rect, views);
   if (!('view' in landing)) {
@@ -94,10 +95,15 @@ export function placeStrike(
   }
   const layout = view.layout;
   const y = center(stroke.rect).y;
+  // With a vertical at each end, the words between them, however little of each (§13.4).
+  const bounds =
+    verticals && verticals.length === 2
+      ? {left: center(verticals[0]).x, right: center(verticals[1]).x, exact: true}
+      : {left: stroke.rect.left, right: stroke.rect.right, exact: false};
   const lineOf = new Map(layout.lines.map(line => [line.index, line]));
   const words = layout.words.map(word => {
     const width = word.right - word.left;
-    const overlap = Math.max(0, Math.min(word.right, stroke.rect.right) - Math.max(word.left, stroke.rect.left));
+    const overlap = Math.max(0, Math.min(word.right, bounds.right) - Math.max(word.left, bounds.left));
     // A word's box is its line's band (the native measure gives each word its line's top and bottom).
     const line = lineOf.get(word.lineIndex);
     return {
@@ -127,7 +133,7 @@ export function placeStrike(
   if (!line) {
     return {ok: false, reason: STRIKE_REASONS.noLine, removable: true, trace};
   }
-  const covered = inBand.filter(word => word.overlapRatio >= 0.5 && isMeaningfulWord(word.text));
+  const covered = inBand.filter(word => (bounds.exact ? word.overlapRatio > 0 : word.overlapRatio >= 0.5 && isMeaningfulWord(word.text)));
   if (covered.length === 0) {
     return {ok: false, reason: STRIKE_REASONS.noWord, removable: true, trace};
   }
