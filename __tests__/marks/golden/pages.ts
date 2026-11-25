@@ -118,6 +118,15 @@ const slashLinked: PageSpec = {
   penEdits: [{number: 1, kind: 'replacement', text: 'b', handwriting: below('b', 0), after: 's1', mark: {kind: 'replace', item: 's1', slash: true}}],
 };
 
+const slashFlat: PageSpec = {
+  name: 'slash-flat-linked',
+  about:
+    'Flat and long slashes: a short one at 35° through the r of "red" with tagged text after it, a long one at 45° through the o of "words" (it reaches above and below the letters, yet is no swap piece).',
+  textboxes: [A],
+  strokes: [{name: 's1', drawn: slash(x(8) + 9, MID, 35, 40)}, slash(x(26) + 9, MID, 45, 60)],
+  penEdits: [{number: 1, kind: 'replacement', text: 'b', handwriting: below('b', 0), after: 's1', mark: {kind: 'replace', item: 's1', slash: true}}],
+};
+
 // A second paragraph below A, with room between them for a new paragraph.
 const C = textbox('second paragraph here', {left: 100, top: 400, width: 1000, uuid: 'tb2', numInPage: 2});
 
@@ -270,6 +279,7 @@ export const GOLDEN_PAGES: PageSpec[] = [
   replaceLinked,
   slashes,
   slashLinked,
+  slashFlat,
   carets,
   paragraphMarks,
   spacePunct,

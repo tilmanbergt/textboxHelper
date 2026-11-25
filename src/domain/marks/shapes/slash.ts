@@ -18,8 +18,12 @@ export const SLASH_MAX_LENGTH = 130;
 /** How much of the path length is cut off at each end as a possible hook. */
 const HOOK_SHARE = 0.1;
 
-/** `rect`: the whole stroke; `top`, `bottom`: the ends of its straight part, the upper one first. */
-export type SlashShape = {rect: Rect; top: Point; bottom: Point; angleDeg: number};
+/**
+ * `rect`: the whole stroke; `top`, `bottom`: the ends of its straight part, the upper one first;
+ * `length`: the straight part's length, taken back to the whole stroke's (the hooks cut off are a
+ * fifth of it). A flat slash is long but not tall: its size is judged by its length.
+ */
+export type SlashShape = {rect: Rect; top: Point; bottom: Point; angleDeg: number; length: number};
 
 /** The point `distance` along the path from its start. */
 function pointAlong(points: Point[], distance: number): {point: Point; index: number} {
@@ -66,7 +70,7 @@ export function analyzeSlash(points: Point[]): SlashShape | null {
   }
   const rect = boundsOf(points) as Rect;
   const [top, bottom] = first.y <= last.y ? [first, last] : [last, first];
-  return {rect, top: {...top}, bottom: {...bottom}, angleDeg};
+  return {rect, top: {...top}, bottom: {...bottom}, angleDeg, length: direct / (1 - 2 * HOOK_SHARE)};
 }
 
 /**

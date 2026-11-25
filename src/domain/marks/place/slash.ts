@@ -26,7 +26,7 @@ function averageCharWidth(words: CaretTextbox['words']): number {
 
 /**
  * Which character of a measured textbox the slash marks: it must cross a line's middle, be of
- * that line's letter size (half to one and a half line heights tall, at most 1.6 line heights
+ * that line's letter size (half to one and a half line heights long, at most 1.6 line heights
  * wide), and cross a character there; one wider than two letters is uncertain. Null when it is no
  * slash on this textbox.
  */
@@ -34,13 +34,14 @@ export function placeSlash(slash: SlashShape, box: CaretTextbox): SlashPlace | n
   for (const line of box.lines) {
     const height = Math.max(1, line.bottom - line.top);
     const centre = (line.top + line.bottom) / 2;
-    const band = 0.15 * height;
+    // It crosses the line's middle by a margin; a flat slash, little taller than the letters'
+    // middle part, by a quarter of its own height.
+    const band = Math.min(0.15 * height, 0.25 * (slash.rect.bottom - slash.rect.top));
     if (slash.rect.top > centre - band || slash.rect.bottom < centre + band) {
       continue;
     }
-    const tall = slash.rect.bottom - slash.rect.top;
     const words = box.words.filter(word => word.lineIndex === line.index);
-    if (words.length === 0 || tall < 0.5 * height || tall > 1.5 * height) {
+    if (words.length === 0 || slash.length < 0.5 * height || slash.length > 1.5 * height) {
       continue;
     }
     const wide = slash.rect.right - slash.rect.left;

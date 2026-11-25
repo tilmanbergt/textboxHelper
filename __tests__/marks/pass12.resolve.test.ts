@@ -142,6 +142,24 @@ const TABLES: Record<string, Case[]> = {
       refused: ['1: The marker does not land clearly inside exactly one main-layer textbox'],
     },
     {
+      name: 'a short slash at 35° through a letter (flat: long, not tall)',
+      strokes: [slash(x(8) + 9, MID, 35, 40)],
+      marks: ['slash 1 [8, 9)'],
+      refused: [],
+    },
+    {
+      name: 'a long slash at 45° reaching above and below the letters is no swap piece',
+      strokes: [slash(x(8) + 9, MID, 45, 60)],
+      marks: ['slash 1 [8, 9)'],
+      refused: [],
+    },
+    {
+      name: 'a long slash just steeper than 30°',
+      strokes: [slash(x(8) + 9, MID, 32, 60)],
+      marks: ['slash 1 [8, 9)'],
+      refused: [],
+    },
+    {
       name: 'a slash through a letter wins over the strike family',
       strokes: [slash(x(4) + 9, MID, 60, 40), strike(x(20) + 3, x(30) - 3, MID)],
       marks: ['delete 2 [20, 30)', 'slash 1 [4, 5)'],
