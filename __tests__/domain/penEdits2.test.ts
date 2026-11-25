@@ -2,12 +2,15 @@ import {
   AWAIT_MARK_MS,
   awaitingEntry,
   kindOfMark,
+  linkedNumbersOnPage,
+  linkPenEdit,
   parsePenEditEntry,
   setAwaitingMark,
   WAITING_RECOGNITION,
   type PenEditEntry,
   type PenEditIndex,
 } from '../../src/domain/penEditModel';
+import {badgeNumberRect, looksLikePenEditNumber, nextPenEditNumber, penEditNumberText} from '../../src/domain/penEditTags';
 describe('Select mark state', () => {
   const NOTE = '/storage/emulated/0/Note/a.note';
   const entry = (id: string, overrides: Partial<PenEditEntry> = {}): PenEditEntry => ({
@@ -67,5 +70,46 @@ describe('Select mark state', () => {
     const since = '2026-11-19T10:00:00.000Z';
     expect(parsePenEditEntry({...old, awaitingMark: {since, from: 'review'}})?.awaitingMark).toEqual({since, from: 'review'});
     expect(parsePenEditEntry({...old, awaitingMark: {since, from: 'elsewhere'}})?.awaitingMark).toBeNull();
+  });
+
+  describe('numbers and "?" (technical-design-mark-dialogue.md §4.4)', () => {
+    const replace = {kind: 'replace' as const, strikeRect: {left: 0, top: 0, right: 90, bottom: 4}, modifierRects: []};
+
+    it('reads text without a mark as "?", also when it was stored with a number', () => {
+      expect(parsePenEditEntry(entry('pe-20261119-100000-002', {kind: 'unpaired', number: 4}))?.number).toBeNull();
+      expect(parsePenEditEntry({...entry('pe-20261119-100000-003', {kind: 'unpaired'}), number: null})?.number).toBeNull();
+      expect(parsePenEditEntry(entry('pe-20261119-100000-004', {kind: 'replacement', mark: replace, number: 3}))?.number).toBe(3);
+    });
+
+    it('numbers count only the linked texts of the page; gaps after Drop stay', () => {
+      const page = index(
+        entry('pe-a', {kind: 'replacement', mark: replace, number: 1}),
+        entry('pe-b', {number: null}),
+        entry('pe-c', {kind: 'replacement', mark: replace, number: 4}),
+        entry('pe-d', {kind: 'replacement', mark: replace, number: 9, page: 3}),
+      );
+      expect(linkedNumbersOnPage(page, NOTE, 2)).toEqual([1, 4]);
+      expect(nextPenEditNumber(linkedNumbersOnPage(page, NOTE, 2))).toBe(5);
+    });
+
+    it('links a text: its mark, kind and number, and it stops waiting', () => {
+      const waiting = index(entry('pe-b', {number: null, awaitingMark: {since: now.toISOString(), from: 'tag'}, placement: 'here'}));
+      expect(linkPenEdit(waiting, 'pe-b', replace, 2).entries[0]).toMatchObject({
+        kind: 'replacement',
+        mark: replace,
+        number: 2,
+        awaitingMark: null,
+        placement: undefined,
+      });
+    });
+
+    it('shows "?" on the page and takes it for a pen-edit number', () => {
+      expect(penEditNumberText(null)).toBe('?');
+      expect(penEditNumberText(12)).toBe('12');
+      expect(looksLikePenEditNumber('?', 28)).toBe(true);
+      expect(looksLikePenEditNumber('??', 28)).toBe(false);
+      const badge = {left: 100, top: 100, right: 148, bottom: 148};
+      expect(badgeNumberRect(badge, null)).toEqual(badgeNumberRect(badge, 7));
+    });
   });
 });

@@ -1,4 +1,5 @@
 import {isTakenStrike} from '../penEditMatching';
+import {NO_MARK_REASON, VERTICALS_NO_TEXT_REASON} from './reasons';
 import {BARE_STEP_REASON} from '../paragraphMarks';
 import type {Rect} from '../textboxModel';
 import {unionRect, type MarkStroke, type Point} from './markStroke';
@@ -416,10 +417,6 @@ export function readMarks(strokes: MarkStroke[]): Pass1Group[] {
 // ---------------------------------------------------------------------------------------------
 // Select mark
 // ---------------------------------------------------------------------------------------------
-
-export const VERTICALS_NO_TEXT_REASON =
-  'Two verticals across a strike mark exactly what to delete; they take no new text. For new text, draw a small loop after the strike.';
-export const NO_MARK_REASON = 'None of these strokes reads as a mark: a strike with a loop, a slash, or a caret.';
 
 /**
  * Select mark (technical-design-pen-edits-2.md §4.2): the strokes the user lassoed as one mark.

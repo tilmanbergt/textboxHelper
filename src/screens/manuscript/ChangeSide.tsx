@@ -24,6 +24,7 @@ import PillButton from '../../ui/PillButton';
 import StrokeDrawing from '../../ui/StrokeDrawing';
 import {COLORS, FONT, RADII, SPACING} from '../../ui/theme';
 import {PUNCTUATION_CHARS, type PunctuationChar} from '../../domain/marks/shapes/punct';
+import {penEditNumberText} from '../../domain/penEditTags';
 
 export type PenDetail = {
   view: PenEditView;
@@ -169,7 +170,7 @@ function PenText({
     <View style={styles.pen}>
       {editing ? (
         <>
-          <Text style={styles.label}>Text of {pen.view.number}</Text>
+          <Text style={styles.label}>Text of {penEditNumberText(pen.view.number)}</Text>
           <TextInput
             style={styles.field}
             value={draft}
@@ -177,7 +178,7 @@ function PenText({
             multiline
             autoFocus
             textAlignVertical="top"
-            accessibilityLabel={`Text of ${pen.view.number}`}
+            accessibilityLabel={`Text of ${penEditNumberText(pen.view.number)}`}
           />
           <View style={styles.buttons}>
             <PillButton
@@ -199,7 +200,7 @@ function PenText({
           </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Correct the text of ${pen.view.number}`}
+            accessibilityLabel={`Correct the text of ${penEditNumberText(pen.view.number)}`}
             disabled={busy || pen.status === 'recognizing'}
             onPress={() => onEditing(true)}
             style={styles.textButton}>

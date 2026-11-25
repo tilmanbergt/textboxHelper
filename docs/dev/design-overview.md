@@ -141,9 +141,12 @@ from the same ranges the apply step uses, so the review shows exactly what will 
 
 **Pen edits** (`actions/penEditTag.ts`, `actions/penEditReview.ts`, `storage/penEditStore.ts`,
 `domain/penEdit*.ts`): the "Insertion or Replacement" lasso button tags handwritten new text. The
-mark written just before it (a replace mark or a caret) decides what it is; badges with a number
-on the page show which text belongs to which mark (a circle the user drew at the mark holds the
-number). A snippet without a mark can be given one later (Select mark), or go in as a new paragraph
+mark written just before it (a replace mark or a caret, pass 1's `readLookBack`) decides what it
+is; badges with a number on the page show which text belongs to which mark (a circle the user drew
+at the mark holds the number). Numbers are given at link time and count only the page's linked
+texts; text without a mark shows "?" (`number: null`), and the index entry is written before
+anything is put on the page. A snippet without a mark can be given one later (Select mark, pass 1's
+`readDeclared`, which turns its "?" into the next number), or go in as a new paragraph
 where its handwriting starts (Insert right here, `domain/marks/place/here.ts`). The tagged strokes and a picture are stored in the plugin folder (`pen-edits/`);
 the review recognizes them while it is open and the user can edit the text in place.
 

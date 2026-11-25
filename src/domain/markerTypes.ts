@@ -109,7 +109,7 @@ export type RecognizedEditOperation = {
   textStart: number;
   /** Set for a change whose new text comes from a tagged snippet. */
   penEditId?: string;
-  penEditNumber?: number;
+  penEditNumber?: number | null;
   penStatus?: PenOperationStatus;
   /** An insertion at a caret: how its text joins the words around it. */
   insertMode?: CaretInsertMode;
@@ -135,7 +135,7 @@ export type IgnoredEditMarker = {
   summary: string;
   reason: string;
   /** Set when the ignored item is a tagged snippet, not a marker stroke. */
-  penEditNumber?: number;
+  penEditNumber?: number | null;
   penEditId?: string;
   /** Set for tagged text without a usable mark: "Insert right here" is offered (fine-marks §8). */
   canPlaceHere?: boolean;
@@ -207,7 +207,8 @@ export type EdgeView = {
 export type PenEditView = {
   id: string;
   kind: PenEditKind;
-  number: number;
+  /** Null for text without a mark ("?"). */
+  number: number | null;
   pictureUri: string | null;
 };
 
@@ -227,7 +228,7 @@ export type MarkerTextboxBase = Omit<TextMutationPlan, 'nextText' | 'nextTextRec
  */
 export type InsertionDraft = {
   penEditId: string;
-  number: number;
+  number: number | null;
   left: number;
   width: number;
   style: TextboxData;

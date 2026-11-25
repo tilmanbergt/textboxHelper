@@ -53,6 +53,8 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Changed
 
+- Tagged text without a mark keeps a "?" on the page instead of a number; numbers are given only when the text is linked to its mark and count only linked texts, so they stay in order. Select mark turns the "?" into the next number. The card after tagging says "No mark found for this text" and offers Select mark now or Later.
+- Select mark on strokes that are no clear mark changes nothing and shows "Not a clear mark" with a picture of the strokes, why, Try again and Cancel.
 - The plugin cleans up after itself: pen edits applied or dropped more than 3 days ago are removed with their handwriting and picture, only the 3 newest backups of the last 14 days are kept, unlinking a file removes the copies of its text, and exports no longer leave a temporary file behind. Manuscript → Settings → Diagnostics → Storage shows how much the plugin keeps and has Clean up now.
 - The NOTE toolbar buttons "Import Text File" and "Export DOCX" are gone: both are in Manuscript → Files.
 - Manuscript: Details is now Settings, with tabs Outline · Layout · Export · Calibration · Diagnostics. Layout holds the page margins, the paragraph and heading sizes, Bold headings and which heading levels start a new page; they are used by every import (the Import screen's Layout sub-screen is gone, it shows a summary). Export holds the classification rules of Export DOCX (the Rules sub-screen is gone).

@@ -25,6 +25,7 @@ import {
   boundsOfPoints,
   isPenEditDecoration,
   parsePenEditUserData,
+  penEditNumberText,
 } from '../domain/penEditTags';
 import {isNoShift, type EdgeShift} from '../domain/edgeShift';
 import {normalizeRecognizedText} from '../domain/penEditText';
@@ -346,7 +347,7 @@ export async function loadPenEditContext(
     return undefined;
   };
 
-  const entries = [...onPage].sort((a, b) => a.number - b.number);
+  const entries = [...onPage].sort((a, b) => (a.number ?? Infinity) - (b.number ?? Infinity));
   const states: Record<string, PenTextState> = {};
   const views: PenEditView[] = [];
   for (const entry of entries) {
@@ -526,7 +527,7 @@ async function placeHere<T extends TextElementData>(
     const below = byUuid(place.below);
     const styleSource = above ?? below;
     if (!styleSource) {
-      return {reason: `Text ${entry.number}: no paragraph to put it next to.`};
+      return {reason: `Text ${penEditNumberText(entry.number)}: no paragraph to put it next to.`};
     }
     const rect = styleSource.textBox.textRect;
     return {
@@ -695,6 +696,13 @@ export async function startSelectMark(
 ): Promise<void> {
   await changePenEditIndex(current =>
     setAwaitingMark(current, id, from, new Date()),
+  );
+}
+
+/** The text stops waiting for its mark (Cancel on the "Not a clear mark" card). */
+export async function stopSelectMark(id: string): Promise<void> {
+  await changePenEditIndex(current =>
+    updatePenEdit(current, id, entry => ({...entry, awaitingMark: null})),
   );
 }
 

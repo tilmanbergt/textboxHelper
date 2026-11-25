@@ -18,7 +18,7 @@ import {resolvePage, type PageResult, type PageStroke, type StrokeOwner} from '.
 import type {TextboxView} from '../domain/marks/textboxView';
 import {readPageSizeForDiagnostics} from '../supernote/noteElements';
 import type {PenEditEntry} from '../domain/penEditModel';
-import {parsePenEditUserData} from '../domain/penEditTags';
+import {parsePenEditUserData, penEditNumberText} from '../domain/penEditTags';
 import {isNormalTextElement, sortTextElements} from '../domain/textboxEditPlan';
 import {pageFingerprint, snippetIdsOnPage, type FingerprintElement} from '../domain/pageFingerprint';
 import {DEFAULT_FONT_SIZE} from '../domain/textboxModel';
@@ -220,7 +220,7 @@ async function analyzePage(
     // Its caret was missing or unclear: it can go where its handwriting is. One already placed
     // there that didn't fit keeps Select mark only.
     ignoredMarkers.push({
-      ...penEditIgnored(entry, `Insertion ${entry.number}`, reason),
+      ...penEditIgnored(entry, `Insertion ${penEditNumberText(entry.number)}`, reason),
       ...(entry.placement === 'here' ? {} : {canPlaceHere: true}),
     });
   });
@@ -389,7 +389,7 @@ function unpairedPenEdits(
     .map(entry => ({
       ...penEditIgnored(
         entry,
-        `Text ${entry.number}`,
+        `Text ${penEditNumberText(entry.number)}`,
         'No replace mark or caret was found just before it. Select mark, then draw or lasso its mark - or insert it right here as a new paragraph.',
       ),
       canPlaceHere: true,
@@ -399,7 +399,7 @@ function unpairedPenEdits(
     .map(entry =>
       penEditIgnored(
         entry,
-        `Replacement ${entry.number}`,
+        `Replacement ${penEditNumberText(entry.number)}`,
         lockedPenIds.has(entry.id)
           ? "Its replace mark is on a textbox whose font can't be read by plugins. Copy the font file to MyStyle/TextboxHelper/fonts and open the review again."
           : entry.mark
@@ -430,7 +430,7 @@ function insertionDraft({entry, textbox, offset, mode, uncertain}: InlineInserti
       targetTextboxUuid: textbox.uuid,
       targetTextboxNumInPage: textbox.numInPage,
       lineIndex: 0,
-      summary: `Insert ${entry.number}`,
+      summary: `Insert ${penEditNumberText(entry.number)}`,
       detail: `Textbox ${textbox.numInPage} · ${place}`,
       words: [],
       textStart: offset,

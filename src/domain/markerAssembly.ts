@@ -1,3 +1,4 @@
+import {penEditNumberText} from './penEditTags';
 import {buildHunk, buildSwapHunk} from './markerHunks';
 import {applyTextMutationRanges, formatOperationSnippet} from './markerText';
 import type {
@@ -73,10 +74,10 @@ export function penTextOf(state: PenTextState | undefined): string {
 
 function placeholder(
   kind: 'replacement' | 'insertion',
-  number: number,
+  number: number | null,
   status: PenOperationStatus,
 ): string {
-  const what = `${kind} ${number}`;
+  const what = `${kind} ${penEditNumberText(number)}`;
   switch (status) {
     case 'recognizing':
       return `‹${what} being recognized…›`;
@@ -271,7 +272,7 @@ export function assembleMarkerPreview(
       // An insertion at a caret: the text goes in at the caret, with the spaces it needs.
       const state = penStates[operation.penEditId];
       const status = penOperationStatus(state);
-      const number = operation.penEditNumber ?? 0;
+      const number = operation.penEditNumber ?? null;
       const text = status === 'ready' ? penTextOf(state) : '';
       const joined = text
         ? caretInsertionText(
@@ -416,7 +417,7 @@ export function assembleMarkerPreview(
     }
     const state = penStates[operation.penEditId];
     const status = penOperationStatus(state);
-    const number = operation.penEditNumber ?? 0;
+    const number = operation.penEditNumber ?? null;
     const text = status === 'ready' ? penTextOf(state) : '';
     const shown = text || placeholder('replacement', number, status);
     const assembled: RecognizedEditOperation = {

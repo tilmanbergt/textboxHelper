@@ -33,7 +33,7 @@ export function changeLabel(operation: RecognizedEditOperation): string {
     case 'punct':
       return operation.punct?.char ? `Insert "${operation.punct.char}"` : 'Insert punctuation';
     case 'replace':
-      return number !== undefined ? `Replace ${number}` : 'Replace';
+      return typeof number === 'number' ? `Replace ${number}` : 'Replace';
     default:
       return 'Delete';
   }

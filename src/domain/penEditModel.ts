@@ -76,7 +76,11 @@ export type PenEditEntry = {
   notePath: string;
   /** 0-based page the tag icon was last found on. */
   page: number;
-  number: number;
+  /**
+   * The number on the page: given when the text is linked to its mark, counting only the linked
+   * texts of the page; null while it has none ("?", technical-design-mark-dialogue.md §4.4).
+   */
+  number: number | null;
   /** ISO time of the tag. */
   createdAt: string;
   /** The lasso rect at tag time, page pixels. */
@@ -204,7 +208,6 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     !kind ||
     !isString(value.notePath) ||
     !isFiniteNumber(value.page) ||
-    !isFiniteNumber(value.number) ||
     !rect
   ) {
     return null;
@@ -215,7 +218,8 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     kind,
     notePath: value.notePath,
     page: value.page,
-    number: value.number,
+    // Text without a mark has no number: entries stored with one are read as "?".
+    number: kind !== 'unpaired' && isFiniteNumber(value.number) ? value.number : null,
     createdAt: isString(value.createdAt) ? value.createdAt : '',
     rect,
     strokeRects: parseRects(value.strokeRects),
@@ -399,6 +403,25 @@ export function awaitingEntry(
       return Number.isFinite(since) && now.getTime() - since >= 0 && now.getTime() - since <= AWAIT_MARK_MS;
     }) ?? null
   );
+}
+
+/** The numbers of the page's linked texts; the next link gets one more than the highest. */
+export function linkedNumbersOnPage(index: PenEditIndex, notePath: string, page: number): number[] {
+  return activePenEditsOnPage(index, notePath, page)
+    .map(entry => entry.number)
+    .filter((number): number is number => number !== null);
+}
+
+/** The text is linked to its mark: it takes the mark, its kind and its number, and stops waiting. */
+export function linkPenEdit(index: PenEditIndex, id: string, mark: PenEditMark, number: number): PenEditIndex {
+  return updatePenEdit(index, id, entry => ({
+    ...entry,
+    kind: kindOfMark(mark),
+    mark,
+    number,
+    awaitingMark: null,
+    placement: undefined,
+  }));
 }
 
 /** The snippet's kind follows from its mark. */

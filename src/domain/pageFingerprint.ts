@@ -38,7 +38,7 @@ export type FingerprintElement = {
 export type FingerprintPenEntry = {
   id: string;
   kind?: string;
-  number?: number;
+  number?: number | null;
   state?: string;
   mark?: unknown;
   strokesTagged?: boolean;

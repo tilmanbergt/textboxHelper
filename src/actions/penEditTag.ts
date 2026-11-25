@@ -3,6 +3,8 @@ import {
   activePenEditsOnPage,
   awaitingEntry,
   kindOfMark,
+  linkedNumbersOnPage,
+  linkPenEdit,
   MAX_DECLARED_MARK_STROKES,
   takenCaretRects,
   takenStrikeRects,
@@ -17,6 +19,7 @@ import type {MarkStroke} from '../domain/marks/markStroke';
 import {readDeclared, readLookBack, readLookBackReplace} from '../domain/marks/pass1';
 import {idsWithRole, rectsWithRole, type Reading} from '../domain/marks/reading';
 import {caretNumberCenter} from '../domain/marks/shapes/caret';
+import {NO_MARK_REASON} from '../domain/marks/reasons';
 import {storedMarkOf} from '../domain/marks/storedMark';
 import {
   BADGE_SIZE_PX,
@@ -40,9 +43,10 @@ import {
 } from '../storage/penEditStore';
 import {readLasso, type LassoSnapshot} from '../supernote/lassoRead';
 import {hideLassoBox} from '../supernote/noteElements';
-import {insertTagElements, tagUserStrokes, type TagBadge, type TagNumber} from '../supernote/penEditElements';
+import {insertTagElements, setSnippetNumber, tagUserStrokes, type TagBadge, type TagNumber} from '../supernote/penEditElements';
 import {readLookBackWindow, recycleWindow, withLookBackPoints} from '../supernote/penEditPageRead';
 import {ensurePermissions} from '../supernote/permissions';
+import {startTiming} from '../utils/perf';
 
 /**
  * The "Insertion or Replacement" lasso button (technical-design-pen-edits.md §3.4,
@@ -59,9 +63,10 @@ export type ReviewFocus = {notePath: string; page: number; penEditId: string; nu
 export type PenEditTagOutcome =
   | {kind: 'tagged'; tagKind: PenEditKind; number: number}
   /** `saving`: shown as soon as the search found no mark, while the tag is still being stored. */
-  | {kind: 'noMark'; id: string; number: number; saving?: boolean}
+  | {kind: 'noMark'; id: string; saving?: boolean}
   | {kind: 'markAttached'; tagKind: PenEditKind; number: number; fromReview: boolean; focus: ReviewFocus}
-  | {kind: 'markNotRead'; number: number}
+  /** Select mark read no mark that takes text: the strokes (flat x,y lists) and pass 1's reason. */
+  | {kind: 'markNotClear'; id: string; strokes: number[][]; reason: string}
   | {kind: 'empty'}
   | {kind: 'busy'}
   | {kind: 'failed'; detail: string};
@@ -108,8 +113,8 @@ export function subscribeReviewFocus(listener: () => void): () => void {
  * The card for a tag whose search found no mark, shown while the tag is still being stored. Its
  * buttons wait for the final outcome, which `presentTagOutcome` puts in its place.
  */
-export function presentEarlyNoMark(notice: {id: string; number: number}): void {
-  setPenEditOutcome({kind: 'noMark', id: notice.id, number: notice.number, saving: true});
+export function presentEarlyNoMark(notice: {id: string}): void {
+  setPenEditOutcome({kind: 'noMark', id: notice.id, saving: true});
 }
 
 /**
@@ -167,7 +172,7 @@ const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, m
  * (writing onto the page and saving the note): the card can open right away and wait there.
  */
 export async function tagPenEdit(
-  options: {onNoMark?: (notice: {id: string; number: number}) => void} = {},
+  options: {onNoMark?: (notice: {id: string}) => void} = {},
 ): Promise<PenEditTagOutcome> {
   if (running) {
     console.warn('[PenEdit] tag already running - press ignored');
@@ -235,8 +240,6 @@ export async function tagPenEdit(
       failure => ({kept: false, error: String(failure), failure: failure ?? 'write failed'}),
     );
 
-    const number = nextPenEditNumber(activePenEditsOnPage(index, notePath, page).map(entry => entry.number));
-
     // Both marks are looked for; the snippet belongs to the one written last before it
     // (pass 1, `readLookBack`). The read stops once a whole replace mark is in the window:
     // everything newer was read before it, so a newer caret is in the window too. Points are read
@@ -252,14 +255,19 @@ export async function tagPenEdit(
     );
     windowElements = result.elements;
     const window = await withLookBackPoints(withoutOwned(result.window, owned), result.elements, taken);
+    const endPass1 = startTiming('tag.pass1', {page});
     const reading = readLookBack(window, taken);
+    endPass1({found: reading?.kind ?? null});
     const lookBack = {read: result.read, ms: Date.now() - last};
     step('lookBack');
     const mark: PenEditMark | null = reading ? storedMarkOf(reading) : null;
     const tagKind = kindOfMark(mark);
+    // Numbers are given at link time and count only the page's linked texts; text without a mark
+    // shows "?" (technical-design-mark-dialogue.md §4.1).
+    const number = mark ? nextPenEditNumber(linkedNumbersOnPage(index, notePath, page)) : null;
     if (!mark && options.onNoMark) {
       try {
-        options.onNoMark({id, number});
+        options.onNoMark({id});
       } catch (error) {
         console.warn('[PenEdit] early no-mark notice failed', String(error));
       }
@@ -296,25 +304,13 @@ export async function tagPenEdit(
     const tagged = await tagUserStrokes(page, id, strokesToTag);
     step('tagStrokes');
 
-    const badge = snippetBadgeRect(lassoRect);
-    const badges: TagBadge[] = [{role: 'snippet', points: snippetBadgePolygon(badge)}];
-    const numbers: TagNumber[] = [{role: 'snippetnum', rect: badgeNumberRect(badge, number), number}];
-    const markTags = markBadges(reading, number, snap.pageSize?.width ?? 0);
-    badges.push(...markTags.badges);
-    numbers.push(...markTags.numbers);
-    const placed = await insertTagElements({page, id, badges, numbers});
-    step('elements');
-    if (!placed.placed) {
-      // Without its badge the entry would never be found on the page again: store nothing.
-      return {kind: 'failed', detail: `Could not put the tag on the page (${placed.error ?? 'unknown error'}). Nothing was tagged; please try again.`};
-    }
-
     const picture = await storing;
     if (picture.failure) {
       // Without its strokes the entry could never be recognized.
       throw picture.failure instanceof Error ? picture.failure : new Error(String(picture.failure));
     }
     const hasPicture = picture.kept;
+    const badge = snippetBadgeRect(lassoRect);
     const entry: PenEditEntry = {
       id,
       kind: tagKind,
@@ -334,9 +330,24 @@ export async function tagPenEdit(
       awaitingMark: null,
       edges: null,
     };
+    // The index entry first, then the badges and numbers: a number on the page always has its entry.
     await changePenEditIndex(current => upsertPenEdit(current, entry));
-    stored = true;
     step('stored');
+
+    const badges: TagBadge[] = [{role: 'snippet', points: snippetBadgePolygon(badge)}];
+    const numbers: TagNumber[] = [{role: 'snippetnum', rect: badgeNumberRect(badge, number), number}];
+    const markTags = markBadges(reading, number, snap.pageSize?.width ?? 0);
+    badges.push(...markTags.badges);
+    numbers.push(...markTags.numbers);
+    const placed = await insertTagElements({page, id, badges, numbers});
+    step('elements');
+    if (!placed.placed) {
+      // Without its badge the entry would never be found on the page again: it is taken back.
+      await changePenEditIndex(current => ({...current, entries: current.entries.filter(item => item.id !== id)}));
+      return {kind: 'failed', detail: `Could not put the tag on the page (${placed.error ?? 'unknown error'}). Nothing was tagged; please try again.`};
+    }
+    stored = true;
+
 
     console.log(
       '[PenEdit] tag',
@@ -366,8 +377,8 @@ export async function tagPenEdit(
         totalMs: Date.now() - start,
       }),
     );
-    if (!mark) {
-      return {kind: 'noMark', id, number};
+    if (!mark || number === null) {
+      return {kind: 'noMark', id};
     }
     return {kind: 'tagged', tagKind, number};
   } catch (error) {
@@ -403,7 +414,7 @@ function markKindOf(reading: Reading): string {
  * legs, or in a ring beside a slash. A strike drawn alone (a mark selected with Select mark) gets
  * its ring just right of its end, so nothing lands on the text above or below.
  */
-function markBadges(reading: Reading | null, number: number, pageWidth: number): {badges: TagBadge[]; numbers: TagNumber[]} {
+function markBadges(reading: Reading | null, number: number | null, pageWidth: number): {badges: TagBadge[]; numbers: TagNumber[]} {
   const half = BADGE_SIZE_PX / 2;
   if (!reading) {
     return {badges: [], numbers: []};
@@ -460,29 +471,47 @@ function declaredStrokes(snap: LassoSnapshot): MarkStroke[] {
 }
 
 /**
- * Select mark (technical-design-pen-edits-2.md §4.2): the lassoed strokes become the waiting
- * snippet's mark (pass 1, `readDeclared`). Its number goes on the mark, the strokes get the
- * snippet's `mark` tag, and the entry takes the mark and the kind that follows from it. The
- * snippet's own files stay as they are. A lasso that reads as no mark that takes text leaves
- * everything as it was, and the snippet keeps waiting.
+ * Select mark (technical-design-mark-dialogue.md §4.2): the lassoed strokes become the waiting
+ * text's mark (pass 1, `readDeclared`). The index first - the mark, its kind and the next number
+ * of the page - then the page: the text's "?" becomes its number, the mark gets its ring and
+ * number, the strokes the text's `mark` tag. If the page can't be changed, the index is set back.
+ * A lasso that reads as no mark that takes text writes nothing; the card shows the strokes and why.
  */
 async function attachSelectedMark(
   snap: LassoSnapshot,
   waiting: PenEditEntry,
   lassoHiddenAt: number,
 ): Promise<PenEditTagOutcome> {
-  const start = Date.now();
+  const endTotal = startTiming('selectMark.total', {page: waiting.page});
   const page = waiting.page;
   const declared = readDeclared(declaredStrokes(snap));
-  const reading = declared.readings[0] ?? null;
+  const reading = declared.readings.length === 1 ? declared.readings[0] : null;
   const mark = reading ? storedMarkOf(reading) : null;
   if (!reading || !mark) {
     console.log(
       '[PenEdit] select mark',
-      JSON.stringify({id: waiting.id, result: 'notRead', strokes: snap.strokes.length, reason: declared.reason}),
+      JSON.stringify({id: waiting.id, result: 'notClear', strokes: snap.strokes.length, readings: declared.readings.length}),
     );
-    return {kind: 'markNotRead', number: waiting.number};
+    endTotal({result: 'notClear'});
+    return {
+      kind: 'markNotClear',
+      id: waiting.id,
+      strokes: snap.strokes.map(stroke => stroke.points).filter(points => points.length >= 4),
+      reason: declared.reason ?? NO_MARK_REASON,
+    };
   }
+  const {index} = await readPenEditIndex();
+  const number = waiting.number ?? nextPenEditNumber(linkedNumbersOnPage(index, waiting.notePath, page));
+  const before = waiting;
+  await changePenEditIndex(current => linkPenEdit(current, waiting.id, mark, number));
+  const setBack = async (detail: string): Promise<PenEditTagOutcome> => {
+    await changePenEditIndex(current => updatePenEdit(current, waiting.id, () => before)).catch(error =>
+      console.warn('[PenEdit] select mark not set back', String(error)),
+    );
+    endTotal({result: 'failed'});
+    return {kind: 'failed', detail};
+  };
+
   const elementsByUuid = new Map(snap.strokeElements.map(element => [element.uuid, element]));
   const settle = LASSO_SETTLE_MS - (Date.now() - lassoHiddenAt);
   if (settle > 0) {
@@ -496,45 +525,44 @@ async function attachSelectedMark(
       .filter((element): element is Element => !!element)
       .map(element => ({element, role: 'mark' as const})),
   );
-  const markTags = markBadges(reading, waiting.number, snap.pageSize?.width ?? 0);
+  const renumbered = await setSnippetNumber(waiting.notePath, page, waiting.id, number);
+  if (!renumbered.changed) {
+    console.warn('[PenEdit] select mark: "?" not changed', JSON.stringify({id: waiting.id, error: renumbered.error}));
+  }
+  const markTags = markBadges(reading, number, snap.pageSize?.width ?? 0);
   const placed = await insertTagElements({page, id: waiting.id, badges: markTags.badges, numbers: markTags.numbers});
   if (!placed.placed) {
-    return {
-      kind: 'failed',
-      detail: `Could not put the number on the mark (${placed.error ?? 'unknown error'}). Please try again.`,
-    };
+    if (renumbered.changed) {
+      await setSnippetNumber(waiting.notePath, page, waiting.id, waiting.number);
+    }
+    return setBack(`Could not put the number on the mark (${placed.error ?? 'unknown error'}). Please try again.`);
+  }
+  if (!tagged.tagged) {
+    await changePenEditIndex(current => updatePenEdit(current, waiting.id, entry => ({...entry, strokesTagged: false})));
   }
   const tagKind = kindOfMark(mark);
   const fromReview = waiting.awaitingMark?.from === 'review';
-  await changePenEditIndex(current =>
-    updatePenEdit(current, waiting.id, entry => ({
-      ...entry,
-      kind: tagKind,
-      mark,
-      strokesTagged: entry.strokesTagged && tagged.tagged,
-      awaitingMark: null,
-      placement: undefined,
-    })),
-  );
   console.log(
     '[PenEdit] select mark',
     JSON.stringify({
       id: waiting.id,
       result: 'attached',
       markKind: markKindOf(reading),
+      number,
+      questionMarkChanged: renumbered.changed,
       strokes: snap.strokes.length,
       markStrokes: reading.strokes.length,
       numberCircle: idsWithRole(reading, 'number').length > 0,
       strokesTagged: tagged.tagged,
       fromReview,
-      totalMs: Date.now() - start,
     }),
   );
+  endTotal({result: 'attached'});
   return {
     kind: 'markAttached',
     tagKind,
-    number: waiting.number,
+    number,
     fromReview,
-    focus: {notePath: waiting.notePath, page, penEditId: waiting.id, number: waiting.number, kind: tagKind},
+    focus: {notePath: waiting.notePath, page, penEditId: waiting.id, number, kind: tagKind},
   };
 }

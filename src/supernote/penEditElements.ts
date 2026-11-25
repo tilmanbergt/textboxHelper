@@ -1,6 +1,15 @@
 import {PluginCommAPI, PluginNoteAPI, TextBox, type Element} from 'sn-plugin-lib';
 import {NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
-import {PEN_EDIT_NUMBER_FONT_SIZE, penEditUserData, type PenEditRole} from '../domain/penEditTags';
+import {
+  badgeNumberRect,
+  boundsOfPoints,
+  PEN_EDIT_NUMBER_FONT_SIZE,
+  penEditNumberText,
+  penEditUserData,
+  parsePenEditUserData,
+  type PenEditRole,
+} from '../domain/penEditTags';
+import {readPageElements, recycleElements} from './noteElements';
 import {ELEMENT_TYPE_GEO, MAIN_LAYER, TEXT_TYPE_NORMAL, type Point, type Rect} from '../domain/textboxModel';
 import {sdkErrorText, type SdkResponse} from './sdkResult';
 import {recycleByUuid} from './sdkElements';
@@ -17,7 +26,8 @@ const ICON_PEN = {penColor: 0x00, penType: 10, penWidth: 200};
 const BUSY_ERROR = '105';
 const RETRY_DELAY_MS = 500;
 
-export type TagNumber = {role: Extract<PenEditRole, 'marknum' | 'snippetnum'>; rect: Rect; number: number};
+/** A number textbox; `number` null shows "?" (text without a mark). */
+export type TagNumber = {role: Extract<PenEditRole, 'marknum' | 'snippetnum'>; rect: Rect; number: number | null};
 export type TagBadge = {role: Extract<PenEditRole, 'snippet' | 'markring'>; points: Point[]};
 
 export type TagElementsRequest = {
@@ -89,7 +99,7 @@ async function buildElements(request: TagElementsRequest): Promise<Element[]> {
     const textBox = element.textBox ?? new TextBox();
     textBox.fontSize = PEN_EDIT_NUMBER_FONT_SIZE;
     textBox.fontPath = NOTE_SYSTEM_FONT_PATH;
-    textBox.textContentFull = String(number.number);
+    textBox.textContentFull = penEditNumberText(number.number);
     textBox.textRect = number.rect;
     textBox.textAlign = 0;
     textBox.textBold = 1;
@@ -183,5 +193,41 @@ export async function tagUserStrokes(
     return {tagged: error === null, error, ms: Date.now() - start};
   } catch (caught) {
     return {tagged: false, error: caught instanceof Error ? caught.message : String(caught), ms: Date.now() - start};
+  }
+}
+
+/**
+ * Select mark (technical-design-mark-dialogue.md §4.2): the snippet's "?" becomes its number (or
+ * back to "?" when the mark couldn't be put on the page). One
+ * read of the page's elements finds the snippet's number textbox by its `userData`; its text and
+ * width change in place (`modifyPageElements`). Never throws; `error` says why it didn't change.
+ */
+export async function setSnippetNumber(
+  notePath: string,
+  page: number,
+  id: string,
+  number: number | null,
+): Promise<{changed: boolean; error: string | null}> {
+  let elements: Element[] = [];
+  try {
+    elements = await readPageElements(notePath, page, `Could not read page ${page + 1}.`);
+    const own = elements.filter(element => parsePenEditUserData(element.userData)?.id === id);
+    const numberBox = own.find(element => parsePenEditUserData(element.userData)?.role === 'snippetnum');
+    if (!numberBox?.textBox) {
+      return {changed: false, error: 'the text\'s "?" is not on the page'};
+    }
+    const badge = own.find(element => parsePenEditUserData(element.userData)?.role === 'snippet');
+    const badgeRect = boundsOfPoints(badge?.geometry?.points ?? []);
+    numberBox.textBox.textContentFull = penEditNumberText(number);
+    if (badgeRect) {
+      numberBox.textBox.textRect = badgeNumberRect(badgeRect, number);
+    }
+    const response = (await PluginCommAPI.modifyPageElements([numberBox], page, null)) as SdkResponse<number[]>;
+    const error = response?.success ? null : 'modifyPageElements: ' + sdkErrorText(response, 'failed');
+    return {changed: error === null, error};
+  } catch (caught) {
+    return {changed: false, error: caught instanceof Error ? caught.message : String(caught)};
+  } finally {
+    await recycleElements(elements);
   }
 }

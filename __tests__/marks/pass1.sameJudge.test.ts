@@ -1,5 +1,6 @@
 import type {MarkStroke} from '../../src/domain/marks/markStroke';
-import {lookBackPointsWanted, readDeclared, readLookBack, readMarks, VERTICALS_NO_TEXT_REASON} from '../../src/domain/marks/pass1';
+import {lookBackPointsWanted, readDeclared, readLookBack, readMarks} from '../../src/domain/marks/pass1';
+import {VERTICALS_NO_TEXT_REASON} from '../../src/domain/marks/reasons';
 import type {MarkKind, Reading} from '../../src/domain/marks/reading';
 import {marks} from './build';
 import {TABLES} from './pass1.cases';

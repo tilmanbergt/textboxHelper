@@ -224,7 +224,7 @@ export type StrokeRef = {id: string; numInPage: number};
 export type PageStroke = StrokeRef & {stroke: MarkStroke | null};
 
 /** The tagged text a stroke is the replace mark of (a strike or a slash), if any. */
-export type StrokeOwner = {id: string; number: number; mark: PenEditMark | null};
+export type StrokeOwner = {id: string; number: number | null; mark: PenEditMark | null};
 
 /** A mark that was ignored: its first stroke, why, and the strokes "Remove" may take (null: none). */
 export type Refusal = {first: StrokeRef; reason: string; removable: number[] | null};

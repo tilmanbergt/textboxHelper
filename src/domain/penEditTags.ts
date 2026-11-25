@@ -93,17 +93,23 @@ const BADGE_INSET_PX = 4;
 const DIGIT_WIDTH_PX = 16;
 
 /**
- * Second guard next to `userData`: a textbox holding only a one- or two-digit number in a small
- * font is treated as a pen-edit number even if the host dropped its `userData`.
+ * Second guard next to `userData`: a textbox holding only a one- or two-digit number, or the "?"
+ * of text without a mark, in a small font is treated as a pen-edit number even if the host
+ * dropped its `userData`.
  */
 export function looksLikePenEditNumber(text: string | null | undefined, fontSize: number | null | undefined): boolean {
   return (
     typeof text === 'string' &&
-    /^\d{1,2}$/.test(text.trim()) &&
+    /^(\d{1,2}|\?)$/.test(text.trim()) &&
     typeof fontSize === 'number' &&
     fontSize > 0 &&
     fontSize <= PEN_EDIT_NUMBER_MAX_FONT_SIZE
   );
+}
+
+/** What the number textbox shows: the number, or "?" for text without a mark. */
+export function penEditNumberText(number: number | null): string {
+  return number === null ? '?' : String(number);
 }
 
 /** One more than the highest number in use; 1 on a page without pen edits. */
@@ -158,8 +164,8 @@ const NUMBER_TEXT_OFFSET_Y = 4;
 const NUMBER_BOX_HEIGHT = 40;
 
 /** The number textbox centred in a badge or in the loop the user drew. */
-export function badgeNumberRect(badge: Rect, number: number): Rect {
-  const digits = String(number).length;
+export function badgeNumberRect(badge: Rect, number: number | null): Rect {
+  const digits = penEditNumberText(number).length;
   const cx = (badge.left + badge.right) / 2;
   const cy = (badge.top + badge.bottom) / 2;
   const left = Math.max(0, Math.round(cx - (digits * DIGIT_WIDTH_PX) / 2 - NUMBER_TEXT_OFFSET_X));

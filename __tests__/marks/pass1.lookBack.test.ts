@@ -2,14 +2,13 @@ import {lookBackNumbers, ownedRects, withoutOwned} from '../../src/domain/penEdi
 import type {MarkStroke} from '../../src/domain/marks/markStroke';
 import {
   lookBackPointsWanted,
-  NO_MARK_REASON,
   pickNewestMark,
   readDeclared,
   readLookBack,
   readLookBackReplace,
-  VERTICALS_NO_TEXT_REASON,
 } from '../../src/domain/marks/pass1';
 import type {Reading} from '../../src/domain/marks/reading';
+import {NO_MARK_REASON, VERTICALS_NO_TEXT_REASON} from '../../src/domain/marks/reasons';
 import {storedMarkOf} from '../../src/domain/marks/storedMark';
 import type {Rect} from '../../src/domain/textboxModel';
 import {rectOf} from './build';
