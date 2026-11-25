@@ -599,3 +599,17 @@ close together in the middle of a strike made a replace mark). Decision:
   replace mark without new text.
 - Stored entries keep their format: two `modifierRects` with a `numberRect` read as
   `replaceVerticals`, two without it as before.
+
+### 13.5 New text and Marks (Tilman, after the device test of S6)
+
+The circled numbers in the Changes list counted the rows, while the circled numbers on the page
+are the tagged texts' numbers: the same look for two different things. Decision (S8):
+
+- Three tabs: **New text** (insertions and replacements with tagged text), **Marks** (every other
+  change) and **To decide**.
+- New text: sorted by page, then by the number on the page ("?" last); each row starts with that
+  number in a circle, as on the page.
+- Marks: in reading order; each row starts with a plain symbol for its kind (− delete, / replace,
+  ⇄ swap, ⌒ close-up and join, ¶ paragraph break, ∧ space, , punctuation), never a circle.
+- The card opens on New text when it has changes, else on Marks; a text whose mark was just
+  selected opens its own tab. Apply still applies every ready change of the page (or all pages).

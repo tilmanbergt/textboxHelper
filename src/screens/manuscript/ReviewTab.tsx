@@ -4,9 +4,10 @@
  *
  * The page strip: every page of the note with its count of changes and items to decide (✓ none,
  * ? not read yet); tapping a page shows only its own (and reads it first), "Read n pages" reads
- * the rest. Two tabs, Changes n · To decide m (technical-design-mark-dialogue.md §5.3). Changes:
- * left, the changes in reading order, each with its changed text in full and a few words of
- * context, and Drop; right, the side bar for the selected change, with its text to correct, its
+ * the rest. Three tabs, New text n · Marks m · To decide k (technical-design-mark-dialogue.md
+ * §5.3, §13.5). New text: the changes with tagged text, by their number on the page, which is
+ * circled as on the page; Marks: the other changes in reading order, each with its kind's symbol.
+ * Left, the changes, each with its changed text in full and a few words of context, and Drop; right, the side bar for the selected change, with its text to correct, its
  * edges and its actions. To decide: left, what the review can't make a change of on its own;
  * right, its side (`ToDecideSide`). Drop asks in the side bar, so rows never change height.
  */
@@ -19,6 +20,7 @@ import type {ChangeHunk, PenTextState} from '../../domain/markerTypes';
 import {plural} from '../../domain/plural';
 import {estimateLines, segmentsText} from '../../domain/textPages';
 import {NO_MARKS} from '../../domain/helpTexts';
+import {rowMarker, splitReviewLists} from '../../domain/reviewLists';
 import ChipRow from '../../ui/ChipRow';
 import CountTabs from '../../ui/CountTabs';
 import EmptyState from '../../ui/EmptyState';
@@ -43,7 +45,7 @@ const ROW_SIDES = 32 + 96 + 2 * SPACING.md + 2 * (SPACING.sm + ROW_BORDER);
 const ROW_CHAR_WIDTH_SHARE = 0.6;
 
 type PageFilter = 'all' | `${number}`;
-type ReviewList = 'changes' | 'decide';
+type ReviewList = 'text' | 'marks' | 'decide';
 type PendingDrop = {title: string; page: number; items: DropItem[]; withHandwriting: boolean; forAttention: boolean};
 
 interface Props {
@@ -74,7 +76,8 @@ export default function ReviewTab({
   const [editing, setEditing] = useState(false);
   const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [list, setList] = useState<ReviewList>('changes');
+  // Null: New text when it has changes, else Marks (technical-design-mark-dialogue.md §13.5).
+  const [chosenList, setList] = useState<ReviewList | null>(null);
   const [decideKey, setDecideKey] = useState<string | null>(null);
   const [listWidth, setListWidth] = useState(0);
   const [pageFilter, setPageFilter] = useState<PageFilter>('all');
@@ -86,7 +89,9 @@ export default function ReviewTab({
     }
   }, [showPage]);
 
-  const entries = useMemo(() => onPage(view.entries, pageFilter), [view.entries, pageFilter]);
+  const lists = useMemo(() => splitReviewLists(onPage(view.entries, pageFilter)), [view.entries, pageFilter]);
+  const list: ReviewList = chosenList ?? (lists.text.length > 0 ? 'text' : 'marks');
+  const entries = list === 'marks' ? lists.marks : lists.text;
   const toDecide = useMemo(() => onPage(view.toDecide, pageFilter), [view.toDecide, pageFilter]);
   useEffect(() => setPendingDrop(null), [view]);
 
@@ -96,10 +101,16 @@ export default function ReviewTab({
   const focused = focusPenEditId
     ? view.entries.find(entry => entry.operation.penEditId === focusPenEditId) ?? null
     : null;
-  const firstKey = focused?.key ?? entries[0]?.key ?? null;
+  const firstKey = (focused && entries.includes(focused) ? focused.key : null) ?? entries[0]?.key ?? null;
   useEffect(() => {
     setSelectedKey(firstKey);
   }, [changeKey, firstKey]);
+  const focusedList: ReviewList | null = focused ? (focused.operation.penEditId ? 'text' : 'marks') : null;
+  useEffect(() => {
+    if (focusedList) {
+      setList(focusedList);
+    }
+  }, [focusedList, focusPenEditId]);
   // A text whose mark was selected but still can't be placed is shown in To decide.
   const focusedDecide = focusPenEditId && !focused ? view.toDecide.find(entry => entry.item.penEditId === focusPenEditId) ?? null : null;
   useEffect(() => {
@@ -218,7 +229,8 @@ export default function ReviewTab({
       <View style={styles.tabs}>
         <CountTabs<ReviewList>
           tabs={[
-            {key: 'changes', label: 'Changes', count: entries.length},
+            {key: 'text', label: 'New text', count: lists.text.length},
+            {key: 'marks', label: 'Marks', count: lists.marks.length},
             {key: 'decide', label: 'To decide', count: toDecide.length},
           ]}
           activeKey={list}
@@ -250,8 +262,8 @@ export default function ReviewTab({
               rows={entries}
               rowHeight={rowHeight}
               resetKey={`${pageFilter}|${changeKey}`}
-              emptyHint={loading ? 'Reading the marks…' : undefined}
-              viewportContent={!loading && entries.length === 0 ? <EmptyState {...NO_MARKS} /> : undefined}
+              emptyHint={loading ? 'Reading the marks…' : list === 'text' ? 'No tagged text here.' : 'No other marks here.'}
+              viewportContent={!loading && view.entries.length === 0 ? <EmptyState {...NO_MARKS} /> : undefined}
               renderRow={entry => {
                 const dropItem = !applied ? dropItemOfOperation(entry.operation) : null;
                 return (
@@ -259,7 +271,7 @@ export default function ReviewTab({
                     key={entry.key}
                     hunk={entry.hunk}
                     page={pageCount > 1 ? entry.page : null}
-                    number={entries.indexOf(entry) + 1}
+                    marker={rowMarker(entry)}
                     height={rowHeight(entry)}
                     selected={entry.key === selected?.key}
                     onPress={() => select(entry.key)}
@@ -407,7 +419,7 @@ function penTextNow(state: PenTextState | undefined): string {
 function HunkRow({
   hunk,
   page,
-  number,
+  marker,
   height,
   selected,
   onPress,
@@ -417,7 +429,8 @@ function HunkRow({
   hunk: ChangeHunk;
   /** Shown before the place when the note has several pages. */
   page: number | null;
-  number: number;
+  /** The number on the page in a circle (new text), or the kind's symbol (other marks). */
+  marker: {circled: boolean; text: string};
   height: number;
   selected: boolean;
   onPress: () => void;
@@ -432,7 +445,7 @@ function HunkRow({
         accessibilityLabel={`${hunk.label}, ${hunk.meta}`}
         onPress={onPress}
         style={styles.rowMain}>
-        <Text style={styles.number}>{number}</Text>
+        <Text style={marker.circled ? styles.number : styles.symbol}>{marker.text}</Text>
         <View style={styles.rowBody}>
           <Text style={styles.kind}>{hunk.label}</Text>
           <Text style={styles.rowText}>
@@ -510,6 +523,14 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     fontSize: FONT.small,
     color: COLORS.muted,
+  },
+  symbol: {
+    width: 32,
+    textAlign: 'center',
+    lineHeight: 32,
+    fontSize: FONT.medium,
+    fontWeight: '700',
+    color: COLORS.text,
   },
   rowBody: {
     flex: 1,
