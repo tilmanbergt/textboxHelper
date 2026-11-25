@@ -6,6 +6,7 @@ All notable changes to Manuscript (formerly Textbox Tools) are listed here, newe
 
 ### Added
 
+- **Cheat sheet**: Getting started has "Put cheat sheet on this page": a picture of the editing marks (delete, replace, insert, change letters, one letter) goes onto the current page, to move with the lasso and erase like any picture. Manuscript never reads it as a mark. Where the picture can't be inserted, it is saved to EXPORT as manuscript-cheatsheet.png instead.
 - **Getting started**: the help (?) in Manuscript starts with what Manuscript does, the toolbar buttons, the core marks and the first things to do; it opens by itself once, the first time Manuscript opens. Its last line shows the plugin version.
 - **Report a problem** (Manuscript → Settings → Diagnostics): one file in EXPORT for a bug report, with the version, device, settings, how the last marks were read, the timings and the errors of this session. Your text is only in it when you tick "Include the text of this page". It replaces Save Diagnostics and Save timings.
 - Settings → Diagnostics shows the plugin version and the device in its first line.

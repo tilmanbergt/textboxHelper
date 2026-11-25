@@ -30,6 +30,8 @@ import {COLORS, FONT, SPACING} from '../../ui/theme';
 import {noteHasTextboxes} from '../../actions/noteContent';
 import {runHousekeepingOnce} from '../../actions/housekeeping';
 import {getSettings, updateSettings} from '../../storage/settingsFile';
+import {putCheatSheetOnPage} from '../../actions/cheatSheet';
+import {CHEAT_SHEET} from '../../ui/generated/markImages';
 import ExportScreen from '../export/ExportScreen';
 import ImportScreen from '../import/ImportScreen';
 import FilesTab from './files/FilesTab';
@@ -95,6 +97,17 @@ function ManuscriptCard({
   const markOnboardingSeen = useCallback(() => {
     updateSettings(settings => ({...settings, onboarding: {seen: true}}));
   }, []);
+  // "Put cheat sheet on this page" in Getting started (technical-design-release-readiness.md §6.2).
+  const [cheatSheetStatus, setCheatSheetStatus] = useState<FrameStatus | null>(null);
+  const putCheatSheet = useCallback(() => {
+    setCheatSheetStatus({text: 'Putting the cheat sheet on the page…'});
+    putCheatSheetOnPage(CHEAT_SHEET.uri.replace(/^data:image\/png;base64,/, ''))
+      .then(result => setCheatSheetStatus({kind: result.placed ? 'info' : 'error', text: result.message}))
+      .catch(error => {
+        console.warn('[CheatSheet] failed', String(error));
+        setCheatSheetStatus({kind: 'error', text: 'The cheat sheet could not be put on the page or saved to EXPORT.'});
+      });
+  }, []);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('outline');
   const [importFolder, setImportFolder] = useState(false);
   const [tab, setTabState] = useState<Tab>(initialTab ?? 'review');
@@ -102,6 +115,7 @@ function ManuscriptCard({
   const tabChosen = useRef(!!initialTab || !!focusPenEditId);
   const setTab = useCallback((next: Tab) => {
     tabChosen.current = true;
+    setCheatSheetStatus(null);
     setTabState(next);
   }, []);
   const notePath = review.note?.notePath ?? null;
@@ -293,7 +307,9 @@ function ManuscriptCard({
       : changes.toDecide.some(item => item.item.penEditId === focusPenEditId)
       ? 'Mark selected, but its place is still open: see To decide.'
       : null;
-  const status = jumpError
+  const status = cheatSheetStatus
+    ? cheatSheetStatus
+    : jumpError
     ? {kind: 'error' as const, text: jumpError}
     : tab === 'outline'
     ? outline.status ?? review.status
@@ -312,6 +328,7 @@ function ManuscriptCard({
         // Getting started opens once, on the first start (technical-design-release-readiness.md §5.2).
         firstStart: firstStart.current,
         onFirstStartDone: markOnboardingSeen,
+        onCheatSheet: putCheatSheet,
       }}
       onClose={onClose}
       status={status}
