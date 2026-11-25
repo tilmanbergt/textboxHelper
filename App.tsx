@@ -21,11 +21,13 @@ import {
   subscribePenEditOutcome,
   subscribeReviewFocus,
 } from './src/actions/penEditTag';
+import {cancelNoteTag, chooseNoteKind} from './src/actions/noteTag';
 import {loadSettings} from './src/storage/settingsFile';
 import {ensurePermissions} from './src/supernote/permissions';
 import {PLUGIN_BUTTON_EVENT, checkPendingButton} from './src/supernote/pluginRouting';
 import {BUTTON_ID_NOTE_MANUSCRIPT, BUTTON_ID_TEXTBOX_TOOLS} from './src/domain/buttonIds';
 import ManuscriptScreen from './src/screens/manuscript/ManuscriptScreen';
+import NoteKindCard from './src/screens/penEdit/NoteKindCard';
 import PenEditOutcomeScreen from './src/screens/penEdit/PenEditOutcomeScreen';
 import TextboxToolsScreen from './src/screens/tools/TextboxToolsScreen';
 import ScreenFrame from './src/ui/ScreenFrame';
@@ -120,6 +122,21 @@ function App(): React.JSX.Element | null {
       subscription?.remove();
     };
   }, []);
+
+  if (penEditOutcome?.kind === 'chooseNote') {
+    return (
+      <NoteKindCard
+        onChoose={chooseNoteKind}
+        onCancel={() => {
+          cancelNoteTag()
+            .catch(error => console.warn('[NoteTag] cancel failed', String(error)))
+            .finally(closePenEditOutcome);
+        }}
+        onDone={closePenEditOutcome}
+        onFailed={setPenEditOutcome}
+      />
+    );
+  }
 
   if (penEditOutcome) {
     return <PenEditOutcomeScreen outcome={penEditOutcome} onClose={closePenEditOutcome} />;

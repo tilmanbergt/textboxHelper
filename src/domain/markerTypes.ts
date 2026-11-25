@@ -1,13 +1,15 @@
-import type {PageWordCandidate} from './hitTesting';
 import type {TextboxMeasurementCalibration} from './textboxLayout';
 import type {TextSegment} from './textPages';
-import type {CaretInsertMode} from './penEditCaret';
 import type {EdgeShift} from './edgeShift';
+import type {ParagraphResult} from './markerDiff';
 import type {RecognitionStatus} from './penEditModel';
 import type {PenEditKind} from './penEditTags';
-import type {SwapZones} from './swapMark';
-import type {PunctuationChar} from './punctMark';
-import type {PageElementData, Rect, TextElementData, TextboxData} from './textboxModel';
+import type {NoteRow, PageParagraph} from './notes/noteRows';
+import type {Rect, TextboxData} from './textboxModel';
+import type {PunctuationChar} from './marks/shapes/punct';
+import type {CaretInsertMode} from './marks/place/point';
+import type {SwapZones} from './marks/place/swap';
+import type {ToDecideItem} from './marks/toDecide';
 
 /**
  * Types of the edit-marker recognition: what the preview shows, the plan that is applied, and the
@@ -110,7 +112,7 @@ export type RecognizedEditOperation = {
   textStart: number;
   /** Set for a change whose new text comes from a tagged snippet. */
   penEditId?: string;
-  penEditNumber?: number;
+  penEditNumber?: number | null;
   penStatus?: PenOperationStatus;
   /** An insertion at a caret: how its text joins the words around it. */
   insertMode?: CaretInsertMode;
@@ -128,24 +130,6 @@ export type RecognizedEditOperation = {
   punct?: PunctInfo;
   /** Set for a join of two paragraphs. */
   join?: JoinInfo;
-};
-
-export type IgnoredEditMarker = {
-  markerUuid: string;
-  markerNumInPage: number;
-  summary: string;
-  reason: string;
-  /** Set when the ignored item is a tagged snippet, not a marker stroke. */
-  penEditNumber?: number;
-  penEditId?: string;
-  /** Set for tagged text without a usable mark: "Insert right here" is offered (fine-marks §8). */
-  canPlaceHere?: boolean;
-  /**
-   * The stroke numbers "Remove" deletes for a marker that landed on a textbox (with a replace
-   * mark's verticals or loop). Unset for strokes that may be ordinary handwriting: those are
-   * never offered for removal.
-   */
-  removableNums?: number[];
 };
 
 /**
@@ -171,7 +155,8 @@ export type EditMarkerPreview = {
   /** Set when a textbox font couldn't be read and word positions were measured in a standard font. */
   fontWarning: string | null;
   operations: RecognizedEditOperation[];
-  ignoredMarkers: IgnoredEditMarker[];
+  /** What the review can't make a change of on its own (technical-design-mark-dialogue.md §5.2). */
+  toDecide: ToDecideItem[];
   canApply: boolean;
   applyPlan: EditMarkerApplyPlan | null;
   /** The analysis the preview is assembled from; re-assembled when a pen edit's text changes. */
@@ -180,6 +165,8 @@ export type EditMarkerPreview = {
   penEdits: PenEditView[];
   /** Pen edits still waiting for their text (being recognized, or not recognized). */
   pendingCount: number;
+  /** Each changed textbox as it will read (by uuid) and how many changes make it so. */
+  results: Record<string, ParagraphResult & {changes: number}>;
 };
 
 /** A pen edit's text as the review knows it. */
@@ -208,7 +195,8 @@ export type EdgeView = {
 export type PenEditView = {
   id: string;
   kind: PenEditKind;
-  number: number;
+  /** Null for text without a mark ("?"). */
+  number: number | null;
   pictureUri: string | null;
 };
 
@@ -228,7 +216,7 @@ export type MarkerTextboxBase = Omit<TextMutationPlan, 'nextText' | 'nextTextRec
  */
 export type InsertionDraft = {
   penEditId: string;
-  number: number;
+  number: number | null;
   left: number;
   width: number;
   style: TextboxData;
@@ -245,12 +233,20 @@ export type MarkerPreviewBase = {
   notePath: string;
   page: number;
   drafts: OperationDraft[];
-  ignored: IgnoredEditMarker[];
+  toDecide: ToDecideItem[];
+  /** The points of the page's mark strokes by number (flat x,y), for the pictures of To decide. */
+  markPoints: Record<number, number[]>;
+  /** Every textbox of the page, for To decide's page map. */
+  pageRects: Rect[];
   textboxes: MarkerTextboxBase[];
   insertions: InsertionDraft[];
   penEdits: PenEditView[];
   /** The pen edits' text as stored when the page was read. */
   penStates: Record<string, PenTextState>;
+  /** The page's comments and images, each with its paragraph (technical-design-comments-images.md §5.1). */
+  notes?: NoteRow[];
+  /** The page's textboxes as paragraphs a note may belong to, in reading order. */
+  paragraphs?: PageParagraph[];
 };
 
 /** A ready new paragraph as applied. */
@@ -307,33 +303,6 @@ export type EditMarkerApplyPlan = {
   insertions: InsertionPlan[];
 };
 
-/**
- * Candidate recognized from a horizontal delete-style marker.
- *
- * These candidates are still pre-apply objects: replace detection, range conflict checks,
- * and final mutation planning all happen after this stage.
- */
-export type MarkerDeleteCandidate<
-  Marker extends PageElementData = PageElementData,
-  Textbox extends TextElementData = TextElementData,
-> = {
-  marker: Marker;
-  markerUuid: string;
-  markerNumInPage: number;
-  markerSortTop: number;
-  markerSortLeft: number;
-  strokeStats: StrokeStats;
-  targetTextbox: Textbox;
-  lineIndex: number;
-  lineRect: Rect;
-  words: WordCandidate[];
-};
-
-export type MarkerStrokeAnalysis<Marker extends PageElementData = PageElementData> = {
-  marker: Marker;
-  strokeStats: StrokeStats;
-};
-
 export type TextMutationRange = {
   kind: EditMarkerOperationKind;
   start: number;
@@ -347,7 +316,5 @@ export type TextMutationRange = {
    */
   joins?: boolean;
 };
-
-export type WordCandidate = PageWordCandidate;
 
 export type EditMarkerCalibration = TextboxMeasurementCalibration;

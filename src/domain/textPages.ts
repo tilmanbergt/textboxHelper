@@ -7,7 +7,8 @@
  * scrolls, and a page never ends in the middle of a line.
  */
 
-export type TextSegmentStyle = 'removed' | 'inserted' | 'heading' | 'muted';
+/** `focus`: the selected change's new text (bold, underlined); `focusPlain`: where its removed text was (underlined). */
+export type TextSegmentStyle = 'removed' | 'inserted' | 'heading' | 'muted' | 'focus' | 'focusPlain';
 
 export type TextSegment = {
   text: string;

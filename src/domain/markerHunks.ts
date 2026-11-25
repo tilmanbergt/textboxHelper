@@ -1,7 +1,7 @@
 import {buildDiffSegments} from './markerDiff';
 import type {ChangeHunk, RecognizedEditOperation, TextMutationRange} from './markerTypes';
-import type {SwapZones} from './swapMark';
 import type {TextSegment} from './textPages';
+import type {SwapZones} from './marks/place/swap';
 
 /**
  * The review's list entries (technical-design-manuscript.md §4.3): one hunk per change, with the
@@ -33,7 +33,7 @@ export function changeLabel(operation: RecognizedEditOperation): string {
     case 'punct':
       return operation.punct?.char ? `Insert "${operation.punct.char}"` : 'Insert punctuation';
     case 'replace':
-      return number !== undefined ? `Replace ${number}` : 'Replace';
+      return typeof number === 'number' ? `Replace ${number}` : 'Replace';
     default:
       return 'Delete';
   }

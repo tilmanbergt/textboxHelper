@@ -1,0 +1,74 @@
+{
+  "about": "Strike with two verticals and no text: at the ends of the strike over \"red\" exactly what is between them goes; inside the strike over \"bigger\", away from its ends, they mark nothing and the strike takes the word (§13.4).",
+  "changes": [
+    {
+      "kind": "delete",
+      "summary": "Delete \"red\"",
+      "detail": "Textbox 1, line 1 - 1 word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 8,
+      "words": [
+        "red"
+      ],
+      "strokes": [
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "kind": "delete",
+      "summary": "Delete \"bigger\"",
+      "detail": "Textbox 2, line 1 - 1 word",
+      "textbox": 2,
+      "line": 0,
+      "textStart": 2,
+      "words": [
+        "bigger"
+      ],
+      "strokes": [
+        6
+      ]
+    }
+  ],
+  "toDecide": [
+    {
+      "kind": "unclear",
+      "summary": "Strokes over the text",
+      "reason": "The marker is too short to classify reliably.",
+      "strokes": [
+        7
+      ],
+      "removable": [
+        7
+      ],
+      "words": "bigger"
+    },
+    {
+      "kind": "unclear",
+      "summary": "Strokes over the text",
+      "reason": "The marker is too short to classify reliably.",
+      "strokes": [
+        8
+      ],
+      "removable": [
+        8
+      ],
+      "words": "bigger"
+    }
+  ],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "the big car and more words here"
+    },
+    {
+      "textbox": 2,
+      "text": "a word"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

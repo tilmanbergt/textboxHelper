@@ -1,0 +1,24 @@
+{
+  "about": "Handwriting in the margin and below the text, and a word written over the text: none of it is a mark.",
+  "changes": [],
+  "toDecide": [
+    {
+      "kind": "unclear",
+      "summary": "Strokes over the text",
+      "reason": "The marker is too short to classify reliably.",
+      "strokes": [
+        11,
+        12
+      ],
+      "removable": [
+        11,
+        12
+      ],
+      "words": "car"
+    }
+  ],
+  "after": [],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": false
+}

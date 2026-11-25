@@ -1,4 +1,4 @@
-import {charPositionInWord, type WordWithEdges} from './textOffsets';
+import {charPositionInWord, type WordWithEdges} from '../../textOffsets';
 
 /**
  * Exact places from the marks drawn letter by letter (technical-design-fine-marks.md §3, §4): a

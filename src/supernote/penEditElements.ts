@@ -1,6 +1,17 @@
 import {PluginCommAPI, PluginNoteAPI, TextBox, type Element} from 'sn-plugin-lib';
 import {NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
-import {PEN_EDIT_NUMBER_FONT_SIZE, penEditUserData, type PenEditRole} from '../domain/penEditTags';
+import {
+  badgeNumberRect,
+  boundsOfPoints,
+  PEN_EDIT_NUMBER_FONT_SIZE,
+  penEditNumberText,
+  penEditUserData,
+  parsePenEditUserData,
+  snippetSign,
+  type PenEditKind,
+  type PenEditRole,
+} from '../domain/penEditTags';
+import {readPageElements, recycleElements} from './noteElements';
 import {ELEMENT_TYPE_GEO, MAIN_LAYER, TEXT_TYPE_NORMAL, type Point, type Rect} from '../domain/textboxModel';
 import {sdkErrorText, type SdkResponse} from './sdkResult';
 import {recycleByUuid} from './sdkElements';
@@ -17,7 +28,8 @@ const ICON_PEN = {penColor: 0x00, penType: 10, penWidth: 200};
 const BUSY_ERROR = '105';
 const RETRY_DELAY_MS = 500;
 
-export type TagNumber = {role: Extract<PenEditRole, 'marknum' | 'snippetnum'>; rect: Rect; number: number};
+/** A small textbox in a sign: a number, "?" (text without a mark) or "C" (a comment). */
+export type TagNumber = {role: Extract<PenEditRole, 'marknum' | 'snippetnum'>; rect: Rect; text: string};
 export type TagBadge = {role: Extract<PenEditRole, 'snippet' | 'markring'>; points: Point[]};
 
 export type TagElementsRequest = {
@@ -89,7 +101,7 @@ async function buildElements(request: TagElementsRequest): Promise<Element[]> {
     const textBox = element.textBox ?? new TextBox();
     textBox.fontSize = PEN_EDIT_NUMBER_FONT_SIZE;
     textBox.fontPath = NOTE_SYSTEM_FONT_PATH;
-    textBox.textContentFull = String(number.number);
+    textBox.textContentFull = number.text;
     textBox.textRect = number.rect;
     textBox.textAlign = 0;
     textBox.textBold = 1;
@@ -183,5 +195,135 @@ export async function tagUserStrokes(
     return {tagged: error === null, error, ms: Date.now() - start};
   } catch (caught) {
     return {tagged: false, error: caught instanceof Error ? caught.message : String(caught), ms: Date.now() - start};
+  }
+}
+
+/**
+ * Select mark (technical-design-mark-dialogue.md §4.2): the snippet's "?" becomes its number (or
+ * back to "?" when the mark couldn't be put on the page). One
+ * read of the page's elements finds the snippet's number textbox by its `userData`; its text and
+ * width change in place (`modifyPageElements`). Never throws; `error` says why it didn't change.
+ */
+export async function setSnippetNumber(
+  notePath: string,
+  page: number,
+  id: string,
+  number: number | null,
+): Promise<{changed: boolean; error: string | null}> {
+  let elements: Element[] = [];
+  try {
+    elements = await readPageElements(notePath, page, `Could not read page ${page + 1}.`);
+    const own = elements.filter(element => parsePenEditUserData(element.userData)?.id === id);
+    const numberBox = own.find(element => parsePenEditUserData(element.userData)?.role === 'snippetnum');
+    if (!numberBox?.textBox) {
+      return {changed: false, error: 'the text\'s "?" is not on the page'};
+    }
+    const badge = own.find(element => parsePenEditUserData(element.userData)?.role === 'snippet');
+    const badgeRect = boundsOfPoints(badge?.geometry?.points ?? []);
+    numberBox.textBox.textContentFull = penEditNumberText(number);
+    if (badgeRect) {
+      numberBox.textBox.textRect = badgeNumberRect(badgeRect, number);
+    }
+    const response = (await PluginCommAPI.modifyPageElements([numberBox], page, null)) as SdkResponse<number[]>;
+    const error = response?.success ? null : 'modifyPageElements: ' + sdkErrorText(response, 'failed');
+    return {changed: error === null, error};
+  } catch (caught) {
+    return {changed: false, error: caught instanceof Error ? caught.message : String(caught)};
+  } finally {
+    await recycleElements(elements);
+  }
+}
+
+/**
+ * A sidemark changes between "?", comment and image (technical-design-comments-images.md §3.3):
+ * its sign is replaced where it is now (a ring with "?", a bubble with "C", a frame). One read of
+ * the page finds the old sign and its text by `userData`; they are deleted, then the new ones
+ * inserted (inserting renumbers the page, so never the other way round) and the note saved. If the
+ * new sign can't be inserted, the old one is put back. `fallback`: where the sign was tagged, for a
+ * sign no longer found. Never throws; `error` says why nothing changed.
+ */
+export async function replaceSnippetSign(
+  notePath: string,
+  page: number,
+  id: string,
+  change: {from: PenEditKind; to: PenEditKind; fallback: Rect},
+): Promise<{changed: boolean; error: string | null}> {
+  let elements: Element[] = [];
+  try {
+    elements = await readPageElements(notePath, page, `Could not read page ${page + 1}.`);
+    const own = elements.filter(element => {
+      const role = parsePenEditUserData(element.userData);
+      return role?.id === id && (role.role === 'snippet' || role.role === 'snippetnum');
+    });
+    const badge = own.find(element => parsePenEditUserData(element.userData)?.role === 'snippet');
+    const box = boundsOfPoints(badge?.geometry?.points ?? []) ?? change.fallback;
+    const request = (kind: PenEditKind): TagElementsRequest => {
+      const sign = snippetSign(kind, box, null);
+      return {
+        page,
+        id,
+        badges: [{role: 'snippet', points: sign.points}],
+        numbers: sign.text !== null && sign.textRect ? [{role: 'snippetnum', rect: sign.textRect, text: sign.text}] : [],
+      };
+    };
+    if (own.length > 0) {
+      const response = (await PluginCommAPI.deletePageElements(own.map(element => element.numInPage), page, null)) as SdkResponse<boolean>;
+      if (!response?.success) {
+        return {changed: false, error: 'deletePageElements: ' + sdkErrorText(response, 'failed')};
+      }
+    }
+    const placed = await insertTagElements(request(change.to));
+    if (!placed.placed) {
+      const back = own.length > 0 ? await insertTagElements(request(change.from)) : null;
+      if (back && !back.placed) {
+        console.warn('[PenEditElements] old sign not put back', JSON.stringify({id, error: back.error}));
+      }
+      return {changed: false, error: placed.error};
+    }
+    return {changed: true, error: null};
+  } catch (caught) {
+    return {changed: false, error: caught instanceof Error ? caught.message : String(caught)};
+  } finally {
+    await recycleElements(elements);
+  }
+}
+
+/**
+ * Drop of a comment or image (technical-design-comments-images.md §5.4): its sign and the sign's
+ * text are deleted, and its strokes lose their tag, so they are plain handwriting again. Strokes
+ * first (a change in place), then the delete (which renumbers), then save. Never throws.
+ */
+export async function removeSidemarkTags(notePath: string, page: number, id: string): Promise<{done: boolean; error: string | null}> {
+  let elements: Element[] = [];
+  try {
+    elements = await readPageElements(notePath, page, `Could not read page ${page + 1}.`);
+    const own = elements.filter(element => parsePenEditUserData(element.userData)?.id === id);
+    const strokes = own.filter(element => {
+      const role = parsePenEditUserData(element.userData)?.role;
+      return role === 'stroke' || role === 'mark';
+    });
+    const signs = own.filter(element => !strokes.includes(element));
+    if (strokes.length > 0) {
+      strokes.forEach(element => {
+        element.userData = '';
+      });
+      const modified = (await PluginCommAPI.modifyPageElements(strokes, page, null)) as SdkResponse<number[]>;
+      if (!modified?.success) {
+        return {done: false, error: 'modifyPageElements: ' + sdkErrorText(modified, 'failed')};
+      }
+    }
+    if (signs.length > 0) {
+      const deleted = (await PluginCommAPI.deletePageElements(signs.map(element => element.numInPage), page, null)) as SdkResponse<boolean>;
+      if (!deleted?.success) {
+        return {done: false, error: 'deletePageElements: ' + sdkErrorText(deleted, 'failed')};
+      }
+    }
+    const saved = await saveCurrentNote();
+    console.log('[PenEditElements] sidemark untagged', JSON.stringify({id, page, strokes: strokes.length, signs: signs.length, saved}));
+    return {done: true, error: null};
+  } catch (caught) {
+    return {done: false, error: caught instanceof Error ? caught.message : String(caught)};
+  } finally {
+    await recycleElements(elements);
   }
 }

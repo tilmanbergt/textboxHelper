@@ -18,8 +18,10 @@ import {name as appName} from './app.json';
 import {
   BUTTON_ID_NOTE_MANUSCRIPT,
   BUTTON_ID_TEXTBOX_TOOLS,
+  BUTTON_ID_TOOLBAR_NOTE,
   BUTTON_ID_TOOLBAR_PEN_EDIT,
 } from './src/domain/buttonIds';
+import {startNoteTag} from './src/actions/noteTag';
 import {presentEarlyNoMark, presentTagOutcome, tagPenEdit} from './src/actions/penEditTag';
 import {initPluginRouting} from './src/supernote/pluginRouting';
 
@@ -58,8 +60,21 @@ function runPenEditTag() {
     .catch(error => console.error('[PenEdit] tag threw', String(error)));
 }
 
+// "Comment or Image" (docs/dev/history/technical-design-comments-images.md §3.1): the lasso is
+// read, then App's small card asks Comment · Image; only the choice writes onto the page.
+function runNoteTag() {
+  startNoteTag()
+    .then(async outcome => {
+      if (presentTagOutcome(outcome)) {
+        await PluginManager.showPluginView();
+      }
+    })
+    .catch(error => console.error('[NoteTag] tag threw', String(error)));
+}
+
 initPluginRouting({
   [BUTTON_ID_TOOLBAR_PEN_EDIT]: () => runPenEditTag(),
+  [BUTTON_ID_TOOLBAR_NOTE]: () => runNoteTag(),
 });
 
 PluginManager.registerButton(2, ['NOTE'], {
@@ -95,6 +110,19 @@ PluginManager.registerButton(2, ['NOTE'], {
     zh_CN: 'Insertion or Replacement',
     zh_TW: 'Insertion or Replacement',
     ja: 'Insertion or Replacement',
+  }),
+  icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
+  showType: 0,
+  editDataTypes: [0],
+});
+
+PluginManager.registerButton(2, ['NOTE'], {
+  id: BUTTON_ID_TOOLBAR_NOTE,
+  name: JSON.stringify({
+    en: 'Comment or Image',
+    zh_CN: 'Comment or Image',
+    zh_TW: 'Comment or Image',
+    ja: 'Comment or Image',
   }),
   icon: Image.resolveAssetSource(require('./assets/icon.png')).uri,
   showType: 0,

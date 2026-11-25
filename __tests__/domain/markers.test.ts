@@ -2,40 +2,20 @@ import {buildClipboardSummary, createEditMarkerBackupPayload} from '../../src/do
 import {
   buildRecognizeRect,
   buildStrokeStats,
-  findBestReplaceModifierPair,
   isSupportedEditMarkerElement,
-  orderTextboxMarkerCandidates,
 } from '../../src/domain/markerStrokes';
 import {
   applyTextMutationRangesDetailed,
   formatOperationSnippet,
   mergeHighlightRanges,
 } from '../../src/domain/markerText';
-import type {EditMarkerApplyPlan, MarkerDeleteCandidate, MarkerStrokeAnalysis, StrokeStats} from '../../src/domain/markerTypes';
-import type {PageElementData, Rect, TextElementData} from '../../src/domain/textboxModel';
+import type {EditMarkerApplyPlan, StrokeStats} from '../../src/domain/markerTypes';
+import type {PageElementData, Rect} from '../../src/domain/textboxModel';
 
 const rect = (left: number, top: number, right: number, bottom: number): Rect => ({left, top, right, bottom});
 
 function element(uuid: string, overrides: Partial<PageElementData> = {}): PageElementData {
   return {uuid, type: 0, layerNum: 0, numInPage: 1, textBox: null, title: null, link: null, picture: null, geometry: null, ...overrides};
-}
-
-function textbox(uuid: string, text: string, textRect: Rect): TextElementData {
-  return {
-    ...element(uuid, {type: 500, numInPage: 7}),
-    textBox: {
-      fontSize: 36,
-      fontPath: null,
-      textContentFull: text,
-      textRect,
-      textAlign: 0,
-      textBold: 0,
-      textItalics: 0,
-      textFrameWidthType: 0,
-      textFrameStyle: 0,
-      textEditable: 0,
-    },
-  };
 }
 
 function stroke(points: Array<{x: number; y: number}>): StrokeStats {
@@ -70,47 +50,6 @@ describe('marker strokes', () => {
     const line = {type: 'straightLine', points: [{x: 0, y: 0}, {x: 10, y: 0}]};
     expect(isSupportedEditMarkerElement(element('g', {type: 700, geometry: line}))).toBe(true);
     expect(isSupportedEditMarkerElement(element('g', {type: 700, geometry: {...line, type: 'GEO_circle'}}))).toBe(false);
-  });
-
-  const deleteStroke = stroke([{x: 100, y: 200}, {x: 200, y: 200}]);
-  const candidate: MarkerDeleteCandidate = {
-    marker: element('delete'),
-    markerUuid: 'delete',
-    markerNumInPage: 1,
-    markerSortTop: 200,
-    markerSortLeft: 100,
-    strokeStats: deleteStroke,
-    targetTextbox: textbox('t', 'text', rect(0, 0, 500, 500)),
-    lineIndex: 0,
-    lineRect: rect(80, 180, 220, 220),
-    words: [],
-  };
-  const vertical = (uuid: string, x: number): MarkerStrokeAnalysis => ({
-    marker: element(uuid),
-    strokeStats: stroke([{x, y: 185}, {x, y: 215}]),
-  });
-
-  it('pairs the two closest vertical strokes on the delete line into a replace mark', () => {
-    const pair = findBestReplaceModifierPair(candidate, [vertical('far', 400), vertical('b', 150), vertical('a', 120), vertical('delete', 130)]);
-    expect(pair.map(analysis => analysis.marker.uuid)).toEqual(['a', 'b']);
-  });
-
-  it('needs two vertical strokes for a replace mark', () => {
-    expect(findBestReplaceModifierPair(candidate, [vertical('a', 120)])).toEqual([]);
-  });
-
-  it('orders candidates by line, then by the first word', () => {
-    const at = (uuid: string, lineIndex: number, start: number) => ({
-      ...candidate,
-      markerUuid: uuid,
-      lineIndex,
-      words: [{start} as MarkerDeleteCandidate['words'][number]],
-    });
-    expect(orderTextboxMarkerCandidates([at('c', 1, 0), at('b', 0, 20), at('a', 0, 5)]).map(item => item.markerUuid)).toEqual([
-      'a',
-      'b',
-      'c',
-    ]);
   });
 });
 

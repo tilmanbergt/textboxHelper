@@ -38,7 +38,7 @@ export const MARK_HELP: MarkHelpEntry[] = [
     name: 'Replace',
     glance: 'Strike, plus a small circle',
     needsText: true,
-    draw: 'Strike the words, then a small circle right after the line or just above it (or two short lines across it). Then write the new words and tag them.',
+    draw: 'Strike the words, then a small circle right after the line or just above it. Then write the new words and tag them.',
     keep: [
       'Tag right after drawing: the text pairs with the mark drawn just before it.',
       'No mark found? The card offers Select mark; nothing needs writing again.',
@@ -67,14 +67,14 @@ export const MARK_HELP: MarkHelpEntry[] = [
     ],
   },
   {
-    id: 'replace-letters',
-    name: 'Change letters',
+    id: 'delete-letters',
+    name: 'Delete letters',
     glance: 'Strike with two short lines',
-    needsText: true,
-    draw: 'Strike the letters and draw a short line across each end of the strike, exactly where the change starts and ends. Then write the new letters and tag them; with no text it deletes exactly that.',
+    needsText: false,
+    draw: 'Strike the letters and draw a short line across each end of the strike, exactly where the deletion starts and ends. Nothing to write: exactly what is between the lines goes.',
     keep: [
-      'The short lines mark exact places, even inside a word; a strike alone or with a circle takes whole words.',
-      'To add to the end of a word, mark its last letters and write them again with the ending.',
+      'The short lines mark exact places, from one letter to several words, even inside a word; a strike alone takes whole words.',
+      'To replace exactly that part, add a small circle after the strike and tag the new text: the number goes into the circle.',
     ],
   },
   {
@@ -136,7 +136,7 @@ export const MARK_HELP: MarkHelpEntry[] = [
     needsText: false,
     draw: 'Under the line, straight up at the gap, on above the next word (or falling), plus a second short line next to the upright (_||‾).',
     keep: [
-      'Without the second line a step is the middle of a swap, or listed under Ignored.',
+      'Without the second line a step is the middle of a swap, or listed under To decide.',
       'The rest becomes a textbox of its own; paragraphs below move down.',
     ],
   },
@@ -181,8 +181,12 @@ export const REVIEW_HELP: HelpBlock[] = [
     text: 'It is recognized while you read; until then a grey placeholder stands in. On the right, tap the recognized text to correct it with the Supernote keyboard’s handwriting input, then Done. The handwriting is shown below it.',
   },
   {
-    title: 'Needs attention',
-    text: 'Above the list: tagged text without a mark, and marks that could not be used, each with the reason. A card also says so right after tagging. Select mark: draw the mark (or lasso the one you drew), lasso only the mark and tap Insertion or Replacement within 5 minutes.',
+    title: 'To decide',
+    text: 'The third tab: a numbered mark whose place stayed open (move it with ‹ › and tap Here), tagged text with a ? (Select mark, Insert right here, or keep it as a Comment or an Image), strokes on the text that read as no clear mark (read them as one of the marks offered, Ignore, or Remove), and a comment or image on a page without a paragraph. Select mark: draw the mark (or lasso the one you drew), lasso only the mark and tap Insertion or Replacement within 5 minutes.',
+  },
+  {
+    title: 'Comments and images',
+    text: 'Lasso handwriting beside the text and tap Comment or Image, then choose. A comment gets a speech bubble with C, an image a double square frame; neither has a number, and Apply never changes them. Each belongs to the paragraph beside it. The Notes tab lists them: Read a comment, correct it, choose its paragraph with ‹ ›, tick it Done, or Use as text to make it tagged text again; for an image choose Before or After its paragraph. Drop takes the sign off; the handwriting stays. Images are written to the file in a later version.',
   },
   {
     title: 'A comma, a space, a letter',

@@ -11,9 +11,18 @@ import type {Point, Rect} from './textboxModel';
 
 /**
  * What a tagged snippet is, decided by the mark written just before it: a replace mark makes a
- * replacement, a caret an insertion. 'unpaired' until a mark is found or selected.
+ * replacement, a caret an insertion. 'unpaired' until a mark is found or selected. A comment or
+ * an image is a note: tagged handwriting that needs no mark (technical-design-comments-images.md
+ * §2.1); it is never a change.
  */
-export type PenEditKind = 'replacement' | 'insertion' | 'unpaired';
+export type PenEditKind = 'replacement' | 'insertion' | 'unpaired' | NoteKind;
+
+/** The kinds of a note: handwriting that belongs to a paragraph and never changes the text. */
+export type NoteKind = 'comment' | 'image';
+
+export function isNoteKind(kind: string): kind is NoteKind {
+  return kind === 'comment' || kind === 'image';
+}
 
 /**
  * What a tagged page element is: the badge at the snippet (its shape is the entry's anchor on the
@@ -92,18 +101,27 @@ const BADGE_INSET_PX = 4;
 /** Rough width of one digit at the number font size, to centre the number in its badge. */
 const DIGIT_WIDTH_PX = 16;
 
+/** The letter in a comment's speech bubble. */
+export const COMMENT_SIGN_TEXT = 'C';
+
 /**
- * Second guard next to `userData`: a textbox holding only a one- or two-digit number in a small
- * font is treated as a pen-edit number even if the host dropped its `userData`.
+ * Second guard next to `userData`: a textbox holding only a one- or two-digit number, the "?"
+ * of text without a mark, or a comment's "C", in a small font is treated as a pen-edit number
+ * even if the host dropped its `userData`.
  */
 export function looksLikePenEditNumber(text: string | null | undefined, fontSize: number | null | undefined): boolean {
   return (
     typeof text === 'string' &&
-    /^\d{1,2}$/.test(text.trim()) &&
+    /^(\d{1,2}|\?|C)$/.test(text.trim()) &&
     typeof fontSize === 'number' &&
     fontSize > 0 &&
     fontSize <= PEN_EDIT_NUMBER_MAX_FONT_SIZE
   );
+}
+
+/** What the number textbox shows: the number, or "?" for text without a mark. */
+export function penEditNumberText(number: number | null): string {
+  return number === null ? '?' : String(number);
 }
 
 /** One more than the highest number in use; 1 on a page without pen edits. */
@@ -158,8 +176,13 @@ const NUMBER_TEXT_OFFSET_Y = 4;
 const NUMBER_BOX_HEIGHT = 40;
 
 /** The number textbox centred in a badge or in the loop the user drew. */
-export function badgeNumberRect(badge: Rect, number: number): Rect {
-  const digits = String(number).length;
+export function badgeNumberRect(badge: Rect, number: number | null): Rect {
+  return badgeTextRect(badge, penEditNumberText(number));
+}
+
+/** A small textbox holding `text` (a number, "?" or "C") centred in `badge`. */
+export function badgeTextRect(badge: Rect, text: string): Rect {
+  const digits = text.length;
   const cx = (badge.left + badge.right) / 2;
   const cy = (badge.top + badge.bottom) / 2;
   const left = Math.max(0, Math.round(cx - (digits * DIGIT_WIDTH_PX) / 2 - NUMBER_TEXT_OFFSET_X));
@@ -187,6 +210,94 @@ export function circlePolygon(box: Rect): Point[] {
  */
 export function snippetBadgePolygon(box: Rect): Point[] {
   return circlePolygon(box);
+}
+
+// ---------------------------------------------------------------------------
+// Signs of notes (technical-design-comments-images.md §3.2). Circles mean one thing only: the
+// number of a tagged text. A comment's sign is a speech bubble with "C", an image's a plain double
+// frame; both have straight edges and corners, so neither reads as the ring at a glance.
+
+/** Share of a bubble's height its tail takes at the lower left. */
+const BUBBLE_TAIL_SHARE = 0.25;
+/** Corner radius of the bubble's body, as a share of its smaller side. */
+const BUBBLE_CORNER_SHARE = 0.2;
+/** How far the inner square of the image frame sits inside the outer one, as a share of its side. */
+const FRAME_INSET_SHARE = 0.18;
+
+/** The body of a comment's bubble: the box without its tail. The "C" is centred in it. */
+export function bubbleBody(box: Rect): Rect {
+  const height = box.bottom - box.top;
+  return {left: box.left, top: box.top, right: box.right, bottom: Math.round(box.bottom - height * BUBBLE_TAIL_SHARE)};
+}
+
+/**
+ * A speech bubble filling `box`: a rounded rectangle (its body, the upper three quarters) with a
+ * small tail down to the lower left corner. One closed outline, drawn clockwise from the top left.
+ */
+export function bubblePolygon(box: Rect): Point[] {
+  const body = bubbleBody(box);
+  const width = body.right - body.left;
+  const r = Math.round(Math.min(width, body.bottom - body.top) * BUBBLE_CORNER_SHARE);
+  const corner = (cx: number, cy: number, from: number): Point[] =>
+    [0, 1, 2, 3].map(step => {
+      const angle = ((from + step * 30) * Math.PI) / 180;
+      return {x: Math.round(cx + r * Math.cos(angle)), y: Math.round(cy + r * Math.sin(angle))};
+    });
+  const tailLeft = Math.round(body.left + width * 0.2);
+  const tailRight = Math.round(body.left + width * 0.45);
+  return [
+    ...corner(body.left + r, body.top + r, 180),
+    ...corner(body.right - r, body.top + r, 270),
+    ...corner(body.right - r, body.bottom - r, 0),
+    {x: tailRight, y: body.bottom},
+    {x: box.left, y: box.bottom},
+    {x: tailLeft, y: body.bottom},
+    ...corner(body.left + r, body.bottom - r, 90),
+    {x: body.left, y: body.top + r},
+  ];
+}
+
+/**
+ * A plain double frame filling `box`: the outer square, a short join to the inner square, the
+ * inner square, and back - one outline, so it is one element like every sign. No glyph inside, so
+ * it doesn't depend on the device font.
+ */
+export function framePolygon(box: Rect): Point[] {
+  const inset = Math.round(Math.min(box.right - box.left, box.bottom - box.top) * FRAME_INSET_SHARE);
+  const outer = {left: box.left, top: box.top, right: box.right, bottom: box.bottom};
+  const inner = {left: box.left + inset, top: box.top + inset, right: box.right - inset, bottom: box.bottom - inset};
+  return [
+    {x: outer.left, y: outer.top},
+    {x: outer.right, y: outer.top},
+    {x: outer.right, y: outer.bottom},
+    {x: outer.left, y: outer.bottom},
+    {x: outer.left, y: outer.top},
+    {x: inner.left, y: inner.top},
+    {x: inner.left, y: inner.bottom},
+    {x: inner.right, y: inner.bottom},
+    {x: inner.right, y: inner.top},
+    {x: inner.left, y: inner.top},
+  ];
+}
+
+/**
+ * The sign at a tagged text and what it says: a ring with the number ("?" without a mark), a
+ * bubble with "C" for a comment, the frame alone for an image. `textRect` is where its textbox
+ * goes; null when the sign has no text.
+ */
+export function snippetSign(
+  kind: PenEditKind,
+  box: Rect,
+  number: number | null,
+): {points: Point[]; text: string | null; textRect: Rect | null} {
+  if (kind === 'comment') {
+    return {points: bubblePolygon(box), text: COMMENT_SIGN_TEXT, textRect: badgeTextRect(bubbleBody(box), COMMENT_SIGN_TEXT)};
+  }
+  if (kind === 'image') {
+    return {points: framePolygon(box), text: null, textRect: null};
+  }
+  const text = penEditNumberText(number);
+  return {points: snippetBadgePolygon(box), text, textRect: badgeTextRect(box, text)};
 }
 
 /** Bounds of a polygon's points (a badge's current place on the page). */

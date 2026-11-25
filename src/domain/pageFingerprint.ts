@@ -38,11 +38,13 @@ export type FingerprintElement = {
 export type FingerprintPenEntry = {
   id: string;
   kind?: string;
-  number?: number;
+  number?: number | null;
   state?: string;
   mark?: unknown;
   strokesTagged?: boolean;
   awaitingMark?: unknown;
+  /** A comment's or image's paragraph, place and Done (its row changes with them). */
+  note?: unknown;
 };
 
 const rect = (value: RectLike) =>
@@ -107,6 +109,7 @@ export function pageFingerprint(
       entry.mark ?? null,
       entry.strokesTagged ?? null,
       entry.awaitingMark ?? null,
+      entry.note ?? null,
     ]);
   return JSON.stringify([elements.map(elementKey), pen, calibration ?? null]);
 }

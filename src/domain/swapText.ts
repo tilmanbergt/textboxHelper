@@ -1,5 +1,5 @@
 import {SPLIT_SIGN} from './paragraphMarks';
-import type {SwapZones} from './swapMark';
+import type {SwapZones} from './marks/place/swap';
 
 /**
  * The text of a swap (technical-design-swap-space-marks.md §5.2, §6.2): the two parts change

@@ -1,4 +1,3 @@
-import {buildStrokeStats, isReplaceLoopRect} from '../../src/domain/markerStrokes';
 import {
   activePenEditsOnPage,
   parsePenEditIndex,
@@ -10,7 +9,6 @@ import {
   WAITING_RECOGNITION,
   type PenEditEntry,
 } from '../../src/domain/penEditModel';
-import {findReplaceMarkInWindow, lookBackNumbers, strokeStatsFromRect, type WindowStroke} from '../../src/domain/penEditPairing';
 import {
   badgeNumberRect,
   boundsOfPoints,
@@ -29,7 +27,8 @@ import {
 import {matchByRects, rectShift, rectsMatch} from '../../src/domain/penEditMatching';
 import {normalizeRecognizedText} from '../../src/domain/penEditText';
 import {isNormalTextElement} from '../../src/domain/textboxEditPlan';
-import type {PageElementData, Rect} from '../../src/domain/textboxModel';
+import type {PageElementData} from '../../src/domain/textboxModel';
+import {isReplaceLoopRect} from '../../src/domain/marks/shapes/strike';
 
 const ID = 'pe-20261118-145501-042';
 
@@ -213,70 +212,6 @@ describe('pen edit index', () => {
   });
 });
 
-describe('look-back pairing', () => {
-  const stroke = (uuid: string, numInPage: number, points: Array<[number, number]>, isStraightLine = false): WindowStroke => ({
-    uuid,
-    numInPage,
-    isStraightLine,
-    stats: buildStrokeStats(points.map(([x, y]) => ({x, y})))!,
-  });
-  const strike = (uuid: string, num: number, line = false) => stroke(uuid, num, [[300, 500], [420, 502], [520, 501]], line);
-  const vertical = (uuid: string, num: number, x: number) => stroke(uuid, num, [[x, 480], [x + 2, 522]]);
-
-  it('reads the numbers just before the snippet', () => {
-    expect(lookBackNumbers(20)).toEqual([19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6]);
-    expect(lookBackNumbers(3)).toEqual([2, 1]);
-    expect(lookBackNumbers(1)).toEqual([]);
-  });
-
-  it('finds a strike with two crossing verticals', () => {
-    const window = [strike('k', 7), vertical('v1', 8, 400), vertical('v2', 9, 430)];
-    expect(findReplaceMarkInWindow(window, [])).toMatchObject({strike: {uuid: 'k'}, modifiers: [{uuid: 'v1'}, {uuid: 'v2'}]});
-  });
-
-  it('accepts a straight-line strike', () => {
-    const window = [strike('k', 7, true), vertical('v1', 8, 400), vertical('v2', 9, 430)];
-    expect(findReplaceMarkInWindow(window, [])?.strike.uuid).toBe('k');
-  });
-
-  it('takes the newest mark and skips strikes already paired', () => {
-    const older = [strike('old', 2), vertical('o1', 3, 400), vertical('o2', 4, 430)];
-    const newer = [strike('new', 5), vertical('n1', 6, 400), vertical('n2', 7, 430)];
-    expect(findReplaceMarkInWindow([...older, ...newer], [])?.strike.uuid).toBe('new');
-    // The newer strike lies where an earlier tag already paired one.
-    const newerAt = newer[0].stats.rect;
-    expect(findReplaceMarkInWindow(newer, [newerAt])).toBeNull();
-  });
-
-  it('needs two verticals that cross the strike and are close together', () => {
-    expect(findReplaceMarkInWindow([strike('k', 7), vertical('v1', 8, 400)], [])).toBeNull();
-    const notCrossing = stroke('v2', 9, [[430, 540], [432, 580]]);
-    expect(findReplaceMarkInWindow([strike('k', 7), vertical('v1', 8, 400), notCrossing], [])).toBeNull();
-    expect(findReplaceMarkInWindow([strike('k', 7), vertical('v1', 8, 320), vertical('v2', 9, 500)], [])).toBeNull();
-  });
-
-  it('pairs from recognize rects alone (the device test page)', () => {
-    const fromRect = (uuid: string, num: number, rect: Rect): WindowStroke => ({
-      uuid,
-      numInPage: num,
-      isStraightLine: false,
-      stats: strokeStatsFromRect(rect)!,
-    });
-    const window = [
-      fromRect('strike', 29, {left: 600, top: 808, right: 972, bottom: 820}),
-      fromRect('v1', 30, {left: 790, top: 789, right: 807, bottom: 833}),
-      fromRect('v2', 31, {left: 800, top: 786, right: 817, bottom: 827}),
-      fromRect('n', 25, {left: 594, top: 1279, right: 605, bottom: 1286}),
-    ];
-    expect(findReplaceMarkInWindow(window, [])).toMatchObject({strike: {uuid: 'strike'}, modifiers: [{uuid: 'v1'}, {uuid: 'v2'}]});
-  });
-
-  it('ignores a plain delete stroke and handwriting', () => {
-    const word = stroke('w', 6, [[300, 480], [310, 520], [320, 480], [330, 520]]);
-    expect(findReplaceMarkInWindow([strike('k', 7), word], [])).toBeNull();
-  });
-});
-
 describe('normalizeRecognizedText', () => {
   it('joins handwritten lines with spaces', () => {
     expect(normalizeRecognizedText('a new\nsentence  here\n')).toBe('a new sentence here');
@@ -337,24 +272,5 @@ describe('the loop after a strike', () => {
     expect(isReplaceLoopRect(strike, {left: 975, top: 760, right: 1135, bottom: 900})).toBe(false);
     expect(isReplaceLoopRect(strike, {left: 975, top: 805, right: 1035, bottom: 815})).toBe(false);
     expect(isReplaceLoopRect(strike, {left: 975, top: 810, right: 985, bottom: 818})).toBe(false);
-  });
-
-  it('pairs a strike with the loop drawn after it in the look-back', () => {
-    const stroke = (uuid: string, numInPage: number, rect: Rect): WindowStroke => ({
-      uuid,
-      numInPage,
-      isStraightLine: false,
-      stats: strokeStatsFromRect(rect)!,
-    });
-    const found = findReplaceMarkInWindow(
-      [stroke('strike', 10, strike), stroke('loop', 11, {left: 975, top: 790, right: 1015, bottom: 832})],
-      [],
-    );
-    expect(found?.strike.uuid).toBe('strike');
-    expect(found?.loop?.uuid).toBe('loop');
-    // A loop drawn before the strike is not its mark.
-    expect(
-      findReplaceMarkInWindow([stroke('strike', 10, strike), stroke('loop', 9, {left: 975, top: 790, right: 1015, bottom: 832})], []),
-    ).toBeNull();
   });
 });

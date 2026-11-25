@@ -1,0 +1,45 @@
+{
+  "about": "Flat and long slashes: a short one at 35° through the r of \"red\" with tagged text after it, a long one at 45° through the o of \"words\" (it reaches above and below the letters, yet is no swap piece).",
+  "changes": [
+    {
+      "kind": "delete",
+      "summary": "Delete \"w[o]rds\"",
+      "detail": "Textbox 1, line 1 - 1 letter",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 26,
+      "words": [
+        "w[o]rds"
+      ],
+      "strokes": [
+        4
+      ],
+      "uncertain": "The slash is slanted: check the letter."
+    },
+    {
+      "kind": "replace",
+      "summary": "Replace \"[r]ed\" -> \"b\"",
+      "detail": "Textbox 1, line 1 - 1 letter",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 8,
+      "words": [
+        "[r]ed"
+      ],
+      "strokes": [
+        2
+      ],
+      "penEdit": 1
+    }
+  ],
+  "toDecide": [],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "the big bed car and more wrds here"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

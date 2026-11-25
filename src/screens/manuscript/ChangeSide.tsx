@@ -6,11 +6,9 @@
  * two for a delete or replace, three for a swap); the actions. Drop asks first, in place of the
  * actions: a tagged snippet's handwriting can stay on the page or go.
  */
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
 import {loadPenEditStrokePoints} from '../../actions/penEditReview';
-import {firstWords, lastWords} from '../../domain/markerHunks';
-import {PUNCTUATION_CHARS, type PunctuationChar} from '../../domain/punctMark';
 import type {
   ChangeHunk,
   EdgePoint,
@@ -24,6 +22,10 @@ import PagedText from '../../ui/PagedText';
 import PillButton from '../../ui/PillButton';
 import StrokeDrawing from '../../ui/StrokeDrawing';
 import {COLORS, FONT, RADII, SPACING} from '../../ui/theme';
+import {PUNCTUATION_CHARS, type PunctuationChar} from '../../domain/marks/shapes/punct';
+import {penEditNumberText} from '../../domain/penEditTags';
+import {plural} from '../../domain/plural';
+import {focusResult, type ParagraphResult} from '../../domain/markerDiff';
 
 export type PenDetail = {
   view: PenEditView;
@@ -32,12 +34,11 @@ export type PenDetail = {
   text: string;
 };
 
-/** Words of context the side bar shows on each side of a change. */
-const SIDE_CONTEXT_WORDS = 24;
-
 interface Props {
   operation: RecognizedEditOperation;
   hunk: ChangeHunk;
+  /** Its paragraph as it will read after all its changes; null when not known. */
+  result: (ParagraphResult & {changes: number}) | null;
   pen: PenDetail | null;
   editing: boolean;
   onEditing: (editing: boolean) => void;
@@ -60,6 +61,7 @@ interface Props {
 export default function ChangeSide({
   operation,
   hunk,
+  result,
   pen,
   editing,
   onEditing,
@@ -92,17 +94,7 @@ export default function ChangeSide({
       {operation.insideSwap ? (
         <Text style={styles.hint}>Inside a swap: this change is made first, then the parts change places.</Text>
       ) : null}
-      <Text style={styles.label}>In its text</Text>
-      <View style={styles.context}>
-        <PagedText
-          segments={[
-            {text: lastWords(hunk.before, SIDE_CONTEXT_WORDS)},
-            ...hunk.segments,
-            {text: firstWords(hunk.after, SIDE_CONTEXT_WORDS)},
-          ]}
-          resetKey={hunk.operationId}
-        />
-      </View>
+      <ResultText result={result} hunk={hunk} />
       {operation.swap ? <SwapDetail operation={operation} disabled={busy} onFixCase={onFixCase} /> : null}
       {operation.join?.hyphen ? (
         <Checkbox
@@ -145,7 +137,7 @@ export default function ChangeSide({
 }
 
 /** A tagged snippet's text: tap to edit (the Supernote's handwriting input fills the field). */
-function PenText({
+export function PenText({
   pen,
   editing,
   onEditing,
@@ -169,7 +161,7 @@ function PenText({
     <View style={styles.pen}>
       {editing ? (
         <>
-          <Text style={styles.label}>Text of {pen.view.number}</Text>
+          <Text style={styles.label}>Text of {penEditNumberText(pen.view.number)}</Text>
           <TextInput
             style={styles.field}
             value={draft}
@@ -177,7 +169,7 @@ function PenText({
             multiline
             autoFocus
             textAlignVertical="top"
-            accessibilityLabel={`Text of ${pen.view.number}`}
+            accessibilityLabel={`Text of ${penEditNumberText(pen.view.number)}`}
           />
           <View style={styles.buttons}>
             <PillButton
@@ -199,7 +191,7 @@ function PenText({
           </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Correct the text of ${pen.view.number}`}
+            accessibilityLabel={`Correct the text of ${penEditNumberText(pen.view.number)}`}
             disabled={busy || pen.status === 'recognizing'}
             onPress={() => onEditing(true)}
             style={styles.textButton}>
@@ -222,7 +214,7 @@ const STATUS_HINT: Record<PenOperationStatus, string> = {
 };
 
 /** The picture taken when tagging; without one, the handwriting drawn from its stored strokes. */
-function Handwriting({view}: {view: PenEditView}): React.JSX.Element {
+export function Handwriting({view}: {view: PenEditView}): React.JSX.Element {
   const [strokes, setStrokes] = useState<number[][] | null | undefined>(undefined);
   useEffect(() => {
     let alive = true;
@@ -321,7 +313,7 @@ function SwapDetail({
 }
 
 /** Each edge of the change (Place; Start and End; or a swap's three) with ‹ › to move it. */
-function EdgeControl({
+export function EdgeControl({
   view,
   disabled,
   onNudge,
@@ -427,6 +419,26 @@ export function DropConfirm({
   );
 }
 
+/**
+ * The paragraph as it will read after all its changes, paged, opened at the selected change (its
+ * new text underlined in bold, or the place of removed text underlined). A new paragraph shows its
+ * own text.
+ */
+function ResultText({result, hunk}: {result: (ParagraphResult & {changes: number}) | null; hunk: ChangeHunk}): React.JSX.Element {
+  const focus = useMemo(() => (result ? focusResult(result, hunk.operationId) : null), [result, hunk.operationId]);
+  const header = focus && result ? `¶ after its ${plural(result.changes, 'change')}` : 'New paragraph';
+  return (
+    <View style={styles.paragraph}>
+      <PagedText
+        header={header}
+        segments={focus ? focus.segments : hunk.segments}
+        resetKey={hunk.operationId}
+        jumpTo={focus && focus.at !== null ? {key: hunk.operationId, index: focus.at} : null}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   side: {
     flex: 1,
@@ -444,9 +456,9 @@ const styles = StyleSheet.create({
   pen: {
     gap: SPACING.xs,
   },
-  context: {
+  paragraph: {
     flex: 1,
-    minHeight: 80,
+    minHeight: 120,
   },
   picture: {
     alignSelf: 'stretch',

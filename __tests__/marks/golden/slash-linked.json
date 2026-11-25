@@ -1,0 +1,31 @@
+{
+  "about": "A slash through the r of \"red\" with tagged text after it: the letter is replaced; its own circle for the number goes with it.",
+  "changes": [
+    {
+      "kind": "replace",
+      "summary": "Replace \"[r]ed\" -> \"b\"",
+      "detail": "Textbox 1, line 1 - 1 letter",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 8,
+      "words": [
+        "[r]ed"
+      ],
+      "strokes": [
+        2,
+        3
+      ],
+      "penEdit": 1
+    }
+  ],
+  "toDecide": [],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "the big bed car and more words here"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

@@ -1,0 +1,57 @@
+{
+  "about": "Strikes over one word and two words; a strike too short to read; a line far from any text.",
+  "changes": [
+    {
+      "kind": "delete",
+      "summary": "Delete \"big\"",
+      "detail": "Textbox 1, line 1 - 1 word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 4,
+      "words": [
+        "big"
+      ],
+      "strokes": [
+        2
+      ]
+    },
+    {
+      "kind": "delete",
+      "summary": "Delete \"more words\"",
+      "detail": "Textbox 1, line 1 - 2 words",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 20,
+      "words": [
+        "more",
+        "words"
+      ],
+      "strokes": [
+        3
+      ]
+    }
+  ],
+  "toDecide": [
+    {
+      "kind": "unclear",
+      "summary": "Strokes over the text",
+      "reason": "The marker is too short to classify reliably.",
+      "strokes": [
+        4
+      ],
+      "removable": [
+        4
+      ],
+      "words": "the"
+    }
+  ],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "the red car and here"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

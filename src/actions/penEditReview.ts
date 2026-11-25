@@ -22,22 +22,17 @@ import {
   type PenEditStrokeData,
 } from '../domain/penEditModel';
 import {
-  locateCaret,
-  type CaretDirection,
-  type CaretInsertMode,
-  type CaretTarget,
-  type CaretTextbox,
-} from '../domain/penEditCaret';
-import {
   boundsOfPoints,
   isPenEditDecoration,
   parsePenEditUserData,
+  penEditNumberText,
 } from '../domain/penEditTags';
 import {isNoShift, type EdgeShift} from '../domain/edgeShift';
 import {normalizeRecognizedText} from '../domain/penEditText';
 import {DEFAULT_FONT_SIZE, type Rect, type TextboxData, type TextElementData} from '../domain/textboxModel';
-import {locateHere, type HereTextbox} from '../domain/insertHere';
-import {NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
+import {fontLockedReason, NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
+import {locateOnPage} from '../domain/marks/pass2';
+import type {TextboxView} from '../domain/marks/textboxView';
 import {
   changePenEditIndex,
   penEditPictureUri,
@@ -46,6 +41,9 @@ import {
 } from '../storage/penEditStore';
 import {recognizeStrokes} from '../supernote/strokeRecognition';
 import type {MeasuredTextbox, TextboxMeasurer} from './markerMeasure';
+import type {CaretDirection} from '../domain/marks/shapes/caret';
+import type {CaretInsertMode, CaretTarget} from '../domain/marks/place/point';
+import {locateHere, type HereTextbox} from '../domain/marks/place/here';
 
 /**
  * The pen edits' side of the Manuscript review (technical-design-pen-edits.md §3.6–§3.9):
@@ -57,8 +55,12 @@ export type PenEditContext = {
   entries: PenEditEntry[];
   /** True for the pen edits' badges, numbers and snippet strokes: never marker candidates. */
   isExcluded: (element: Element) => boolean;
-  /** The pen edit whose replace mark has this strike, if any. */
-  strikeOwner: (element: Element) => PenEditEntry | undefined;
+  /**
+   * Each entry's mark strokes on the page now: tagged `mark`, or found by their stored places.
+   * They are kept out of pass 1 and placed from the entry's stored mark
+   * (technical-design-mark-dialogue.md §5.1).
+   */
+  marks: Map<string, Element[]>;
   /** Each entry's snippet on the page now (its strokes' bounds, or where it was tagged, shifted). */
   snippetRects: Map<string, Rect>;
   /** Each insertion's caret as it is on the page now: its tip moved with the caret. */
@@ -71,7 +73,7 @@ export type PenEditContext = {
 export const EMPTY_PEN_EDIT_CONTEXT: PenEditContext = {
   entries: [],
   isExcluded: element => isPenEditDecoration(element),
-  strikeOwner: () => undefined,
+  marks: new Map(),
   snippetRects: new Map(),
   carets: new Map(),
   states: {},
@@ -279,7 +281,10 @@ export async function loadPenEditContext(
   // places (element uuids are not identities, host facts §3).
   const excludedRects: Rect[] = [];
   const snippetRects = new Map<string, Rect>();
-  const strikeRects = new Map<string, Rect>();
+  const marks = new Map<string, Element[]>();
+  const untagged = pageElements
+    .filter(element => parsePenEditUserData(element.userData) === null && isSupportedEditMarkerElement(element))
+    .map(element => ({element, rect: elementRect(element)}));
   const carets: PenEditContext['carets'] = new Map();
   for (const entry of onPage) {
     const resolved = resolvePenEdit(entry, pageElements);
@@ -292,9 +297,26 @@ export async function loadPenEditContext(
       unionRects(rects) ??
         shiftRect(entry.rect, resolved.shift.dx, resolved.shift.dy),
     );
-    const markRect = resolved.strike ? elementRect(resolved.strike) : null;
-    if (entry.mark?.kind === 'replace' && markRect) {
-      strikeRects.set(entry.id, markRect);
+    // A replace mark's strokes: tagged, or the strike and the loop, verticals and number circle
+    // at their stored places, moved like the strike.
+    const strikeRect = resolved.strike ? elementRect(resolved.strike) : null;
+    if (entry.mark?.kind === 'replace' && resolved.strike) {
+      const others =
+        resolved.markElements.length > 0
+          ? resolved.markElements.filter(element => element !== resolved.strike)
+          : matchByRects(
+              [...entry.mark.modifierRects, ...(entry.mark.numberRect ? [entry.mark.numberRect] : [])],
+              untagged.filter(item => item.element !== resolved.strike),
+              strikeRect ? rectShift(entry.mark.strikeRect, strikeRect) : {dx: 0, dy: 0},
+            ).map(item => item.element);
+      const markStrokes = [resolved.strike, ...others];
+      marks.set(entry.id, markStrokes);
+      markStrokes.forEach(element => {
+        const rect = elementRect(element);
+        if (rect) {
+          excludedRects.push(rect);
+        }
+      });
     }
     const caretRect =
       entry.mark?.kind === 'caret'
@@ -305,6 +327,7 @@ export async function loadPenEditContext(
           )
         : null;
     if (entry.mark?.kind === 'caret' && caretRect) {
+      marks.set(entry.id, resolved.markElements);
       // A caret (one stroke or two) is never a delete marker; its tip moves with it.
       resolved.markElements.forEach(element => {
         const rect = elementRect(element);
@@ -319,37 +342,19 @@ export async function loadPenEditContext(
       });
     }
   }
-  const caretIds = new Set(
-    onPage.filter(entry => entry.mark?.kind === 'caret').map(entry => entry.id),
-  );
-  const byId = new Map(onPage.map(entry => [entry.id, entry]));
+  const onPageIds = new Set(onPage.map(entry => entry.id));
 
+  // Every linked mark's strokes stay out of pass 1: they are placed from the stored mark.
   const isExcluded = (element: Element): boolean => {
     const tag = parsePenEditUserData(element.userData);
     if (tag) {
-      return tag.role !== 'mark' || caretIds.has(tag.id);
+      return tag.role !== 'mark' || onPageIds.has(tag.id);
     }
     const rect = elementRect(element);
     return !!rect && excludedRects.some(other => rectsMatch(rect, other));
   };
-  const strikeOwner = (element: Element): PenEditEntry | undefined => {
-    const tag = parsePenEditUserData(element.userData);
-    if (tag?.role === 'mark' && strikeRects.has(tag.id)) {
-      return byId.get(tag.id);
-    }
-    const rect = elementRect(element);
-    if (!rect) {
-      return undefined;
-    }
-    for (const [id, strikeRect] of strikeRects) {
-      if (rectsMatch(rect, strikeRect)) {
-        return byId.get(id);
-      }
-    }
-    return undefined;
-  };
 
-  const entries = [...onPage].sort((a, b) => a.number - b.number);
+  const entries = [...onPage].sort((a, b) => (a.number ?? Infinity) - (b.number ?? Infinity));
   const states: Record<string, PenTextState> = {};
   const views: PenEditView[] = [];
   for (const entry of entries) {
@@ -364,7 +369,7 @@ export async function loadPenEditContext(
   return {
     entries,
     isExcluded,
-    strikeOwner,
+    marks,
     snippetRects,
     carets,
     states,
@@ -529,7 +534,7 @@ async function placeHere<T extends TextElementData>(
     const below = byUuid(place.below);
     const styleSource = above ?? below;
     if (!styleSource) {
-      return {reason: `Text ${entry.number}: no paragraph to put it next to.`};
+      return {reason: `Text ${penEditNumberText(entry.number)}: no paragraph to put it next to.`};
     }
     const rect = styleSource.textBox.textRect;
     return {
@@ -562,9 +567,9 @@ async function placeHere<T extends TextElementData>(
 }
 
 /**
- * Where a mark points on the page: the textboxes in its column near its tip are measured (once per
- * review, by `measurer`) and the mark located among them (`locateCaret`). A place inside a
- * textbox whose font can't be read is unclear: its words were measured in the wrong font
+ * Where a caret points on the page (pass 2, `locateOnPage`): the textboxes in its column near its
+ * tip are measured (once per review, by `measurer`) and the tip located among them. A place inside
+ * a textbox whose font can't be read is unclear: its words were measured in the wrong font
  * (technical-design-swap-space-marks.md §2).
  */
 export async function locateMarkOnPage<T extends TextElementData>(
@@ -573,35 +578,50 @@ export async function locateMarkOnPage<T extends TextElementData>(
   pageTextboxes: T[],
   measurer: TextboxMeasurer,
 ): Promise<{near: T[]; target: CaretTarget | null}> {
-  const near = pageTextboxes.filter(textbox => {
-    const rect = textbox.textBox.textRect;
-    return (
-      tip.x >= rect.left - 120 &&
-      tip.x <= rect.right + 120 &&
-      tip.y >= rect.top - 400 &&
-      tip.y <= rect.bottom + 400
-    );
-  });
-  const boxes: CaretTextbox[] = [];
-  const measuredBy = new Map<string, {textbox: T; measured: MeasuredTextbox}>();
-  for (const textbox of near) {
+  const views: TextboxView[] = pageTextboxes.map(textbox => ({
+    uuid: textbox.uuid,
+    numInPage: textbox.numInPage,
+    rect: {...textbox.textBox.textRect},
+    text: textbox.textBox.textContentFull || '',
+    measured: false,
+    layout: null,
+    fontReadable: true,
+  }));
+  const measuredBy = new Map<string, MeasuredTextbox>();
+  // The first run says which textboxes are near the tip; they are measured for the second.
+  const wanted = new Set<string>();
+  locateOnPage(tip, direction, views, view => wanted.add(view.uuid));
+  for (const textbox of pageTextboxes.filter(item => wanted.has(item.uuid))) {
     const measured = await measurer.measure(textbox);
     if (measured) {
-      measuredBy.set(textbox.uuid, {textbox, measured});
-      boxes.push(measured.box);
+      measuredBy.set(textbox.uuid, measured);
     }
   }
-  const target = locateCaret(tip, direction, boxes);
-  if (target && (target.kind === 'text' || target.kind === 'split')) {
-    const hit = measuredBy.get(target.uuid);
-    if (hit && !hit.measured.fontReadable) {
-      return {
-        near,
-        target: {kind: 'unclear', reason: measurer.locked(hit.textbox, hit.measured)},
-      };
+  const located = locateOnPage(
+    tip,
+    direction,
+    views.map(view => {
+      const measured = measuredBy.get(view.uuid);
+      return measured
+        ? {
+            ...view,
+            measured: true,
+            layout: measured.box,
+            fontReadable: measured.fontReadable,
+            ...(measured.fontReadable ? {} : {lockedReason: fontLockedReason(measured.fontName)}),
+          }
+        : {...view, measured: wanted.has(view.uuid)};
+    }),
+  );
+  const near = pageTextboxes.filter(textbox => located.near.some(view => view.uuid === textbox.uuid));
+  if (located.locked) {
+    const textbox = pageTextboxes.find(item => item.uuid === located.locked?.uuid);
+    const measured = located.locked ? measuredBy.get(located.locked.uuid) : undefined;
+    if (textbox && measured) {
+      measurer.locked(textbox, measured);
     }
   }
-  return {near, target};
+  return {near, target: located.target};
 }
 
 /** Recognizes one pen edit from its stored strokes and stores the result. Never throws. */
@@ -683,6 +703,18 @@ export async function startSelectMark(
 ): Promise<void> {
   await changePenEditIndex(current =>
     setAwaitingMark(current, id, from, new Date()),
+  );
+}
+
+/** Here on a pen edit whose place stayed open: the review takes the nearest place it found. */
+export async function confirmPenEditPlace(id: string): Promise<void> {
+  await changePenEditIndex(current => updatePenEdit(current, id, entry => ({...entry, confirmed: true})));
+}
+
+/** The text stops waiting for its mark (Cancel on the "Not a clear mark" card). */
+export async function stopSelectMark(id: string): Promise<void> {
+  await changePenEditIndex(current =>
+    updatePenEdit(current, id, entry => ({...entry, awaitingMark: null})),
   );
 }
 

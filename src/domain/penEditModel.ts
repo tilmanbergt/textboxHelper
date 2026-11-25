@@ -1,5 +1,5 @@
 import {isNoShift, type EdgeShift} from './edgeShift';
-import type {PenEditKind} from './penEditTags';
+import {isNoteKind, type NoteKind, type PenEditKind} from './penEditTags';
 import type {Rect} from './textboxModel';
 
 /**
@@ -70,13 +70,30 @@ export type PenEditRecognition = {
 
 export type PenEditState = 'active' | 'applied' | 'dropped';
 
+/**
+ * What a comment or an image knows besides its handwriting (technical-design-comments-images.md
+ * §2.1). Every field is optional: a note without any belongs to the nearest paragraph by height.
+ */
+export type NoteInfo = {
+  /** The paragraph the user chose: its block id. Missing: the nearest by height (§4). */
+  paragraph?: string;
+  /** Images: before or after their paragraph. Missing: after. */
+  place?: 'before' | 'after';
+  /** Comments: checked off. */
+  done?: boolean;
+};
+
 export type PenEditEntry = {
   id: string;
   kind: PenEditKind;
   notePath: string;
   /** 0-based page the tag icon was last found on. */
   page: number;
-  number: number;
+  /**
+   * The number on the page: given when the text is linked to its mark, counting only the linked
+   * texts of the page; null while it has none ("?", technical-design-mark-dialogue.md §4.4).
+   */
+  number: number | null;
   /** ISO time of the tag. */
   createdAt: string;
   /** The lasso rect at tag time, page pixels. */
@@ -110,6 +127,13 @@ export type PenEditEntry = {
    * paragraph where its handwriting starts (technical-design-fine-marks.md §8). Missing: by its mark.
    */
   placement?: 'here';
+  /**
+   * Here on a mark whose place stayed open (technical-design-mark-dialogue.md §2.7): the review
+   * takes the nearest place it found. Part of the user layer, not of the page's fingerprint.
+   */
+  confirmed?: boolean;
+  /** Comments and images only: their paragraph, place and Done. */
+  note?: NoteInfo;
 };
 
 /** Where Select mark was started: the tag's result card, or the review (which opens again). */
@@ -197,14 +221,15 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     return null;
   }
   const rect = parseRect(value.rect);
-  const kind =
-    value.kind === 'replacement' || value.kind === 'insertion' || value.kind === 'unpaired' ? value.kind : null;
+  // An unknown kind (from a newer build, or bad data) is kept as text without a mark ("?").
+  const kind: PenEditKind =
+    value.kind === 'replacement' || value.kind === 'insertion' || value.kind === 'unpaired' || (isString(value.kind) && isNoteKind(value.kind))
+      ? (value.kind as PenEditKind)
+      : 'unpaired';
   if (
     !isString(value.id) ||
-    !kind ||
     !isString(value.notePath) ||
     !isFiniteNumber(value.page) ||
-    !isFiniteNumber(value.number) ||
     !rect
   ) {
     return null;
@@ -215,13 +240,14 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     kind,
     notePath: value.notePath,
     page: value.page,
-    number: value.number,
+    // Text without a mark has no number: entries stored with one are read as "?". Notes have none.
+    number: kind !== 'unpaired' && !isNoteKind(kind) && isFiniteNumber(value.number) ? value.number : null,
     createdAt: isString(value.createdAt) ? value.createdAt : '',
     rect,
     strokeRects: parseRects(value.strokeRects),
     iconRect: parseRect(value.iconRect) ?? rect,
     strokesTagged: value.strokesTagged === true,
-    mark: parseMark(value.mark),
+    mark: isNoteKind(kind) ? null : parseMark(value.mark),
     hasPicture: value.hasPicture === true,
     recognition: parseRecognition(value.recognition),
     correctedText: isString(value.correctedText) ? value.correctedText : null,
@@ -230,7 +256,26 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     awaitingMark: parseAwaitingMark(value.awaitingMark),
     edges: parseEdges(value.edges),
     ...(value.placement === 'here' ? {placement: 'here' as const} : {}),
+    ...(value.confirmed === true ? {confirmed: true} : {}),
+    ...(isNoteKind(kind) ? {note: parseNoteInfo(value.note)} : {}),
   };
+}
+
+/** A note's info; anything unreadable is left out, so the defaults apply. */
+export function parseNoteInfo(value: unknown): NoteInfo {
+  if (!isRecord(value)) {
+    return {};
+  }
+  return {
+    ...(isString(value.paragraph) && value.paragraph ? {paragraph: value.paragraph} : {}),
+    ...(value.place === 'before' || value.place === 'after' ? {place: value.place} : {}),
+    ...(value.done === true ? {done: true} : {}),
+  };
+}
+
+/** Where an image goes next to its paragraph: after it unless the user chose before. */
+export function notePlace(entry: Pick<PenEditEntry, 'note'>): 'before' | 'after' {
+  return entry.note?.place ?? 'after';
 }
 
 /** Edge nudges: a list of character counts; entries from before 1–3 edges were `{start, end}`. */
@@ -401,10 +446,65 @@ export function awaitingEntry(
   );
 }
 
+/** The numbers of the page's linked texts; the next link gets one more than the highest. */
+export function linkedNumbersOnPage(index: PenEditIndex, notePath: string, page: number): number[] {
+  return activePenEditsOnPage(index, notePath, page)
+    .map(entry => entry.number)
+    .filter((number): number is number => number !== null);
+}
+
+/** The text is linked to its mark: it takes the mark, its kind and its number, and stops waiting. */
+export function linkPenEdit(index: PenEditIndex, id: string, mark: PenEditMark, number: number): PenEditIndex {
+  return updatePenEdit(index, id, entry => ({
+    ...entry,
+    kind: kindOfMark(mark),
+    mark,
+    number,
+    awaitingMark: null,
+    placement: undefined,
+    confirmed: undefined,
+  }));
+}
+
 /** The snippet's kind follows from its mark. */
 export function kindOfMark(mark: PenEditMark | null): PenEditKind {
   if (!mark) {
     return 'unpaired';
   }
   return mark.kind === 'replace' ? 'replacement' : 'insertion';
+}
+
+/** What a sidemark without a link can become: text without a mark ("?"), a comment, an image. */
+export type SidemarkKind = 'unpaired' | NoteKind;
+
+/**
+ * Whether a sidemark can change between "?", comment and image (technical-design-comments-images.md
+ * §3.3): only while it is linked to no mark. A number on the page means linked, and stays.
+ */
+export function canConvertSidemark(entry: PenEditEntry): boolean {
+  return entry.state === 'active' && entry.mark === null && entry.number === null;
+}
+
+/**
+ * The entry as `kind`: no number, no mark, no wait for a mark, no place of its own. A note keeps
+ * the paragraph the user chose (and an image its place, a comment its Done); "?" has no note.
+ * Its strokes keep their tags, so the review keeps taking them out of the marks.
+ */
+export function convertSidemarkEntry(entry: PenEditEntry, kind: SidemarkKind): PenEditEntry {
+  const converted: PenEditEntry = {...entry, kind, number: null, mark: null, awaitingMark: null, edges: null};
+  delete converted.note;
+  delete converted.placement;
+  delete converted.confirmed;
+  if (kind === 'unpaired') {
+    return converted;
+  }
+  const kept = entry.note ?? {};
+  return {
+    ...converted,
+    note: {
+      ...(kept.paragraph ? {paragraph: kept.paragraph} : {}),
+      ...(kind === 'image' && kept.place ? {place: kept.place} : {}),
+      ...(kind === 'comment' && kept.done ? {done: true} : {}),
+    },
+  };
 }

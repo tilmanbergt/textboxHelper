@@ -218,7 +218,7 @@ export default function DetailsPanel({outline, view, disabled, onReviewPage, onG
       <InfoLine
         text={`Paragraph${owner && position ? ` ${position} of ${owner.own.length}` : ''} · page ${block.page + 1} · ${
           block.pendingEdits === null ? 'edits not read yet' : edits ? `${plural(edits, 'edit')} waiting` : 'no edits waiting'
-        }`}
+        }${notesInfo(block)}`}
         page={block.page}
         onGoToPage={onGoToPage}
         disabled={busy}
@@ -393,3 +393,15 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
   },
 });
+
+/** " · 2 comments · 1 image" for a block's comments and images (technical-design-comments-images.md §6). */
+function notesInfo(block: OutlineBlock): string {
+  const count = block.notes;
+  if (!count) {
+    return '';
+  }
+  return [count.comments > 0 ? plural(count.comments, 'comment') : null, count.images > 0 ? plural(count.images, 'image') : null]
+    .filter(Boolean)
+    .map(part => ` · ${part}`)
+    .join('');
+}

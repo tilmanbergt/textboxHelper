@@ -42,6 +42,9 @@ import {getSettings} from '../../../storage/settingsFile';
 import type {NoteInfo} from '../../../supernote/noteElements';
 import type {FrameStatus} from '../../../ui/ScreenFrame';
 import {perfEvent, timed} from '../../../utils/perf';
+import {readNoteEntries} from '../../../actions/notesRead';
+import {noteCounts} from '../../../domain/notes/outlineNotes';
+import type {PenEditEntry} from '../../../domain/penEditModel';
 
 export interface Outline {
   blocks: OutlineBlock[] | null;
@@ -82,6 +85,8 @@ export function useOutline(
   const notePath = note?.notePath ?? null;
   const [items, setItems] = useState<ScannedTextBox[] | null>(null);
   const [statuses, setStatuses] = useState<Record<string, BlockStatus>>({});
+  // The note's comments and images from the pen-edit index: counted per block, no page read.
+  const [noteEntries, setNoteEntries] = useState<PenEditEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setFrameStatus] = useState<FrameStatus | null>(null);
@@ -123,10 +128,15 @@ export function useOutline(
         {pages: pageCount, cached: !!cached},
       ),
       readBlockStatuses(),
+      readNoteEntries(notePath).catch(error => {
+        console.warn('[Outline] comments and images not read', String(error));
+        return [];
+      }),
     ])
-      .then(([scan, stored]) => {
+      .then(([scan, stored, entries]) => {
         rememberOutline(notePath, pageCount, scan.items);
         setStatuses(stored);
+        setNoteEntries(entries);
         const changed = !cached || JSON.stringify(cached) !== JSON.stringify(scan.items);
         if (changed && cached && planRef.current.length > 0) {
           setFrameStatus({
@@ -155,7 +165,7 @@ export function useOutline(
       return null;
     }
     const bySource = new Map(records.map(record => [record.sourceId, record]));
-    return buildOutline(items, statuses, pages, {
+    const built = buildOutline(items, statuses, pages, {
       defaultLevel: getSettings().outline.defaultHeadingLevel,
       // Records made before headings kept their #s hold a heading's text without them.
       recordLevel: tag => {
@@ -163,7 +173,9 @@ export function useOutline(
         return block?.role === 'heading' && headingLevelOf(block.text) === 0 ? block.level : null;
       },
     });
-  }, [items, pages, records, statuses]);
+    const counts = noteCounts(built, noteEntries);
+    return counts.size === 0 ? built : built.map(block => (counts.has(block.key) ? {...block, notes: counts.get(block.key)} : block));
+  }, [items, noteEntries, pages, records, statuses]);
   const planned = useMemo(
     () => (blocks && plan.length > 0 ? plannedOrder(blocks, plan) : null),
     [blocks, plan],

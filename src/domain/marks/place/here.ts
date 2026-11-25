@@ -1,4 +1,5 @@
-import type {Rect} from './textboxModel';
+import {penEditNumberText} from '../../penEditTags';
+import type {Rect} from '../../textboxModel';
 
 /**
  * "Insert right here" (technical-design-fine-marks.md §8): tagged text without a usable mark goes
@@ -36,7 +37,7 @@ export function locateHere(
   snippet: Rect,
   textboxes: HereTextbox[],
   pageWidth: number,
-  number: number,
+  number: number | null,
 ): HerePlace {
   const left = snippet.left;
   const top = snippet.top;
@@ -63,7 +64,7 @@ export function locateHere(
       }
       return {
         kind: 'unclear',
-        reason: `Text ${number} lies over the text of textbox ${inside.numInPage}. Move it between paragraphs, or select a mark.`,
+        reason: `Text ${penEditNumberText(number)} lies over the text of textbox ${inside.numInPage}. Move it between paragraphs, or select a mark.`,
       };
     }
     const above = [...column]
@@ -85,7 +86,7 @@ export function locateHere(
   if (beside) {
     return {
       kind: 'unclear',
-      reason: `Text ${number} is beside textbox ${beside.numInPage}. Move it between paragraphs, or select a mark.`,
+      reason: `Text ${penEditNumberText(number)} is beside textbox ${beside.numInPage}. Move it between paragraphs, or select a mark.`,
     };
   }
 

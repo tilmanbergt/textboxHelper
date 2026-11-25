@@ -23,8 +23,8 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 ### Edit Markers
 
 - Recognize handwritten delete markers
-- Recognize replace markers as a delete line plus a small loop (or two crossing lines), with the new text tagged right after
-- Change single letters: a strike with two short lines across its ends marks exact places, a slash marks one letter
+- Recognize replace markers as a delete line plus a small loop, with the new text tagged right after
+- Single letters: a strike with two short lines across its ends deletes exactly what is between them; a slash marks one letter, also when drawn slanted
 - Close up a space with an arc under the gap; join two lines or two paragraphs with two arcs
 - Put in punctuation with a caret and a small circle holding the mark, without tagging
 - Support both freehand strokes and Supernote straight-line geometry
@@ -35,17 +35,26 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 
 - Tag handwritten new text with one lasso button, "Insertion or Replacement", instead of converting it to text first
 - The mark drawn just before the text decides: a replace mark makes it a replacement, a caret an insertion; a small number at both shows which belong together
-- No mark found? Select mark: draw or lasso the mark and tap the button again; the text never needs to be written again. Or Insert right here: it becomes a new paragraph where its handwriting starts
+- No mark found? The text keeps a "?". Select mark: draw or lasso the mark and tap the button again; the "?" becomes its number and the text never needs to be written again. Or Insert right here: it becomes a new paragraph where its handwriting starts
 - An insertion is written right after a caret (a V on the line or a ∧ under it): between words, inside a word, or between paragraphs; paragraphs below move down to make room
 - Manuscript recognizes the tagged text while you read, shows a picture of the handwriting, and lets you fix the text in place with the Supernote keyboard's handwriting input
 - Fine-tune any change by one character (a comma, a space, a letter; a swap's three edges), and drop a change or an unused mark, keeping or erasing your handwriting
 - The handwriting and its picture are kept in the plugin folder (`pen-edits/`)
 
+### Comments and Images
+
+- Keep handwriting beside the text as a comment or an image with the lasso button "Comment or Image": a small card asks which; a comment gets a speech bubble with "C", an image a plain double frame (circles stay for the numbers of tagged text)
+- Comments and images never change the text: Apply leaves them alone
+- Text without a mark ("?") can become a comment or an image, and back: on the tag's cards and under To decide
+- Each belongs to the paragraph beside it; Manuscript's Notes tab lists them with their paragraph: read and correct a comment, choose another paragraph, tick it done, or drop it; an image goes before or after its paragraph
+- The Outline counts the comments and images of each paragraph across the whole note
+- Not exported; images are written to a linked file in a later version
+
 ### Manuscript
 
 - The NOTE toolbar button "Manuscript" reads every edit mark on the current page
 - Every change in reading order, the changed text in full with a few words around it; the selected change on the right with its text, its edges and Drop
-- "Needs attention" above the list: tagged text without a mark, marks that couldn't be used, with the reason
+- To decide, next to the changes: a numbered mark whose place stayed open (‹ › and Here), tagged text with a "?" (Select mark, Insert right here), strokes on the text that read as no clear mark (read as one of the marks offered, Ignore, Remove)
 - The whole note: a page strip with each page's count of changes; tap a page, or read them all
 - Apply every ready change of the pages read after the preview; one backup of those pages is written first
 - Outline: the note's linked files and headings on the left, the open heading's paragraphs on the right, details below; change a heading's level (with or without its subheadings), move paragraphs within a heading or to another one, move files, set aside or delete a section; statuses (open, review, final) and a filter for edits waiting or not final; headings of chosen levels get a NOTE title for the table of contents

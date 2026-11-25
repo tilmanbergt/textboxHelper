@@ -1,5 +1,5 @@
-import type {CaretInsertMode} from './penEditCaret';
-import type {SwapZones} from './swapMark';
+import type {CaretInsertMode} from './marks/place/point';
+import type {SwapZones} from './marks/place/swap';
 
 /**
  * Fine-tuning a change's edges, one character at a time (technical-design-pen-edits-2.md §6,

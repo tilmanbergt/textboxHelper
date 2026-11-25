@@ -4,7 +4,6 @@ import {
   isDefaultTypefaceStatus,
   NOTE_SYSTEM_FONT_PATH,
 } from '../domain/fontPaths';
-import type {CaretTextbox} from '../domain/penEditCaret';
 import {
   textLeftX,
   X_HEIGHT_PER_FONT_SIZE,
@@ -14,6 +13,7 @@ import {
 import {DEFAULT_FONT_SIZE, type TextElementData} from '../domain/textboxModel';
 import {measureDetailedTextLayout} from '../supernote/textboxMetrics';
 import {logEditMarker} from '../utils/editMarkerLog';
+import type {CaretTextbox} from '../domain/marks/textboxView';
 
 /**
  * One measurement per textbox and review (technical-design-swap-space-marks.md §2): every mark

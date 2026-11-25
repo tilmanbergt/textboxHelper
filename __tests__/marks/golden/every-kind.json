@@ -1,0 +1,162 @@
+{
+  "about": "Every mark kind on one page, close to each other: what each takes from the others.",
+  "changes": [
+    {
+      "kind": "delete",
+      "summary": "Delete \"alpha\"",
+      "detail": "Textbox 1, line 1 - 1 word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 0,
+      "words": [
+        "alpha"
+      ],
+      "strokes": [
+        3
+      ]
+    },
+    {
+      "kind": "split",
+      "summary": "Paragraph break",
+      "detail": "Textbox 1 · between two lines",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 31,
+      "words": [],
+      "strokes": [
+        12
+      ]
+    },
+    {
+      "kind": "space",
+      "summary": "Space · he big|red ca",
+      "detail": "Textbox 2 · he big|red ca",
+      "textbox": 2,
+      "line": 0,
+      "textStart": 7,
+      "words": [],
+      "strokes": [
+        18,
+        19,
+        20
+      ]
+    },
+    {
+      "kind": "punct",
+      "summary": "Insert \".\" ·  words| here",
+      "detail": "Textbox 2",
+      "textbox": 2,
+      "line": 0,
+      "textStart": 29,
+      "words": [],
+      "strokes": [
+        22,
+        23,
+        24
+      ],
+      "punct": {
+        "offset": 29,
+        "mode": "betweenWords",
+        "char": ".",
+        "source": "own",
+        "tie": false
+      }
+    },
+    {
+      "kind": "closeUp",
+      "summary": "Close up · ed car|and mo",
+      "detail": "Textbox 2 · line 1",
+      "textbox": 2,
+      "line": 0,
+      "textStart": 14,
+      "words": [],
+      "strokes": [
+        21
+      ],
+      "closeUp": {
+        "gapStart": 14,
+        "gapEnd": 15
+      }
+    },
+    {
+      "kind": "delete",
+      "summary": "Delete \"g[a]mma\"",
+      "detail": "Textbox 1, line 1 - 1 letter",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 12,
+      "words": [
+        "g[a]mma"
+      ],
+      "strokes": [
+        11
+      ]
+    },
+    {
+      "kind": "replace",
+      "summary": "Replace \"b[et]a\" -> \"BETA\"",
+      "detail": "Textbox 1, line 1 - 1 word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 7,
+      "words": [
+        "b[et]a"
+      ],
+      "strokes": [
+        4,
+        5,
+        6
+      ],
+      "penEdit": 1
+    },
+    {
+      "kind": "insert",
+      "summary": "Insert \"new\"",
+      "detail": "Textbox 1 · between words",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 10,
+      "words": [],
+      "strokes": [],
+      "penEdit": 2,
+      "insertMode": "betweenWords"
+    },
+    {
+      "kind": "swap",
+      "summary": "Swap · \"eta\" ⇄ \"theta\"",
+      "detail": "Textbox 1 · line 2",
+      "textbox": 1,
+      "line": 1,
+      "textStart": 36,
+      "words": [
+        "eta",
+        "theta"
+      ],
+      "strokes": [
+        17
+      ],
+      "swap": {
+        "zones": {
+          "a0": 36,
+          "a1": 39,
+          "b0": 40,
+          "b1": 45
+        }
+      }
+    }
+  ],
+  "toDecide": [],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "bBETAa new gmma delta epsilon zeta theta eta iota kappa lambda mu nu xi omicron pi rho"
+    },
+    {
+      "textbox": 2,
+      "text": "the big red carand more words. here"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

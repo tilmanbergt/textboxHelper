@@ -1,6 +1,6 @@
 import {assembleMarkerPreview} from '../../src/domain/markerAssembly';
 import type {MarkerPreviewBase, OperationDraft} from '../../src/domain/markerTypes';
-import {punctuationAtGap} from '../../src/domain/closeUpMark';
+import {punctuationAtGap} from '../../src/domain/marks/place/closeUp';
 
 const textboxOf = (text: string) => ({
   uuid: 'tb',
@@ -50,7 +50,9 @@ const base = (text: string, drafts: OperationDraft[]): MarkerPreviewBase => ({
   notePath: '/n.note',
   page: 0,
   drafts,
-  ignored: [],
+  toDecide: [],
+  markPoints: {},
+  pageRects: [],
   textboxes: [textboxOf(text)],
   insertions: [],
   penEdits: [],
@@ -74,14 +76,14 @@ describe('close-up in the review (§6)', () => {
     const strike: OperationDraft = {range: {kind: 'delete', start: 4, end: 7}, operation: operation('d', 'delete')};
     const preview = assembleMarkerPreview(base(text, [closeUp(text, 7, 8), strike]), {});
     expect(nextText(preview)).toBe('the red car');
-    expect(preview.ignoredMarkers.map(item => item.reason)).toEqual([expect.stringContaining('Another change')]);
+    expect(preview.toDecide.map(item => item.reason)).toEqual([expect.stringContaining('Another change')]);
     const space: OperationDraft = {
       range: {kind: 'replace', start: 8, end: 8, replacementText: ' '},
       operation: operation('s', 'space'),
     };
     const both = assembleMarkerPreview(base(text, [closeUp(text, 7, 8), space]), {});
     expect(both.applyPlan).toBeNull();
-    expect(both.ignoredMarkers).toHaveLength(2);
+    expect(both.toDecide).toHaveLength(2);
   });
 
   it('cancels a swap whose gap it closes', () => {
@@ -91,7 +93,7 @@ describe('close-up in the review (§6)', () => {
       operation: operation('swap:1', 'swap', {swap: {zones: {a0: 0, a1: 3, b0: 4, b1: 7}, fixCase: false, capsAvailable: false}}),
     };
     const preview = assembleMarkerPreview(base(text, [swap, closeUp(text, 3, 4)]), {});
-    expect(preview.ignoredMarkers.map(item => item.reason)).toEqual([expect.stringContaining('close-up between')]);
+    expect(preview.toDecide.map(item => item.reason)).toEqual([expect.stringContaining('close-up between')]);
     expect(nextText(preview)).toBe('bigred car');
   });
 });
@@ -116,7 +118,7 @@ describe('punctuation circle in the review (§9)', () => {
     expect(tie.operations[0].uncertain).toContain('comma or an apostrophe');
     const refused = assembleMarkerPreview(base('walking', [punct(4, ',', 'inWord')]), {});
     expect(refused.applyPlan).toBeNull();
-    expect(refused.ignoredMarkers[0].reason).toContain('goes after a word');
+    expect(refused.toDecide[0].reason).toContain('goes after a word');
   });
 });
 
@@ -188,6 +190,6 @@ describe('joining two paragraphs (§7)', () => {
       operation: {...operation('s', 'split'), targetTextboxUuid: 'tb2', targetTextboxNumInPage: 3},
     };
     const preview = assembleMarkerPreview(joinBase('It is a note', [join('It is a note'), split]), {});
-    expect(preview.ignoredMarkers.map(item => item.reason)).toEqual([expect.stringContaining('paragraph break')]);
+    expect(preview.toDecide.map(item => item.reason)).toEqual([expect.stringContaining('paragraph break')]);
   });
 });

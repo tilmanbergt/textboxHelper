@@ -2,9 +2,9 @@ import type {Element} from 'sn-plugin-lib';
 import {isSupportedEditMarkerElement} from '../domain/markerStrokes';
 import type {
   EditMarkerPreview,
-  IgnoredEditMarker,
   RecognizedEditOperation,
 } from '../domain/markerTypes';
+import type {ToDecideItem} from '../domain/marks/toDecide';
 import {isPenEditElement} from '../domain/penEditTags';
 import {plural} from '../domain/plural';
 import {fileNameOf} from '../domain/userMessage';
@@ -29,7 +29,7 @@ import {
  */
 export type DropItem = {penEditId?: string; markerNums?: number[]};
 
-export function dropItemOfIgnored(item: IgnoredEditMarker): DropItem | null {
+export function dropItemOfToDecide(item: ToDecideItem): DropItem | null {
   if (item.penEditId !== undefined) {
     return {penEditId: item.penEditId};
   }

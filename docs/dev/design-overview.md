@@ -57,7 +57,7 @@ check fail if the SDK types drift away from them.
 it opens one screen per button, keyed by the press,
 so a screen opened again starts fresh. The button listener subscribes once and calls the latest
 router through a ref. Screens are built on `ui/ScreenFrame.tsx` and own their state in a hook next
-to them: `screens/manuscript/` (the Manuscript card: `ReviewTab` with its page strip and side bar `ChangeSide`, the Outline in `outline/`, the Files tab in `files/` and Settings in `settings/`; the page states are `domain/manuscriptPages.ts`; the outline is `domain/outlineModel.ts` (what a block is: a file's divider, a heading by its `#`s — `domain/headingText.ts` — or a paragraph; statuses in `storage/blockStatusStore.ts`, block tags `domain/blockTag.ts`), what its panes show `domain/outlineContents.ts` (the Contents, each entry's own paragraphs, the filter, the moves offered), planned moves, levels, set-asides and deletes `domain/outlinePlan.ts`, their new places `domain/outlineLayout.ts`, and `actions/outlineApply.ts` checks and writes them; the tab (`outline/OutlineTab.tsx`) renders `outline/useOutline.ts` (data and plan) through `outline/useOutlineView.ts` (filter or Set aside view, open entry, panel subject, Move to and Move back) in `ContentsColumn`, `ParagraphList` and `DetailsPanel` (its actions from `domain/outlineActions.ts`), with the shared light controls `ui/TextChoices.tsx`, `ui/ActionBar.tsx`, `ui/TextLink.tsx`, `ui/EmptyState.tsx` and the symbols in `ui/glyphs.ts`; what was read is kept in memory by `actions/manuscriptCache.ts` with a page fingerprint, `domain/pageFingerprint.ts`, and checked again in the background by `usePageChecks.ts`; timings are `utils/perf.ts`, saved by `actions/timingsExport.ts`), `screens/tools/` (the lasso screen,
+to them: `screens/manuscript/` (the Manuscript card: `ReviewTab` with its page strip, its tabs New text, Marks and To decide (`domain/reviewLists.ts`) and side bar `ChangeSide`, the Outline in `outline/`, the Files tab in `files/` and Settings in `settings/`; the page states are `domain/manuscriptPages.ts`; the outline is `domain/outlineModel.ts` (what a block is: a file's divider, a heading by its `#`s — `domain/headingText.ts` — or a paragraph; statuses in `storage/blockStatusStore.ts`, block tags `domain/blockTag.ts`), what its panes show `domain/outlineContents.ts` (the Contents, each entry's own paragraphs, the filter, the moves offered), planned moves, levels, set-asides and deletes `domain/outlinePlan.ts`, their new places `domain/outlineLayout.ts`, and `actions/outlineApply.ts` checks and writes them; the tab (`outline/OutlineTab.tsx`) renders `outline/useOutline.ts` (data and plan) through `outline/useOutlineView.ts` (filter or Set aside view, open entry, panel subject, Move to and Move back) in `ContentsColumn`, `ParagraphList` and `DetailsPanel` (its actions from `domain/outlineActions.ts`), with the shared light controls `ui/TextChoices.tsx`, `ui/ActionBar.tsx`, `ui/TextLink.tsx`, `ui/EmptyState.tsx` and the symbols in `ui/glyphs.ts`; what was read is kept in memory by `actions/manuscriptCache.ts` with a page fingerprint, `domain/pageFingerprint.ts`, and checked again in the background by `usePageChecks.ts`; timings are `utils/perf.ts`, saved by `actions/timingsExport.ts`), `screens/tools/` (the lasso screen,
 its Details with "Log All Textboxes"),
 `screens/import/` (Import with the page drawing) and `screens/export/` (Export), both opened as
 sub-screens from the Manuscript card's Files tab. Every sub-screen (Settings, Import, Export) is
@@ -92,45 +92,106 @@ in the lasso, `domain/textSplitting.ts` computes the new texts, `domain/textboxE
 preview of every action at once (with the reason an action can't be chosen), the new textboxes
 and the checks that the result fits the page without colliding with other elements; the new textboxes are sized through the native measurement.
 
-### Edit markers (`actions/markerPageAnalysis.ts`, `actions/markerApply.ts`, `actions/editMarkerAnalysis.ts`, `actions/shapeMarks.ts`)
+### Edit markers (`actions/markerPageAnalysis.ts`, `actions/markerApply.ts`, `domain/marks/`)
 
 Handwritten edit markers on textboxes: a delete marker is a line through words; a replace marker
-is a delete line plus a small loop (or two crossing lines); a < or >, or a step mark with a second
+is a delete line plus a small loop; a < or >, or a step mark with a second
 upright (_||‾), breaks a paragraph; a ∧ or V with a cross inserts a space; the swap mark (a line
 above one part and below the next, joined by a vertical, in one stroke or in three pieces across
-lines) swaps two parts. The fine marks work letter by letter: a strike with two verticals marks
-exact places (`domain/exactBounds.ts`), a slash one letter (`domain/slashMark.ts`), an arc under
-or over a gap closes it, two arcs close a gap at a line end or join two paragraphs
-(`domain/closeUpMark.ts`, `domain/paragraphJoin.ts`), and a ∧ or V with a filled circle between its
-legs puts in the punctuation drawn in it (`domain/punctMark.ts` reads it, `domain/punctText.ts`
-places it by its type; what the plugin can't read waits for the user's pick in the review).
-Freehand strokes and the Supernote straight-line tool are both recognized.
-`supernote/markerStrokeRead.ts` reads the strokes; `actions/markerMeasure.ts` measures each
-textbox once per review and locks textboxes whose font can't be read (their marks are ignored);
-`actions/shapeMarks.ts` reads the marks known by their shape first (`domain/paragraphMarks.ts`,
-`domain/spaceMark.ts`, `domain/swapMark.ts`), and their strokes never reach the delete analysis;
-`actions/editMarkerAnalysis.ts` maps one marker to words through the hit-testing core and the
-native measurement (with each letter's edge, `domain/textOffsets.ts`);
-`actions/markerPageAnalysis.ts` pairs replace marks with their tagged text, places insertions and
-builds the preview of the current page in named steps; `actions/markerApply.ts`
-applies the plan; `actions/markerCalibration.ts` keeps the calibration and saves the diagnostics. The pure parts are in
-`domain/markerStrokes.ts`, `domain/markerText.ts`, `domain/markerTypes.ts`,
-`domain/markerAssembly.ts`, `domain/swapText.ts` (a swap makes the changes inside its parts
-first) and `domain/edgeShift.ts` (one to three edges per change). The analysis runs once; the
-preview is assembled from it, the tagged texts and the user's edge nudges (one character at a
-time), so the review updates without measuring again. It lists every change as a hunk in reading
-order (`domain/markerHunks.ts`): the changed text with the removed ranges struck through and new
-text in bold (`domain/markerDiff.ts`), and the rest of its textbox as context, built from the same
-ranges the apply step uses, so the review shows exactly what will change.
+lines) swaps two parts. The fine marks work letter by letter: a strike with a vertical at each end deletes
+exactly what is between them (with a circle too, the tagged text replaces it), a slash marks one letter, an arc under or over a
+gap closes it, two arcs close a gap at a line end or join two paragraphs (`domain/paragraphJoin.ts`),
+and a ∧ or V with a filled circle between its legs puts in the punctuation drawn in it
+(`domain/punctText.ts` places it by its type; what the plugin can't read waits for the user's pick
+in the review). Freehand strokes and the Supernote straight-line tool are both recognized.
+
+The marks are read in two pure passes (`domain/marks/`, technical-design-mark-dialogue.md §2):
+
+- **Pass 1, what the strokes are**, from the strokes alone: the stroke as read (`markStroke.ts`),
+  a reading (`reading.ts`: kind, strokes and their roles, anchors), one file per shape family in
+  `marks/shapes/` (`strike.ts` with the verticals and the loop, `slash.ts`, `caret.ts` with the
+  step, `space.ts`, `punct.ts`, `closeUp.ts`, `swap.ts`) and `marks/pass1.ts`, which reads them for
+  all three callers: the tag's look-back (`readLookBack`), Select mark (`readDeclared`) and the
+  review (the family readers, `readMarks`). A reading is stored with a pen edit as the
+  `PenEditMark` (`marks/storedMark.ts`).
+- **Pass 2, where they act**, from readings and measured textboxes (`textboxView.ts`): one file per
+  kind of place in `marks/place/` (`point.ts` for carets, `paragraph.ts` for splits, `strike.ts`
+  for the words a strike covers through the hit-testing core, `exact.ts` for letter-exact edges,
+  `slash.ts`, `closeUp.ts`, `swap.ts` - a swap piece is read against a line - and `here.ts` for
+  Insert right here), the place type (`place.ts`) and `marks/pass2.ts`: `placeReading` for one
+  reading, `resolvePage` for a page in the review's order of consumption, where a reading that
+  doesn't place leaves its strokes free for the later families. `marks/drafts.ts` turns the
+  result into the review's drafts and ignored rows.
+
+**Linked marks and To decide.** A linked mark (its text has a number) is kept out of pass 1; its
+stored reading (`marks/storedMark.ts` `readingOfStoredMark`, on its strokes as they are now) is
+placed with pass 2 (`marks/linked.ts`): as a change, or "place open" with pass 2's reason and the
+nearest sensible place. What the review can't make a change of is `toDecide`
+(`marks/toDecide.ts`): place open, text without a mark ("?"), and unclear marks - strokes on or over
+the text no family placed (strike-family scribbles close together over a line as one item), with
+the readings pass 1 found; handwriting beside the text isn't listed. Ignore is remembered per note
+and page (`storage/ignoredMarks.ts`). The user layer (`marks/userLayer.ts`: Here, ‹ ›, a chosen
+reading) goes on top; a pen edit stores Here as `confirmed`. The Review tab shows Changes and To
+decide (`screens/manuscript/ToDecideList.tsx`, `ToDecideSide.tsx` with `ui/PageMap.tsx`); the
+options an unclear mark offers and the edges and result of a place are `marks/decide.ts`.
+
+`actions/markerPageAnalysis.ts` orchestrates one page: it reads the elements and strokes
+(`supernote/markerStrokeRead.ts`), takes out tagged strokes and linked marks, runs pass 2 with lazy measuring -
+`actions/markerMeasure.ts` measures a textbox once per review, only when pass 2 asks for it, and
+locks textboxes whose font can't be read (their marks are ignored) - places insertions at their
+carets and builds the preview in named steps; `actions/markerApply.ts` applies the plan;
+`actions/markerCalibration.ts` keeps the calibration and saves the diagnostics (pass 2's trace is
+logged there). The other pure parts are in `domain/markerStrokes.ts`, `domain/markerText.ts`,
+`domain/markerTypes.ts`, `domain/markerAssembly.ts`, `domain/swapText.ts` (a swap makes the changes
+inside its parts first) and `domain/edgeShift.ts` (one to three edges per change). The analysis
+runs once; the preview is assembled from it, the tagged texts and the user's edge nudges (one
+character at a time), so the review updates without measuring again. It lists every change as a
+hunk in reading order (`domain/markerHunks.ts`): the changed text with the removed ranges struck
+through and new text in bold (`domain/markerDiff.ts`), and the rest of its textbox as context, built
+from the same ranges the apply step uses, so the review shows exactly what will change. Each
+textbox's paragraph after all its changes (`buildParagraphResult`, with the apply step's space
+cleanup and where each change is in it) is in the preview's `results`; a test holds its plain text
+equal to the plan's text. The side shows it paged, at the selected change (`focusResult`). Apply
+applies the shown page's plans (`useManuscriptReview.applyPage`) or every read page's (`apply`).
 `actions/editMarkerDrop.ts` takes changes off the page without applying them.
 
 **Pen edits** (`actions/penEditTag.ts`, `actions/penEditReview.ts`, `storage/penEditStore.ts`,
 `domain/penEdit*.ts`): the "Insertion or Replacement" lasso button tags handwritten new text. The
-mark written just before it (a replace mark or a caret) decides what it is; badges with a number
-on the page show which text belongs to which mark (a circle the user drew at the mark holds the
-number). A snippet without a mark can be given one later (Select mark), or go in as a new paragraph
-where its handwriting starts (Insert right here, `domain/insertHere.ts`). The tagged strokes and a picture are stored in the plugin folder (`pen-edits/`);
+mark written just before it (a replace mark or a caret, pass 1's `readLookBack`) decides what it
+is; badges with a number on the page show which text belongs to which mark (a circle the user drew
+at the mark holds the number). Numbers are given at link time and count only the page's linked
+texts; text without a mark shows "?" (`number: null`), and the index entry is written before
+anything is put on the page. A snippet without a mark can be given one later (Select mark, pass 1's
+`readDeclared`, which turns its "?" into the next number), or go in as a new paragraph
+where its handwriting starts (Insert right here, `domain/marks/place/here.ts`). The tagged strokes and a picture are stored in the plugin folder (`pen-edits/`);
 the review recognizes them while it is open and the user can edit the text in place.
+
+**Comments and images** (`actions/noteTag.ts`, `screens/penEdit/NoteKindCard.tsx`,
+technical-design-comments-images.md): the "Comment or Image" lasso button keeps handwriting as a
+note - a pen-edit entry of kind `comment` or `image` that needs no mark and never becomes a change.
+It looks for no mark: the lasso is read, the small card asks Comment · Image, and only the choice
+writes the entry, the tag on the strokes and the sign (a speech bubble with "C" or a plain double
+frame, `domain/penEditTags.ts` `snippetSign`; circles stay for the numbers of tagged text). Both
+lasso buttons write through `actions/sidemarkWrite.ts`: lasso snapshot and picture, the wait after
+the lasso closes, the tag on the strokes, the index entry before the sign, and the sign.
+`actions/sidemarkConvert.ts` changes a sidemark without a link between "?", comment and image
+(`domain/penEditModel.ts` `convertSidemarkEntry`): the entry first, then the sign
+(`supernote/penEditElements.ts` `replaceSnippetSign`), set back if the sign can't change.
+A note belongs to a paragraph (`domain/notes/paragraphOf.ts`): of its own page, region (text or
+aside area) and linked file, the one it overlaps most in height, else the nearest above, else the
+nearest below; a paragraph the user chose is stored as its block id (`actions/noteEdit.ts`, which
+gives the textbox a block id only then, `actions/blockStatus.ts` `ensureBlockId`) and wins while
+it is in the note. The Review reads a page's notes with their paragraphs after pass 2
+(`actions/notesRead.ts`, on the textboxes already read; a stored paragraph on another page is
+looked for there) into the preview base (`notes`, `paragraphs`), and stores a moved note's new
+place in the index. The Review's fourth tab, Notes (`NotesList.tsx`, `NoteSide.tsx`, `useNotes.ts`;
+the list from `domain/reviewLists.ts` `notesList`), shows them; every action writes at once
+(`actions/noteEdit.ts`: paragraph, Done, place, Drop, Update image; `sidemarkConvert.ts` for Use as
+text) and the page is read again. A note without a paragraph on its page is a To decide item
+(`noParagraph`). The Outline counts each block's notes for the whole note from the index and its
+own scan (`domain/notes/outlineNotes.ts`). Apply removes signs only of the entries it applies
+(`penEditElementNums` filters by id), so notes and their signs stay; the "C" textbox carries the
+pen-edit tag, so the export and the write-back skip it (`isPenEditNumberElement`).
 
 **Housekeeping** (`domain/housekeeping.ts`, `storage/housekeepingStore.ts`,
 `actions/housekeeping.ts`) keeps the plugin folder small: once per JS context, a few seconds after

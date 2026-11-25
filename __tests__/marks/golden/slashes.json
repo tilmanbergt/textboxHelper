@@ -1,0 +1,74 @@
+{
+  "about": "Slashes through one letter at about 60°, 50° and 35°, and one through a space. A slash from 30° on is one; the 35° one is wider than two letters: check the letter.",
+  "changes": [
+    {
+      "kind": "delete",
+      "summary": "Delete \"[b]ig\"",
+      "detail": "Textbox 1, line 1 - 1 letter",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 4,
+      "words": [
+        "[b]ig"
+      ],
+      "strokes": [
+        2
+      ]
+    },
+    {
+      "kind": "delete",
+      "summary": "Delete \"r[e]d\"",
+      "detail": "Textbox 1, line 1 - 1 letter",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 9,
+      "words": [
+        "r[e]d"
+      ],
+      "strokes": [
+        3
+      ]
+    },
+    {
+      "kind": "delete",
+      "summary": "Delete \"w[o]rds\"",
+      "detail": "Textbox 1, line 1 - 1 letter",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 26,
+      "words": [
+        "w[o]rds"
+      ],
+      "strokes": [
+        4
+      ],
+      "uncertain": "The slash is slanted: check the letter."
+    }
+  ],
+  "toDecide": [
+    {
+      "kind": "unclear",
+      "summary": "Slash",
+      "reason": "A slash marks one letter; to join two words, use the close-up arc.",
+      "strokes": [
+        5
+      ],
+      "removable": [
+        5
+      ],
+      "words": "and more",
+      "readings": [
+        "slash"
+      ]
+    }
+  ],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "the ig rd car and more wrds here"
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

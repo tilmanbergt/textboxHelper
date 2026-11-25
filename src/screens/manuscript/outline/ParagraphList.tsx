@@ -1,6 +1,7 @@
 /**
  * The Outline's right column (technical-design-outline-sections.md §3, §7.1): the open entry's own
- * paragraphs — up to its first subheading — each with its first and last line, ✎ n when edits wait
+ * paragraphs — up to its first subheading — each with its first and last line, ✎ n when edits wait,
+ * "C n" and "▣ n" for its comments and images (technical-design-comments-images.md §6)
  * on it and its status on the right. Planned changes show in place (moved and new level underlined,
  * set aside in italics, deleted struck through). Below the rows: what follows (its subheadings) and
  * how many paragraphs the filter hides. In a note without headings it is the only column.
@@ -10,6 +11,7 @@ import {Pressable, StyleSheet, Text, View} from 'react-native';
 import type {ContentsEntry} from '../../../domain/outlineContents';
 import {STATUS_GLYPH, STATUS_LABEL, type OutlineBlock} from '../../../domain/outlineModel';
 import type {ChangeMark} from '../../../domain/outlinePlan';
+import {noteCountLabel} from '../../../domain/notes/outlineNotes';
 import {plural} from '../../../domain/plural';
 import {GLYPH} from '../../../ui/glyphs';
 import PagedSection from '../../../ui/PagedSection';
@@ -117,6 +119,7 @@ function ParagraphRow({
           {GLYPH.edits} {block.pendingEdits}
         </Text>
       ) : null}
+      {block.notes ? <Text style={styles.notes}>{noteCountLabel(block.notes, GLYPH.image)}</Text> : null}
       <Text style={styles.status} accessibilityLabel={STATUS_LABEL[block.status]}>
         {STATUS_GLYPH[block.status]}
       </Text>
@@ -178,6 +181,10 @@ const styles = StyleSheet.create({
     borderColor: COLORS.accent,
     borderRadius: RADII.sm,
     paddingHorizontal: SPACING.xs,
+  },
+  notes: {
+    fontSize: FONT.small,
+    color: COLORS.text,
   },
   status: {
     width: 26,

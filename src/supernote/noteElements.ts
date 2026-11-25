@@ -170,6 +170,14 @@ export async function jumpToNotePage(page: number): Promise<void> {
   );
 }
 
+/** How many pages a note has. */
+export async function readNotePageCount(notePath: string): Promise<number> {
+  return assertApiSuccess(
+    (await PluginFileAPI.getNoteTotalPageNum(notePath)) as {success?: boolean; result?: number; error?: {message?: string}},
+    'Could not determine the note page count.',
+  );
+}
+
 export async function readNoteInfo(): Promise<NoteInfo> {
   const notePath = assertApiSuccess(
     (await PluginCommAPI.getCurrentFilePath()) as {success?: boolean; result?: string; error?: {message?: string}},
@@ -179,10 +187,7 @@ export async function readNoteInfo(): Promise<NoteInfo> {
     (await PluginCommAPI.getCurrentPageNum()) as {success?: boolean; result?: number; error?: {message?: string}},
     'Could not determine the current page.',
   );
-  const pageCount = assertApiSuccess(
-    (await PluginFileAPI.getNoteTotalPageNum(notePath)) as {success?: boolean; result?: number; error?: {message?: string}},
-    'Could not determine the note page count.',
-  );
+  const pageCount = await readNotePageCount(notePath);
   return {notePath, currentPage, pageCount};
 }
 

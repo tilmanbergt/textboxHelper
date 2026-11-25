@@ -1,0 +1,89 @@
+{
+  "about": "A close-up arc under one gap; two arcs across a line wrap; two arcs joining two paragraphs; a deep arc over two gaps is no close-up.",
+  "changes": [
+    {
+      "kind": "closeUp",
+      "summary": "Close up · a note|book h",
+      "detail": "Textbox 1 · line 1",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 6,
+      "words": [],
+      "strokes": [
+        5
+      ],
+      "closeUp": {
+        "gapStart": 6,
+        "gapEnd": 7
+      }
+    },
+    {
+      "kind": "closeUp",
+      "summary": "Close up · t that|wraps ",
+      "detail": "Textbox 2 · lines 1–2 (line wrap)",
+      "textbox": 2,
+      "line": 0,
+      "textStart": 19,
+      "words": [],
+      "strokes": [
+        6,
+        7
+      ],
+      "closeUp": {
+        "gapStart": 19,
+        "gapEnd": 20
+      }
+    },
+    {
+      "kind": "join",
+      "summary": "Join · \"…r paragraph ends\" + \"the lower one st…\"",
+      "detail": "Textboxes 3 + 4",
+      "textbox": 3,
+      "line": 0,
+      "textStart": 24,
+      "words": [],
+      "strokes": [
+        8,
+        9
+      ],
+      "join": {
+        "below": 4
+      }
+    }
+  ],
+  "toDecide": [
+    {
+      "kind": "unclear",
+      "summary": "Strike",
+      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
+      "strokes": [
+        10
+      ],
+      "words": "book here",
+      "readings": [
+        "strike"
+      ]
+    }
+  ],
+  "after": [
+    {
+      "textbox": 1,
+      "text": "a notebook here"
+    },
+    {
+      "textbox": 2,
+      "text": "some long text thatwraps over here"
+    },
+    {
+      "textbox": 3,
+      "text": "the upper paragraph ends the lower one starts"
+    },
+    {
+      "textbox": 4,
+      "text": ""
+    }
+  ],
+  "newParagraphs": [],
+  "fontWarning": null,
+  "canApply": true
+}

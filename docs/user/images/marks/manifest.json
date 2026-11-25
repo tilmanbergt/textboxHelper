@@ -43,15 +43,15 @@
       "bytes": 2049
     }
   },
-  "replace-letters": {
-    "hash": "1a24849421e9552a",
+  "delete-letters": {
+    "hash": "1d6b1c80b280a81b",
     "width": 960,
-    "height": 425,
-    "bytes": 10004,
+    "height": 336,
+    "bytes": 5698,
     "icon": {
-      "width": 205,
+      "width": 217,
       "height": 64,
-      "bytes": 1564
+      "bytes": 1586
     }
   },
   "slash": {

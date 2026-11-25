@@ -1,65 +1,25 @@
-import type {Rect} from './textboxModel';
-import {
-  textLeftX,
-  type NativeDetailedMeasurement,
-  type NativeDetailedWord,
-  type TextboxMeasurementCalibration,
-} from './textboxLayout';
-
 /**
- * Shared text hit-testing helpers for Supernote plugins.
- *
- * These helpers convert native text layout metrics into page-space word boxes and
- * provide coarse coordinate-to-word / coordinate-to-character lookup utilities.
+ * Shared text hit-testing helpers: which measured words, in page pixels, lie in a mark's line band,
+ * on which lines, and coarse coordinate-to-word / coordinate-to-character lookups.
  */
 
-export type PageWordCandidate = NativeDetailedWord & {
+/** A measured word's box on the page. */
+export type PageWord = {
+  start: number;
+  end: number;
+  lineIndex: number;
   absoluteLeft: number;
   absoluteRight: number;
   absoluteTop: number;
   absoluteBottom: number;
   absoluteCenterX: number;
   absoluteCenterY: number;
-  overlapRatio: number;
-  projectedY: number;
 };
 
-export function buildPageWordCandidates(
-  measurement: NativeDetailedMeasurement,
-  textRect: Rect,
-  calibration: TextboxMeasurementCalibration,
-  markerRect: Rect,
-  projectY: (absoluteCenterX: number) => number,
-): PageWordCandidate[] {
-  return measurement.words.map(word => {
-    const absoluteLeft = textLeftX(textRect.left, calibration) + word.left;
-    const absoluteRight = textLeftX(textRect.left, calibration) + word.right;
-    const absoluteTop = textRect.top + calibration.offsetY + word.top;
-    const absoluteBottom = textRect.top + calibration.offsetY + word.bottom;
-    const absoluteCenterX = textLeftX(textRect.left, calibration) + word.centerX;
-    const absoluteCenterY = textRect.top + calibration.offsetY + word.centerY;
-    const overlapLeft = Math.max(absoluteLeft, markerRect.left);
-    const overlapRight = Math.min(absoluteRight, markerRect.right);
-    const overlapWidth = Math.max(0, overlapRight - overlapLeft);
-    const overlapRatio = word.width > 0 ? overlapWidth / word.width : 0;
-
-    return {
-      ...word,
-      absoluteLeft,
-      absoluteRight,
-      absoluteTop,
-      absoluteBottom,
-      absoluteCenterX,
-      absoluteCenterY,
-      overlapRatio,
-      projectedY: projectY(absoluteCenterX),
-    };
-  });
-}
-
-export function findLineBandWordCandidates(
-  wordCandidates: PageWordCandidate[],
-): PageWordCandidate[] {
+/** The words whose box (without its top and bottom fifth) holds the mark's height `projectedY`. */
+export function findLineBandWordCandidates<T extends {absoluteTop: number; absoluteBottom: number; projectedY: number}>(
+  wordCandidates: T[],
+): T[] {
   return wordCandidates.filter(candidate => {
     const wordHeight = Math.max(1, candidate.absoluteBottom - candidate.absoluteTop);
     const bandTop = candidate.absoluteTop + wordHeight * 0.2;
@@ -68,17 +28,12 @@ export function findLineBandWordCandidates(
   });
 }
 
-export function findCandidateLineIndexes(
-  wordCandidates: PageWordCandidate[],
-): number[] {
+/** The lines the words are on, in the order first met. */
+export function findCandidateLineIndexes(wordCandidates: Array<{lineIndex: number}>): number[] {
   return [...new Set(wordCandidates.map(candidate => candidate.lineIndex))];
 }
 
-export function findWordAtPoint(
-  wordCandidates: PageWordCandidate[],
-  x: number,
-  y: number,
-): PageWordCandidate | null {
+export function findWordAtPoint<T extends PageWord>(wordCandidates: T[], x: number, y: number): T | null {
   const containingWord = wordCandidates.find(
     word =>
       x >= word.absoluteLeft &&
@@ -107,7 +62,7 @@ export function findWordAtPoint(
  * This is intentionally simple but good enough for plugin-side coordinate mapping.
  */
 export function findCharacterOffsetAtPoint(
-  wordCandidates: PageWordCandidate[],
+  wordCandidates: PageWord[],
   x: number,
   y: number,
 ): number | null {
