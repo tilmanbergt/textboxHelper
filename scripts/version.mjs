@@ -1,0 +1,242 @@
+#!/usr/bin/env node
+// Version, build label and build info for the app, and small helpers for scripts/release.ps1.
+// Design: docs/dev/history/technical-design-release-scaffolding.md §3
+//
+//   node scripts/version.mjs                       write src/generated/buildInfo.ts (versionCode 0; npm run gen, postinstall)
+//   node scripts/version.mjs --build [--stage alpha|beta]
+//                                                  + compute versionCode, write build/build-info.json (buildPlugin.ps1)
+//   node scripts/version.mjs --patch-config <PluginConfig.json copy>   versionName + versionCode into the packaged copy
+//   node scripts/version.mjs --set-next <x.y.z>    package.json nextVersion (the release being worked on)
+//   node scripts/version.mjs --target-version      prints nextVersion if it is above version, else nothing
+//   node scripts/version.mjs --next-version <patch|minor|major>       prints the bumped version
+//   node scripts/version.mjs --check-release <x.y.z>                  exit 1 + message if not releasable
+//   node scripts/version.mjs --set-version <x.y.z> package.json, package-lock.json and PluginConfig.json versionName
+//   node scripts/version.mjs --stamp-changelog <x.y.z> <YYYY-MM-DD>
+//   node scripts/version.mjs --release-notes <x.y.z> <outfile>
+
+import {execFileSync} from 'node:child_process';
+import {existsSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {dirname, join, resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {
+  BUILD_STAGES,
+  bumpVersion,
+  buildLabel,
+  compareVersions,
+  computeVersionCode,
+  isSemver,
+  packagedVersionName,
+  parseChangelog,
+  releaseNotes,
+  renderBuildInfoTs,
+  setJsonStringField,
+  setLockfileVersion,
+  stampChangelog,
+  targetVersion,
+  unreleasedIsEmpty,
+} from './lib/versioning.mjs';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const P = {
+  pkg: join(ROOT, 'package.json'),
+  lock: join(ROOT, 'package-lock.json'),
+  pluginConfig: join(ROOT, 'PluginConfig.json'),
+  changelog: join(ROOT, 'CHANGELOG.md'),
+  generatedDir: join(ROOT, 'src', 'generated'),
+  buildDir: join(ROOT, 'build'),
+  buildInfoJson: join(ROOT, 'build', 'build-info.json'),
+  lastVersionCode: join(ROOT, 'build', 'last-version-code'),
+};
+
+function read(path) {
+  // Strip a UTF-8 BOM (PowerShell 5.1's Set-Content -Encoding UTF8 writes one).
+  return readFileSync(path, 'utf8').replace(/^﻿/, '');
+}
+
+/** Writes only when the content changed (keeps Metro and tsc from seeing needless changes). */
+function writeIfChanged(path, content) {
+  if (existsSync(path) && read(path) === content) return false;
+  mkdirSync(dirname(path), {recursive: true});
+  writeFileSync(path, content, 'utf8');
+  return true;
+}
+
+function git(args) {
+  try {
+    return execFileSync('git', args, {cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']}).trim();
+  } catch {
+    return null;
+  }
+}
+
+function packageVersion() {
+  const v = JSON.parse(read(P.pkg)).version;
+  if (!isSemver(v)) throw new Error(`package.json version "${v}" is not x.y.z`);
+  return v;
+}
+
+function packageNextVersion() {
+  const v = JSON.parse(read(P.pkg)).nextVersion;
+  return typeof v === 'string' && isSemver(v) ? v : null;
+}
+
+function snPluginLibVersion() {
+  try {
+    return JSON.parse(read(join(ROOT, 'node_modules', 'sn-plugin-lib', 'package.json'))).version || 'unknown';
+  } catch {
+    const spec = JSON.parse(read(P.pkg)).dependencies?.['sn-plugin-lib'];
+    return spec ? String(spec) : 'unknown';
+  }
+}
+
+function gitInfo(version) {
+  const commit = git(['rev-parse', '--short=7', 'HEAD']) || 'unknown';
+  // Files the build itself writes are ignored by git, so they never make a build dirty.
+  const status = git(['status', '--porcelain']);
+  const dirty = status === null ? false : status.length > 0;
+  const tags = (git(['tag', '--points-at', 'HEAD']) || '').split(/\s+/).filter(Boolean);
+  const tagged = tags.includes(`v${version}`);
+  return {commit, dirty, release: tagged && !dirty && commit !== 'unknown'};
+}
+
+function generate({build, stage = 'alpha'}) {
+  if (!BUILD_STAGES.includes(stage)) throw new Error(`unknown stage "${stage}" (${BUILD_STAGES.join(', ')})`);
+  const version = packageVersion();
+  const nextVersion = packageNextVersion();
+  const {commit, dirty, release} = gitInfo(version);
+  const target = release ? null : targetVersion(version, nextVersion);
+  let versionCode = 0;
+  if (build) {
+    const last = existsSync(P.lastVersionCode) ? parseInt(read(P.lastVersionCode).trim(), 10) : 0;
+    versionCode = computeVersionCode(Date.now(), last);
+  }
+  const info = {
+    version,
+    versionCode,
+    label: buildLabel({version, commit, dirty, release, nextVersion, stage}),
+    versionName: packagedVersionName({version, release, nextVersion, stage}),
+    nextVersion: target,
+    stage: target ? stage : null,
+    commit,
+    dirty,
+    release,
+    builtAt: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    snPluginLib: snPluginLibVersion(),
+  };
+
+  // builtAt changes on every run: outside a build, buildInfo.ts is only rewritten when anything
+  // else differs, so `npm run gen` doesn't touch it needlessly.
+  const buildInfoPath = join(P.generatedDir, 'buildInfo.ts');
+  const prev = existsSync(buildInfoPath) ? read(buildInfoPath) : '';
+  const withoutDate = s => s.replace(/builtAt: .*/, '');
+  const next = renderBuildInfoTs(info);
+  if (build || withoutDate(prev) !== withoutDate(next)) writeIfChanged(buildInfoPath, next);
+
+  if (build) {
+    mkdirSync(P.buildDir, {recursive: true});
+    writeFileSync(P.lastVersionCode, String(versionCode), 'utf8');
+    writeFileSync(P.buildInfoJson, JSON.stringify(info, null, 2) + '\n', 'utf8');
+    const cfgVersion = /"versionName"\s*:\s*"([^"]*)"/.exec(read(P.pluginConfig))?.[1];
+    if (cfgVersion !== version) {
+      console.warn(
+        `WARNING: package.json version ${version} differs from PluginConfig.json versionName ${cfgVersion}` +
+          ` (the package gets ${info.versionName}).`,
+      );
+    }
+    console.log(`Manuscript ${info.label}  build ${versionCode}${dirty ? '  (uncommitted changes!)' : ''}`);
+    if (!release && !target) {
+      console.warn(`No next version set - this build is labelled after ${version}. Set it with: npm run next-version -- <x.y.z>`);
+    }
+  } else {
+    console.log(`src/generated/buildInfo.ts: Manuscript ${info.label}`);
+  }
+}
+
+function patchConfig(path) {
+  if (!existsSync(P.buildInfoJson)) throw new Error('build/build-info.json missing - run with --build first');
+  const info = JSON.parse(read(P.buildInfoJson));
+  let text = read(path);
+  text = setJsonStringField(text, 'versionName', info.versionName || info.version);
+  text = setJsonStringField(text, 'versionCode', String(info.versionCode));
+  writeFileSync(path, text, 'utf8');
+  console.log(`Patched ${path}: versionName ${info.versionName || info.version}, versionCode ${info.versionCode}`);
+}
+
+function checkRelease(version) {
+  const problems = [];
+  if (!isSemver(version)) problems.push(`"${version}" is not x.y.z`);
+  const changelog = read(P.changelog);
+  if (unreleasedIsEmpty(changelog)) problems.push('CHANGELOG.md: the [Unreleased] section is empty');
+  if (parseChangelog(changelog).some(r => r.version === version)) {
+    problems.push(`CHANGELOG.md already has a section for ${version}`);
+  }
+  if (problems.length) {
+    problems.forEach(p => console.error(p));
+    process.exit(1);
+  }
+}
+
+function setVersion(version) {
+  if (!isSemver(version)) throw new Error(`"${version}" is not x.y.z`);
+  writeFileSync(P.pkg, setJsonStringField(read(P.pkg), 'version', version), 'utf8');
+  writeFileSync(P.pluginConfig, setJsonStringField(read(P.pluginConfig), 'versionName', version), 'utf8');
+  // The lockfile carries the version too; left behind, the next npm install would change it.
+  if (existsSync(P.lock)) writeFileSync(P.lock, setLockfileVersion(read(P.lock), JSON.parse(read(P.pkg)).name, version), 'utf8');
+  console.log(`Version set to ${version} (package.json, package-lock.json, PluginConfig.json)`);
+}
+
+/** Sets package.json's nextVersion - the release the following builds are for. */
+function setNext(version) {
+  if (!isSemver(version)) throw new Error(`"${version}" is not x.y.z`);
+  const current = packageVersion();
+  if (compareVersions(version, current) <= 0) throw new Error(`next version ${version} must be above the current version ${current}`);
+  let text = read(P.pkg);
+  if (/"nextVersion"\s*:/.test(text)) text = setJsonStringField(text, 'nextVersion', version);
+  else text = text.replace(/("version"\s*:\s*"[^"]*",)/, `$1\n  "nextVersion": "${version}",`);
+  writeFileSync(P.pkg, text, 'utf8');
+  console.log(`Next version set to ${version}: builds are now labelled ${version}-alpha / ${version}-beta`);
+}
+
+function main(argv) {
+  const [cmd, a, b] = argv;
+  switch (cmd) {
+    case undefined:
+      return generate({build: false});
+    case '--build':
+      return generate({build: true, stage: a === '--stage' ? b : 'alpha'});
+    case '--patch-config':
+      if (!a) throw new Error('--patch-config needs a path');
+      return patchConfig(resolve(a));
+    case '--set-next':
+      return setNext(a);
+    case '--target-version': {
+      const target = targetVersion(packageVersion(), packageNextVersion());
+      if (target) console.log(target);
+      return;
+    }
+    case '--next-version':
+      return console.log(bumpVersion(packageVersion(), a));
+    case '--check-release':
+      return checkRelease(a);
+    case '--set-version':
+      return setVersion(a);
+    case '--stamp-changelog':
+      if (!a || !b) throw new Error('--stamp-changelog needs <version> <YYYY-MM-DD>');
+      writeFileSync(P.changelog, stampChangelog(read(P.changelog), a, b), 'utf8');
+      return console.log(`CHANGELOG.md: [Unreleased] -> [${a}] - ${b}`);
+    case '--release-notes':
+      if (!a || !b) throw new Error('--release-notes needs <version> <outfile>');
+      mkdirSync(dirname(resolve(b)), {recursive: true});
+      writeFileSync(resolve(b), releaseNotes(read(P.changelog), a) + '\n', 'utf8');
+      return;
+    default:
+      throw new Error(`unknown option ${cmd}`);
+  }
+}
+
+try {
+  main(process.argv.slice(2));
+} catch (e) {
+  console.error(`version: ${e.message}`);
+  process.exit(1);
+}

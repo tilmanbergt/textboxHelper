@@ -1,4 +1,17 @@
 # PowerShell Script: Analyze Android Dependencies and Generate PluginConfig.json
+#
+# Manuscript usage (docs/dev/RELEASING.md section 4):
+#   ./buildPlugin.ps1                 test build, labelled for package.json's nextVersion, e.g. 0.3.0-alpha+a1b2c3d
+#   ./buildPlugin.ps1 -Stage beta     same, labelled 0.3.0-beta+a1b2c3d (release is feature-complete, final device test)
+# Output: build/outputs/manuscript.snplg and a copy named after the label, manuscript-<label>.snplg.
+param(
+    [ValidateSet('alpha', 'beta')]
+    [string]$Stage = 'alpha'
+)
+
+# The .snplg is named after the product, not after package.json or the folder
+# (docs/dev/history/technical-design-release-scaffolding.md 3.3).
+$OutputName = 'manuscript'
 
 # Set color output function
 function Write-ColorOutput {
@@ -751,13 +764,15 @@ function Build-AndroidApk {
                 }
             }
             
-            # Execute gradle build directly so control reliably returns to this script
-            & $gradlewPath buildCustomApkDebug
+            # Execute gradle build directly so control reliably returns to this script.
+            # | Out-Host: the console output must not become part of this function's return
+            # value (the caller tests it as $true/$false; an array of lines is always true).
+            & $gradlewPath buildCustomApkDebug | Out-Host
             $buildResult = $LASTEXITCODE
         }
         elseif (Get-Command 'gradle' -ErrorAction SilentlyContinue) {
             Write-ColorOutput 'Using gradle to execute buildCustomApkDebug task...' 'Green'
-            & gradle buildCustomApkDebug
+            & gradle buildCustomApkDebug | Out-Host
             $buildResult = $LASTEXITCODE
         }
         else {
@@ -1161,6 +1176,15 @@ function Main {
         Write-ColorOutput "Created build/generated directory: $buildGeneratedDir" 'Green'
     }
     
+    # Step 1b: stamp version, build number, stage and git commit into src/generated/ BEFORE
+    # bundling, so the JS bundle carries them (technical-design-release-scaffolding.md 3.2).
+    Write-ColorOutput '=== Step 1b: Stamp build info ===' 'Blue'
+    & node (Join-Path $projectRoot 'scripts\version.mjs') --build --stage $Stage
+    if ($LASTEXITCODE -ne 0) {
+        Write-ColorOutput 'Stamping build info failed (is Node installed?), script terminated' 'Red'
+        return
+    }
+
     # Step 2: Run React Native bundling command
     Write-ColorOutput '=== Step 2: Execute React Native bundling ===' 'Blue'
     $bundleSuccess = Build-ReactNativeBundle -ProjectRoot $projectRoot -ProjectName $projectName -OutputDir $buildGeneratedDir
@@ -1194,6 +1218,14 @@ function Main {
     
     # Copy icon file and update iconPath field
     Copy-IconAndUpdatePath -ProjectRoot $projectRoot -BuildGeneratedDir $buildGeneratedDir -BuildGeneratedConfigFile $buildGeneratedConfigFile
+
+    # Step 6b: versionName and versionCode from build/build-info.json into the packaged copy only;
+    # the root PluginConfig.json keeps the released version.
+    & node (Join-Path $projectRoot 'scripts\version.mjs') --patch-config $buildGeneratedConfigFile
+    if ($LASTEXITCODE -ne 0) {
+        Write-ColorOutput 'Writing version into build/generated/PluginConfig.json failed, script terminated' 'Red'
+        return
+    }
     
     # Step 7: Parse manually added packages from Application.getPackages
     Write-ColorOutput '=== Step 7: Parse Application.getPackages (manually added packages) ===' 'Blue'
@@ -1241,7 +1273,7 @@ function Main {
         Write-ColorOutput 'Build conditions not met; skipping steps 10–13 and proceeding to packaging' 'Yellow'
     }
 
-    # Step 14: 打包输出 .snplg
+    # Step 14: package the output as .snplg
     Write-ColorOutput 'Step 14: Package build/generated directory and generate .snplg file...' 'Green'
     
     # Create build/outputs directory
@@ -1275,7 +1307,7 @@ function Main {
     }
     
     # Rename to .snplg file
-    $outputPackageName = Split-Path -Path $projectRoot -Leaf
+    $outputPackageName = $OutputName
     $snplgFileName = "$outputPackageName.snplg"
     $finalSnplgPath = Join-Path $buildOutputsDir $snplgFileName
     $null = Rename-ToSnplgFile -ZipFilePath $tempZipPath -ProjectName $outputPackageName -OutputDir $buildOutputsDir
@@ -1286,6 +1318,19 @@ function Main {
         $fileInfo = Get-Item -LiteralPath $finalSnplgPath
         $fileSizeMB = [math]::Round($fileInfo.Length / 1MB, 2)
         Write-ColorOutput "File size: $fileSizeMB MB" 'Blue'
+
+        # A copy named after the build label (manuscript-0.3.0.snplg for a release,
+        # manuscript-0.3.0-alpha+a1b2c3d.snplg otherwise), so earlier builds aren't overwritten.
+        try {
+            $buildInfo = Get-Content (Join-Path $projectRoot 'build\build-info.json') -Raw | ConvertFrom-Json
+            $labeledPath = Join-Path $buildOutputsDir "$OutputName-$($buildInfo.label).snplg"
+            Copy-Item -LiteralPath $finalSnplgPath -Destination $labeledPath -Force
+            Write-ColorOutput "Also saved as: $labeledPath" 'Green'
+            Write-ColorOutput "Manuscript $($buildInfo.label)  build $($buildInfo.versionCode)" 'Green'
+        }
+        catch {
+            Write-ColorOutput "Could not create labeled copy: $_" 'Yellow'
+        }
     } else {
         Write-ColorOutput 'Failed to rename to .snplg file' 'Red'
     }

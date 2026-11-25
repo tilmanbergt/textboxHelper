@@ -9,15 +9,22 @@
 Requirements: Node 18 or newer, Java 17 and the Android SDK (Android Studio), Windows PowerShell.
 
 ```powershell
-npm ci                 # install exactly what package-lock.json says (also bundles the help pictures)
-npm run check          # help pictures, type check, ESLint, Jest
-./buildPlugin.ps1      # build the plugin
+npm ci                     # install exactly what package-lock.json says (also writes src/generated/ and the help pictures)
+npm run check              # build info, help pictures, script tests, type check, ESLint, Jest
+./buildPlugin.ps1          # build the plugin, labelled for package.json's nextVersion (0.3.0-alpha+a1b2c3d)
+./buildPlugin.ps1 -Stage beta   # the same, labelled 0.3.0-beta+a1b2c3d
 ```
 
-The build bundles the JavaScript, compiles the native module with Gradle and writes
-`build\outputs\textboxHelper.snplg`. `PluginConfig.json` in the repository root is used as it
-is (version, pluginID, permissions). Install the `.snplg` on the Supernote by copying it to
-`MyStyle/` and installing it in Settings → Apps → Plugins, over the existing plugin.
+The build stamps the version into `src/generated/buildInfo.ts` and `build/build-info.json`
+(`scripts/version.mjs`), bundles the JavaScript, compiles the native module with Gradle and writes
+`build\outputs\manuscript.snplg` plus a copy named after the label,
+`manuscript-0.3.0-alpha+a1b2c3d.snplg`. `PluginConfig.json` in the repository root keeps the
+released version, pluginID and permissions; the packaged copy gets the label's versionName
+(`0.3.0-alpha`) and a new versionCode. Labels and releases: `RELEASING.md`. Install the `.snplg`
+on the Supernote by copying it to `MyStyle/` and installing it in Settings → Apps → Plugins, over
+the existing plugin.
+
+`buildPlugin.sh` (Linux/macOS) builds the same package without the label.
 
 npm is the package manager; there is no `yarn.lock`.
 
@@ -25,9 +32,11 @@ npm is the package manager; there is no `yarn.lock`.
 
 `npm run check` runs, in this order, and stops at the first failure:
 
-1. `node scripts/gen-mark-images.mjs` - bundles the help pictures into `src/ui/generated/`;
+1. `npm run gen` - writes `src/generated/buildInfo.ts` (`scripts/version.mjs`) and bundles the
+   help pictures into `src/ui/generated/` (`scripts/gen-mark-images.mjs`);
 2. `node scripts/marks.mjs --check` - every help picture is drawn from the current spec;
-3. `node scripts/test-marks.mjs` - tests of the picture scripts;
+3. `npm run test:scripts` - tests of the scripts (`test-marks.mjs`, `test-versioning.mjs`,
+   `test-ci-build.mjs`, `test-test-notes.mjs`);
 4. `tsc --noEmit` - zero errors;
 5. `eslint .` - zero errors and zero warnings;
 6. `jest --passWithNoTests` - every test in `__tests__/` passes.
@@ -63,7 +72,9 @@ To change a picture: edit the spec (or `scripts/lib/markDrawing.mjs` for every p
 | `src/screens/` | The views and dialogs of the plugin window. |
 | `src/ui/` | Shared building blocks of the screens: `ScreenFrame`, buttons, tabs, paging (`PagedSection`, `PagedText`), the help (`HelpOverlay`, `MarkHelp`), `theme.ts`; `generated/` holds the bundled help pictures (not committed). |
 | `__tests__/domain/`, `__tests__/ui/` | Jest tests, one file per domain module or group; `ui/` for the help screen and its pictures. |
-| `scripts/` | `marks.mjs`, `gen-mark-images.mjs`, `test-marks.mjs` and `lib/`: drawing, bundling and checking the help pictures. |
+| `scripts/` | `marks.mjs`, `gen-mark-images.mjs`, `test-marks.mjs`: drawing, bundling and checking the help pictures. `version.mjs` and `lib/versioning.mjs` (tested by `test-versioning.mjs`): build labels, build info and the release helpers. `ci-build.mjs`, `lib/ciBuild.mjs` (`test-ci-build.mjs`): steps of the GitHub builds. `test-notes.mjs`, `lib/testNotes.mjs` (`test-test-notes.mjs`): TESTING.md. `release.ps1`: the release (`RELEASING.md` §5). |
+| `.github/workflows/` | `check.yml`: checks and a test build on every push. `beta.yml`: a beta pre-release by button. |
+| `src/generated/` | `buildInfo.ts`: version, label and commit of the build (written by `scripts/version.mjs`, not committed). |
 | `docs/user/marks/`, `docs/user/images/marks/` | The help pictures' spec and the drawn PNGs. |
 | `android/.../com/textboxhelper/TextboxMetricsModule.kt` | Native module: Android `StaticLayout` text measurement for textbox sizes and hit testing. |
 
@@ -76,11 +87,13 @@ no history and no open work:
 - `design-overview.md`: how the plugin is built, and why.
 - `supernote-host-facts.md`: how the Supernote and its plugin host behave where the SDK
   documentation is silent or unclear.
-- `RELEASING.md`: git, commits, builds and releases.
+- `RELEASING.md`: git, commits, builds, betas and releases.
+- `GITHUB-GUIDE.md`: which GitHub button or workflow to use when.
 - this `README.md`.
 
 In the repository root: `CLAUDE.md` (short instructions for Claude), `AGENTS.md` (code review
-guidelines), `CONTRIBUTING.md`, `CHANGELOG.md`.
+guidelines), `CONTRIBUTING.md`, `CHANGELOG.md`, `PRIVACY.md`, `SECURITY.md`; `.github/` holds the
+workflows, the issue forms and the pull request template.
 
 **Historical documents** live in `docs/dev/history/`: technical designs (`technical-design-*.md`,
 requirements, design, as built) and device test records. They are written once and not updated

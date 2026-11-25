@@ -14,7 +14,7 @@ const RN_AND_SDK = ['react', 'react-native', 'react-native-*', '@react-native*/*
 module.exports = {
   root: true,
   extends: '@react-native',
-  ignorePatterns: ['build/', 'src/ui/generated/'],
+  ignorePatterns: ['build/', 'src/ui/generated/', 'src/generated/'],
   rules: {
     // `void promise` marks a deliberate fire-and-forget call (same rule as Kept GTD).
     'no-void': ['warn', {allowAsStatement: true}],
