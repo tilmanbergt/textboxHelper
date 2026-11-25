@@ -35,5 +35,8 @@ describe('errorRing', () => {
     expect(entry.module).toBe('screen');
     expect(entry.message).toBe('TypeError: undefined is not a function');
     expect(entry.stack).toContain('in OutlineTab');
+    const longStack = new Error('x');
+    longStack.stack = 'at f\n'.repeat(1000);
+    expect(errorEntryFromCrash(longStack, 'in ReviewTab', AT).stack!.startsWith('in ReviewTab')).toBe(true);
   });
 });

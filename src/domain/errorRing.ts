@@ -58,7 +58,8 @@ export function errorEntryFromLog(level: ErrorEntry['level'], args: unknown[], a
 
 /** An error caught by a screen's error boundary. */
 export function errorEntryFromCrash(error: unknown, componentStack: string | null | undefined, at: string): ErrorEntry {
-  const stack = [error instanceof Error ? error.stack : '', componentStack ?? ''].filter(Boolean).join('\n');
+  // The component stack first: it names the screen, and survives when a long JS stack is cut.
+  const stack = [componentStack?.trim() ?? '', error instanceof Error ? error.stack : ''].filter(Boolean).join('\n');
   return {
     at,
     level: 'error',
