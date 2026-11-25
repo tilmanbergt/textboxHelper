@@ -21,7 +21,6 @@ import {
   setPlaceHere,
   type PenEditStrokeData,
 } from '../domain/penEditModel';
-import {locateCaret, type CaretInsertMode, type CaretTarget, type CaretTextbox} from '../domain/penEditCaret';
 import {
   boundsOfPoints,
   isPenEditDecoration,
@@ -30,8 +29,9 @@ import {
 import {isNoShift, type EdgeShift} from '../domain/edgeShift';
 import {normalizeRecognizedText} from '../domain/penEditText';
 import {DEFAULT_FONT_SIZE, type Rect, type TextboxData, type TextElementData} from '../domain/textboxModel';
-import {locateHere, type HereTextbox} from '../domain/insertHere';
-import {NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
+import {fontLockedReason, NOTE_SYSTEM_FONT_PATH} from '../domain/fontPaths';
+import {locateOnPage} from '../domain/marks/pass2';
+import type {TextboxView} from '../domain/marks/textboxView';
 import {
   changePenEditIndex,
   penEditPictureUri,
@@ -41,6 +41,8 @@ import {
 import {recognizeStrokes} from '../supernote/strokeRecognition';
 import type {MeasuredTextbox, TextboxMeasurer} from './markerMeasure';
 import type {CaretDirection} from '../domain/marks/shapes/caret';
+import type {CaretInsertMode, CaretTarget} from '../domain/marks/place/point';
+import {locateHere, type HereTextbox} from '../domain/marks/place/here';
 
 /**
  * The pen edits' side of the Manuscript review (technical-design-pen-edits.md §3.6–§3.9):
@@ -557,9 +559,9 @@ async function placeHere<T extends TextElementData>(
 }
 
 /**
- * Where a mark points on the page: the textboxes in its column near its tip are measured (once per
- * review, by `measurer`) and the mark located among them (`locateCaret`). A place inside a
- * textbox whose font can't be read is unclear: its words were measured in the wrong font
+ * Where a caret points on the page (pass 2, `locateOnPage`): the textboxes in its column near its
+ * tip are measured (once per review, by `measurer`) and the tip located among them. A place inside
+ * a textbox whose font can't be read is unclear: its words were measured in the wrong font
  * (technical-design-swap-space-marks.md §2).
  */
 export async function locateMarkOnPage<T extends TextElementData>(
@@ -568,35 +570,50 @@ export async function locateMarkOnPage<T extends TextElementData>(
   pageTextboxes: T[],
   measurer: TextboxMeasurer,
 ): Promise<{near: T[]; target: CaretTarget | null}> {
-  const near = pageTextboxes.filter(textbox => {
-    const rect = textbox.textBox.textRect;
-    return (
-      tip.x >= rect.left - 120 &&
-      tip.x <= rect.right + 120 &&
-      tip.y >= rect.top - 400 &&
-      tip.y <= rect.bottom + 400
-    );
-  });
-  const boxes: CaretTextbox[] = [];
-  const measuredBy = new Map<string, {textbox: T; measured: MeasuredTextbox}>();
-  for (const textbox of near) {
+  const views: TextboxView[] = pageTextboxes.map(textbox => ({
+    uuid: textbox.uuid,
+    numInPage: textbox.numInPage,
+    rect: {...textbox.textBox.textRect},
+    text: textbox.textBox.textContentFull || '',
+    measured: false,
+    layout: null,
+    fontReadable: true,
+  }));
+  const measuredBy = new Map<string, MeasuredTextbox>();
+  // The first run says which textboxes are near the tip; they are measured for the second.
+  const wanted = new Set<string>();
+  locateOnPage(tip, direction, views, view => wanted.add(view.uuid));
+  for (const textbox of pageTextboxes.filter(item => wanted.has(item.uuid))) {
     const measured = await measurer.measure(textbox);
     if (measured) {
-      measuredBy.set(textbox.uuid, {textbox, measured});
-      boxes.push(measured.box);
+      measuredBy.set(textbox.uuid, measured);
     }
   }
-  const target = locateCaret(tip, direction, boxes);
-  if (target && (target.kind === 'text' || target.kind === 'split')) {
-    const hit = measuredBy.get(target.uuid);
-    if (hit && !hit.measured.fontReadable) {
-      return {
-        near,
-        target: {kind: 'unclear', reason: measurer.locked(hit.textbox, hit.measured)},
-      };
+  const located = locateOnPage(
+    tip,
+    direction,
+    views.map(view => {
+      const measured = measuredBy.get(view.uuid);
+      return measured
+        ? {
+            ...view,
+            measured: true,
+            layout: measured.box,
+            fontReadable: measured.fontReadable,
+            ...(measured.fontReadable ? {} : {lockedReason: fontLockedReason(measured.fontName)}),
+          }
+        : {...view, measured: wanted.has(view.uuid)};
+    }),
+  );
+  const near = pageTextboxes.filter(textbox => located.near.some(view => view.uuid === textbox.uuid));
+  if (located.locked) {
+    const textbox = pageTextboxes.find(item => item.uuid === located.locked?.uuid);
+    const measured = located.locked ? measuredBy.get(located.locked.uuid) : undefined;
+    if (textbox && measured) {
+      measurer.locked(textbox, measured);
     }
   }
-  return {near, target};
+  return {near, target: located.target};
 }
 
 /** Recognizes one pen edit from its stored strokes and stores the result. Never throws. */

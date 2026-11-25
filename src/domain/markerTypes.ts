@@ -1,13 +1,12 @@
-import type {PageWordCandidate} from './hitTesting';
 import type {TextboxMeasurementCalibration} from './textboxLayout';
 import type {TextSegment} from './textPages';
-import type {CaretInsertMode} from './penEditCaret';
 import type {EdgeShift} from './edgeShift';
 import type {RecognitionStatus} from './penEditModel';
 import type {PenEditKind} from './penEditTags';
-import type {SwapZones} from './swapMark';
-import type {PageElementData, Rect, TextElementData, TextboxData} from './textboxModel';
+import type {Rect, TextboxData} from './textboxModel';
 import type {PunctuationChar} from './marks/shapes/punct';
+import type {CaretInsertMode} from './marks/place/point';
+import type {SwapZones} from './marks/place/swap';
 
 /**
  * Types of the edit-marker recognition: what the preview shows, the plan that is applied, and the
@@ -307,33 +306,6 @@ export type EditMarkerApplyPlan = {
   insertions: InsertionPlan[];
 };
 
-/**
- * Candidate recognized from a horizontal delete-style marker.
- *
- * These candidates are still pre-apply objects: replace detection, range conflict checks,
- * and final mutation planning all happen after this stage.
- */
-export type MarkerDeleteCandidate<
-  Marker extends PageElementData = PageElementData,
-  Textbox extends TextElementData = TextElementData,
-> = {
-  marker: Marker;
-  markerUuid: string;
-  markerNumInPage: number;
-  markerSortTop: number;
-  markerSortLeft: number;
-  strokeStats: StrokeStats;
-  targetTextbox: Textbox;
-  lineIndex: number;
-  lineRect: Rect;
-  words: WordCandidate[];
-};
-
-export type MarkerStrokeAnalysis<Marker extends PageElementData = PageElementData> = {
-  marker: Marker;
-  strokeStats: StrokeStats;
-};
-
 export type TextMutationRange = {
   kind: EditMarkerOperationKind;
   start: number;
@@ -347,7 +319,5 @@ export type TextMutationRange = {
    */
   joins?: boolean;
 };
-
-export type WordCandidate = PageWordCandidate;
 
 export type EditMarkerCalibration = TextboxMeasurementCalibration;

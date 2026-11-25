@@ -1,6 +1,6 @@
-import type {CaretTextbox} from './penEditCaret';
-import {characterAt} from './exactBounds';
-import type {SlashShape} from './marks/shapes/slash';
+import type {CaretTextbox} from '../textboxView';
+import {characterAt} from './exact';
+import type {SlashShape} from '../shapes/slash';
 
 /**
  * Where a slash through one letter acts (technical-design-mark-dialogue.md §7,

@@ -500,3 +500,19 @@ text tagged right after it gets "no mark found". Replace = a strike with a loop 
 slash (one letter). Entries stored earlier with verticals keep working in the review. The loop is
 found by one rule everywhere: by its rect, the one nearest the strike's end, wherever it was
 written. The help page "Change letters" becomes "Delete letters".
+
+### 13.2 Notes from S1 and S2 (for the "As built" section)
+
+- `Reading` carries `roles` (mark, modifier, number, content per stroke) and `shape` (the caret,
+  slash or arc it was read from), which pass 2 and `storedMarkOf` need. Kind `strikeVerticals`
+  replaces `replaceVerticals` (verticals are exact delete only, §13.1 Q2).
+- Pass 1's family readers (`readParagraphMark`, `findCarets`, `readAtCaret`, `readArc`,
+  `readSlash`, `readStrike`) are what `resolvePage` calls, family by family on the strokes still
+  free; `readMarks` is the same order as if every reading placed (tests, sameJudge).
+- `resolvePage` replaces `resolveGroup` (§13.1 Q3). Its `PageMark`s carry what the drafts need
+  (words, zones, the joined textbox); `drafts.ts` builds the review's rows from them. `Place`
+  (`placeReading`) has the design's shape, with `numInPage` added.
+- Measuring is lazy and pure: a `TextboxView` has `measured`; pass 2 reports the textboxes it
+  needs in `wanted`, the orchestrator measures them and runs pass 2 again until it needs none.
+- Pass 2 keeps today's diagnostics as a `trace` the orchestrator logs.
+- One vertical rule everywhere: a vertical may be a straight line (as the review always allowed).

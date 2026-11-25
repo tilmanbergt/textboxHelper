@@ -1,5 +1,5 @@
-import type {CaretTextbox} from './penEditCaret';
-import type {ArcShape} from './marks/shapes/closeUp';
+import type {ArcShape} from '../shapes/closeUp';
+import type {CaretTextbox} from '../textboxView';
 
 /**
  * The close-up arc (technical-design-fine-marks.md §6, §7): a flat arc ‿ or ⁀ drawn under or over

@@ -1,7 +1,8 @@
-import {WORD_EDGE_SNAP_CHARS, type CaretTextbox} from './penEditCaret';
-import {charPositionInWord} from './textOffsets';
-import type {Rect} from './textboxModel';
-import type {Point} from './marks/markStroke';
+import {charPositionInWord} from '../../textOffsets';
+import type {Rect} from '../../textboxModel';
+import type {Point} from '../markStroke';
+import type {CaretTextbox} from '../textboxView';
+import {WORD_EDGE_SNAP_CHARS} from './point';
 
 /**
  * The swap mark (technical-design-swap-space-marks.md §5): two parts of the text side by side,

@@ -1,7 +1,7 @@
 import {buildDiffSegments} from './markerDiff';
 import type {ChangeHunk, RecognizedEditOperation, TextMutationRange} from './markerTypes';
-import type {SwapZones} from './swapMark';
 import type {TextSegment} from './textPages';
+import type {SwapZones} from './marks/place/swap';
 
 /**
  * The review's list entries (technical-design-manuscript.md §4.3): one hunk per change, with the

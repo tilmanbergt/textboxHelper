@@ -327,3 +327,26 @@ export function marks(...drawn: Drawn[]): Array<{id: string; numInPage: number; 
     straightLine: false,
   }));
 }
+
+/**
+ * A textbox as pass 2 sees it (`TextboxView`): measured with the builder's layout; `locked`: its
+ * font can't be read; `measured: false`: not measured yet (pass 2 asks for it).
+ */
+export function view(box: TextboxSpec, options: {locked?: boolean; measured?: boolean} = {}) {
+  const measured = options.measured ?? true;
+  return {
+    uuid: box.uuid,
+    numInPage: box.numInPage,
+    rect: {...box.rect},
+    text: box.text,
+    measured,
+    layout: measured ? box : null,
+    fontReadable: !options.locked,
+    ...(options.locked ? {lockedReason: 'The font locked.ttf can\'t be read by plugins.'} : {}),
+  };
+}
+
+/** The strokes of several builders as a page gives them to pass 2, in writing order. */
+export function page(...drawn: Drawn[]) {
+  return marks(...drawn).map(stroke => ({id: stroke.id, numInPage: stroke.numInPage, stroke}));
+}

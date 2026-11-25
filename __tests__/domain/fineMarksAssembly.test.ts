@@ -1,6 +1,6 @@
 import {assembleMarkerPreview} from '../../src/domain/markerAssembly';
 import type {MarkerPreviewBase, OperationDraft} from '../../src/domain/markerTypes';
-import {punctuationAtGap} from '../../src/domain/closeUpMark';
+import {punctuationAtGap} from '../../src/domain/marks/place/closeUp';
 
 const textboxOf = (text: string) => ({
   uuid: 'tb',

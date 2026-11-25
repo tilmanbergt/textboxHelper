@@ -1,23 +1,12 @@
 import {cloneRect} from './geometry';
 import type {
-  EditMarkerCalibration,
   EditMarkerHighlightRange,
   EditMarkerOperationKind,
   EditMarkerPreview,
-  IgnoredEditMarker,
-  StrokeStats,
   TextMutationPlan,
   TextMutationRange,
-  WordCandidate,
 } from './markerTypes';
-import {textLeftX, type NativeDetailedLine} from './textboxLayout';
-import {
-  ELEMENT_TYPE_GEO,
-  ELEMENT_TYPE_STROKE,
-  type PageElementData,
-  type Rect,
-  type TextElementData,
-} from './textboxModel';
+import type {PageElementData, Rect, TextElementData} from './textboxModel';
 
 /**
  * The text side of edit markers: applying deletions and replacements to a textbox's text, the
@@ -63,33 +52,6 @@ export function formatOperationSnippet(
   return `Delete "${shortened}"`;
 }
 
-export function buildOperationDetailWithReplacement(
-  targetTextbox: TextElementData,
-  lineIndex: number,
-  words: WordCandidate[],
-  replacementText?: string,
-): string {
-  const wordLabel = words.length === 1 ? 'word' : 'words';
-  const baseDetail = `Textbox ${targetTextbox.numInPage}, line ${lineIndex + 1} - ${words.length} ${wordLabel}`;
-  if (!replacementText) {
-    return baseDetail;
-  }
-
-  return `${baseDetail} - replacement "${shortenSnippet(replacementText.trim(), 32)}"`;
-}
-
-export function buildIgnoredMarker(
-  marker: PageElementData,
-  reason: string,
-): IgnoredEditMarker {
-  return {
-    markerUuid: marker.uuid,
-    markerNumInPage: marker.numInPage,
-    summary: `Ignored marker ${marker.numInPage}`,
-    reason,
-  };
-}
-
 export function buildTextboxLogSummary(textbox: TextElementData): Record<string, unknown> {
   return {
     uuid: textbox.uuid,
@@ -102,77 +64,6 @@ export function buildTextboxLogSummary(textbox: TextElementData): Record<string,
     fontPath: textbox.textBox.fontPath,
     textAlign: textbox.textBox.textAlign,
     textBold: textbox.textBox.textBold,
-  };
-}
-
-export function buildStrokeLogSummary(marker: PageElementData, strokeStats: StrokeStats): Record<string, unknown> {
-  return {
-    uuid: marker.uuid,
-    numInPage: marker.numInPage,
-    sourceType:
-      marker.type === ELEMENT_TYPE_STROKE
-        ? 'stroke'
-        : marker.type === ELEMENT_TYPE_GEO
-          ? 'geometry'
-          : `type-${marker.type}`,
-    geometryType: marker.geometry?.type || null,
-    layerNum: marker.layerNum,
-    rect: roundRect(strokeStats.rect),
-    center: {
-      x: roundNumber(strokeStats.center.x),
-      y: roundNumber(strokeStats.center.y),
-    },
-    width: roundNumber(strokeStats.width),
-    height: roundNumber(strokeStats.height),
-    straightness: roundNumber(strokeStats.straightness),
-    angleDeg: roundNumber(strokeStats.angleDeg),
-    firstPoint: {
-      x: roundNumber(strokeStats.firstPoint.x),
-      y: roundNumber(strokeStats.firstPoint.y),
-    },
-    lastPoint: {
-      x: roundNumber(strokeStats.lastPoint.x),
-      y: roundNumber(strokeStats.lastPoint.y),
-    },
-  };
-}
-
-export function buildLineLogSummary(
-  line: NativeDetailedLine,
-  textRect: Rect,
-  calibration: EditMarkerCalibration,
-): Record<string, unknown> {
-  return {
-    index: line.index,
-    start: line.start,
-    end: line.end,
-    left: roundNumber(textLeftX(textRect.left, calibration) + line.left),
-    right: roundNumber(textLeftX(textRect.left, calibration) + line.right),
-    top: roundNumber(textRect.top + calibration.offsetY + line.top),
-    bottom: roundNumber(textRect.top + calibration.offsetY + line.bottom),
-    width: roundNumber(line.width),
-    baseline: roundNumber(textRect.top + calibration.offsetY + line.baseline),
-  };
-}
-
-export function buildWordLogSummary(candidate: WordCandidate): Record<string, unknown> {
-  return {
-    text: candidate.text,
-    lineIndex: candidate.lineIndex,
-    start: candidate.start,
-    end: candidate.end,
-    rect: roundRect({
-      left: candidate.absoluteLeft,
-      top: candidate.absoluteTop,
-      right: candidate.absoluteRight,
-      bottom: candidate.absoluteBottom,
-    }),
-    center: {
-      x: roundNumber(candidate.absoluteCenterX),
-      y: roundNumber(candidate.absoluteCenterY),
-    },
-    overlapRatio: roundNumber(candidate.overlapRatio),
-    projectedY: roundNumber(candidate.projectedY),
   };
 }
 

@@ -92,46 +92,51 @@ in the lasso, `domain/textSplitting.ts` computes the new texts, `domain/textboxE
 preview of every action at once (with the reason an action can't be chosen), the new textboxes
 and the checks that the result fits the page without colliding with other elements; the new textboxes are sized through the native measurement.
 
-### Edit markers (`actions/markerPageAnalysis.ts`, `actions/markerApply.ts`, `actions/editMarkerAnalysis.ts`, `actions/shapeMarks.ts`)
+### Edit markers (`actions/markerPageAnalysis.ts`, `actions/markerApply.ts`, `domain/marks/`)
 
 Handwritten edit markers on textboxes: a delete marker is a line through words; a replace marker
 is a delete line plus a small loop; a < or >, or a step mark with a second
 upright (_||‾), breaks a paragraph; a ∧ or V with a cross inserts a space; the swap mark (a line
 above one part and below the next, joined by a vertical, in one stroke or in three pieces across
 lines) swaps two parts. The fine marks work letter by letter: a strike with two verticals deletes
-exactly what is between them and takes no text (`domain/exactBounds.ts`), a slash marks one letter
-(`domain/slashMark.ts`), an arc under or over a gap closes it, two arcs close a gap at a line end or
-join two paragraphs (`domain/closeUpMark.ts`, `domain/paragraphJoin.ts`), and a ∧ or V with a filled
-circle between its legs puts in the punctuation drawn in it (`domain/punctText.ts` places it by its
-type; what the plugin can't read waits for the user's pick in the review).
-Freehand strokes and the Supernote straight-line tool are both recognized.
+exactly what is between them and takes no text, a slash marks one letter, an arc under or over a
+gap closes it, two arcs close a gap at a line end or join two paragraphs (`domain/paragraphJoin.ts`),
+and a ∧ or V with a filled circle between its legs puts in the punctuation drawn in it
+(`domain/punctText.ts` places it by its type; what the plugin can't read waits for the user's pick
+in the review). Freehand strokes and the Supernote straight-line tool are both recognized.
 
-**What the strokes are** is pass 1 (`domain/marks/`, technical-design-mark-dialogue.md §2): the
-stroke as read (`markStroke.ts`), a reading (`reading.ts`: kind, strokes and their roles, anchors),
-one file per shape family in `marks/shapes/` (`strike.ts` with the verticals and the loop,
-`slash.ts`, `caret.ts` with the step, `space.ts`, `punct.ts`, `closeUp.ts`, `swap.ts`) and
-`marks/pass1.ts`, which reads them for all three callers: the tag's look-back (`readLookBack`),
-Select mark (`readDeclared`) and the review (the family readers, `readMarks`). A reading is stored
-with a pen edit as today's `PenEditMark` (`marks/storedMark.ts`).
-`supernote/markerStrokeRead.ts` reads the strokes; `actions/markerMeasure.ts` measures each
-textbox once per review and locks textboxes whose font can't be read (their marks are ignored);
-`actions/shapeMarks.ts` reads the marks known by their shape first with pass 1 and places them
-(`domain/paragraphMarks.ts`, `domain/spaceMark.ts`, `domain/swapMark.ts` - a swap piece is read
-against a line - `domain/closeUpMark.ts`, `domain/slashMark.ts`), and their strokes never reach the
-delete analysis;
-`actions/editMarkerAnalysis.ts` maps one marker to words through the hit-testing core and the
-native measurement (with each letter's edge, `domain/textOffsets.ts`);
-`actions/markerPageAnalysis.ts` pairs replace marks with their tagged text, places insertions and
-builds the preview of the current page in named steps; `actions/markerApply.ts`
-applies the plan; `actions/markerCalibration.ts` keeps the calibration and saves the diagnostics. The pure parts are in
-`domain/markerStrokes.ts`, `domain/markerText.ts`, `domain/markerTypes.ts`,
-`domain/markerAssembly.ts`, `domain/swapText.ts` (a swap makes the changes inside its parts
-first) and `domain/edgeShift.ts` (one to three edges per change). The analysis runs once; the
-preview is assembled from it, the tagged texts and the user's edge nudges (one character at a
-time), so the review updates without measuring again. It lists every change as a hunk in reading
-order (`domain/markerHunks.ts`): the changed text with the removed ranges struck through and new
-text in bold (`domain/markerDiff.ts`), and the rest of its textbox as context, built from the same
-ranges the apply step uses, so the review shows exactly what will change.
+The marks are read in two pure passes (`domain/marks/`, technical-design-mark-dialogue.md §2):
+
+- **Pass 1, what the strokes are**, from the strokes alone: the stroke as read (`markStroke.ts`),
+  a reading (`reading.ts`: kind, strokes and their roles, anchors), one file per shape family in
+  `marks/shapes/` (`strike.ts` with the verticals and the loop, `slash.ts`, `caret.ts` with the
+  step, `space.ts`, `punct.ts`, `closeUp.ts`, `swap.ts`) and `marks/pass1.ts`, which reads them for
+  all three callers: the tag's look-back (`readLookBack`), Select mark (`readDeclared`) and the
+  review (the family readers, `readMarks`). A reading is stored with a pen edit as the
+  `PenEditMark` (`marks/storedMark.ts`).
+- **Pass 2, where they act**, from readings and measured textboxes (`textboxView.ts`): one file per
+  kind of place in `marks/place/` (`point.ts` for carets, `paragraph.ts` for splits, `strike.ts`
+  for the words a strike covers through the hit-testing core, `exact.ts` for letter-exact edges,
+  `slash.ts`, `closeUp.ts`, `swap.ts` - a swap piece is read against a line - and `here.ts` for
+  Insert right here), the place type (`place.ts`) and `marks/pass2.ts`: `placeReading` for one
+  reading, `resolvePage` for a page in the review's order of consumption, where a reading that
+  doesn't place leaves its strokes free for the later families. `marks/drafts.ts` turns the
+  result into the review's drafts and ignored rows.
+
+`actions/markerPageAnalysis.ts` orchestrates one page: it reads the elements and strokes
+(`supernote/markerStrokeRead.ts`), takes out tagged strokes, runs pass 2 with lazy measuring -
+`actions/markerMeasure.ts` measures a textbox once per review, only when pass 2 asks for it, and
+locks textboxes whose font can't be read (their marks are ignored) - places insertions at their
+carets and builds the preview in named steps; `actions/markerApply.ts` applies the plan;
+`actions/markerCalibration.ts` keeps the calibration and saves the diagnostics (pass 2's trace is
+logged there). The other pure parts are in `domain/markerStrokes.ts`, `domain/markerText.ts`,
+`domain/markerTypes.ts`, `domain/markerAssembly.ts`, `domain/swapText.ts` (a swap makes the changes
+inside its parts first) and `domain/edgeShift.ts` (one to three edges per change). The analysis
+runs once; the preview is assembled from it, the tagged texts and the user's edge nudges (one
+character at a time), so the review updates without measuring again. It lists every change as a
+hunk in reading order (`domain/markerHunks.ts`): the changed text with the removed ranges struck
+through and new text in bold (`domain/markerDiff.ts`), and the rest of its textbox as context, built
+from the same ranges the apply step uses, so the review shows exactly what will change.
 `actions/editMarkerDrop.ts` takes changes off the page without applying them.
 
 **Pen edits** (`actions/penEditTag.ts`, `actions/penEditReview.ts`, `storage/penEditStore.ts`,
@@ -139,7 +144,7 @@ ranges the apply step uses, so the review shows exactly what will change.
 mark written just before it (a replace mark or a caret) decides what it is; badges with a number
 on the page show which text belongs to which mark (a circle the user drew at the mark holds the
 number). A snippet without a mark can be given one later (Select mark), or go in as a new paragraph
-where its handwriting starts (Insert right here, `domain/insertHere.ts`). The tagged strokes and a picture are stored in the plugin folder (`pen-edits/`);
+where its handwriting starts (Insert right here, `domain/marks/place/here.ts`). The tagged strokes and a picture are stored in the plugin folder (`pen-edits/`);
 the review recognizes them while it is open and the user can edit the text in place.
 
 **Housekeeping** (`domain/housekeeping.ts`, `storage/housekeepingStore.ts`,

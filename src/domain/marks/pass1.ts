@@ -315,10 +315,10 @@ function intersectsRect(a: Rect, b: Rect): boolean {
   return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
 }
 
-/** The verticals across a strike among the candidates: the closest pair, or []. */
+/** The verticals across a strike among the candidates (straight lines too): the closest pair, or []. */
 export function verticalsFor(strike: MarkStroke, candidates: MarkStroke[]): MarkStroke[] {
   return closestVerticalPair(
-    candidates.filter(other => other !== strike && !other.straightLine && isReplaceVertical(strike.rect, other.rect)),
+    candidates.filter(other => other.id !== strike.id && isReplaceVertical(strike.rect, other.rect)),
     stroke => stroke.rect,
   );
 }
@@ -327,7 +327,7 @@ export function verticalsFor(strike: MarkStroke, candidates: MarkStroke[]): Mark
 export function loopFor(strike: MarkStroke, candidates: MarkStroke[]): MarkStroke | null {
   return nearestLoop(
     strike.rect,
-    candidates.filter(other => other !== strike && !other.straightLine),
+    candidates.filter(other => other.id !== strike.id && !other.straightLine),
     stroke => stroke.rect,
   );
 }
@@ -490,11 +490,10 @@ export function readLookBackReplace(window: MarkStroke[], taken: Rect[], options
     if (isTakenStrike(strike.rect, taken) || !isStrikeLike(strike.rect)) {
       continue;
     }
-    const others = ordered.filter(other => other !== strike && !other.straightLine);
-    if (verticalsFor(strike, others).length === 2) {
+    if (verticalsFor(strike, ordered).length === 2) {
       continue;
     }
-    const loop = loopFor(strike, others);
+    const loop = loopFor(strike, ordered);
     if (loop) {
       return loopReading(strike, loop);
     }
@@ -505,7 +504,7 @@ export function readLookBackReplace(window: MarkStroke[], taken: Rect[], options
   const unfinished = ordered.some(
     strike =>
       isStrikeLike(strike.rect) &&
-      ordered.some(other => other !== strike && !other.straightLine && isReplaceVertical(strike.rect, other.rect)),
+      ordered.some(other => other !== strike && isReplaceVertical(strike.rect, other.rect)),
   );
   if (unfinished) {
     return null;

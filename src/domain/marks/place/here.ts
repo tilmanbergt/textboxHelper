@@ -1,4 +1,4 @@
-import type {Rect} from './textboxModel';
+import type {Rect} from '../../textboxModel';
 
 /**
  * "Insert right here" (technical-design-fine-marks.md §8): tagged text without a usable mark goes

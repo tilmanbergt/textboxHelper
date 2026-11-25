@@ -1,7 +1,9 @@
-import {caretInsertionText, gapParagraphPlacement, locateCaret, placeGapParagraphs, planReflow, type CaretTextbox} from '../../src/domain/penEditCaret';
+import {caretInsertionText, gapParagraphPlacement, placeGapParagraphs, planReflow} from '../../src/domain/penEditCaret';
 import {textLeftX} from '../../src/domain/textboxLayout';
 import {analyzeCaret, analyzeTwoStrokeCaret, caretNumberCenter} from '../../src/domain/marks/shapes/caret';
 import type {Point} from '../../src/domain/marks/markStroke';
+import {locateCaret} from '../../src/domain/marks/place/point';
+import type {CaretTextbox} from '../../src/domain/marks/textboxView';
 
 function leg(from: Point, to: Point, steps = 8): Point[] {
   const points: Point[] = [];

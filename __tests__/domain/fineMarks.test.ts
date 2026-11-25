@@ -1,17 +1,17 @@
-import {closeUpSnippet, gapBetween, placeArc, punctuationAtGap} from '../../src/domain/closeUpMark';
-import {bracketSnippet, characterAt, exactSpan, offsetAtVertical} from '../../src/domain/exactBounds';
-import {locateHere, type HereTextbox} from '../../src/domain/insertHere';
 import {applyTextMutationRanges, withSpacesKept} from '../../src/domain/markerText';
-import type {CaretTextbox} from '../../src/domain/penEditCaret';
 import {breakCommaTie, placePunctuation} from '../../src/domain/punctText';
 import * as model from '../../src/domain/penEditModel';
 import {joinParagraphTexts, trailingDash} from '../../src/domain/paragraphJoin';
-import {placeSlash} from '../../src/domain/slashMark';
 import {analyzeSlash, isSlashCandidateRect} from '../../src/domain/marks/shapes/slash';
 import {analyzeArc} from '../../src/domain/marks/shapes/closeUp';
 import {analyzeCaret} from '../../src/domain/marks/shapes/caret';
 import type {Point} from '../../src/domain/marks/markStroke';
 import {analyzeCircle, findCaretCircle, readCircle, type PlainStroke} from '../../src/domain/marks/shapes/punct';
+import {closeUpSnippet, gapBetween, placeArc, punctuationAtGap} from '../../src/domain/marks/place/closeUp';
+import {bracketSnippet, characterAt, exactSpan, offsetAtVertical} from '../../src/domain/marks/place/exact';
+import {locateHere, type HereTextbox} from '../../src/domain/marks/place/here';
+import type {CaretTextbox} from '../../src/domain/marks/textboxView';
+import {placeSlash} from '../../src/domain/marks/place/slash';
 
 /** Points every few pixels along straight segments between the corners. */
 function path(...corners: Array<[number, number]>): Point[] {

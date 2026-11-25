@@ -1,22 +1,11 @@
-import {rectHeight, rectOverlapHeight, rectWidth} from './geometry';
-import {closestVerticalPair, isReplaceVertical, nearestLoop} from './marks/shapes/strike';
-import {buildPageWordCandidates} from './hitTesting';
-import type {
-  EditMarkerCalibration,
-  MarkerDeleteCandidate,
-  MarkerStrokeAnalysis,
-  StrokeStats,
-  WordCandidate,
-} from './markerTypes';
-import type {NativeDetailedMeasurement} from './textboxLayout';
+import {rectHeight, rectWidth} from './geometry';
+import type {StrokeStats} from './markerTypes';
 import {ELEMENT_TYPE_GEO, ELEMENT_TYPE_STROKE, MAIN_LAYER, type PageElementData, type Rect} from './textboxModel';
 
 /**
- * Reading edit-marker strokes: which elements can be markers, stroke statistics and bounds, the
- * words a delete stroke covers, and the two vertical strokes that turn a delete into a replace.
+ * Reading edit-marker strokes: which page elements can be marks, and their stroke statistics and
+ * bounds. What the strokes are is pass 1's (`marks/`).
  */
-
-export const MAX_DELETE_WORDS_PER_MARKER = 100;
 
 const FALLBACK_MARKER_HEIGHT = 4;
 
@@ -36,56 +25,6 @@ export function isStraightLineGeometryElement(element: PageElementData): boolean
 
 export function isSupportedEditMarkerElement(element: PageElementData): boolean {
   return isMainLayerStrokeElement(element) || isStraightLineGeometryElement(element);
-}
-
-function getCandidateTextStart(candidate: MarkerDeleteCandidate): number {
-  return candidate.words[0]?.start ?? Number.MAX_SAFE_INTEGER;
-}
-
-export function orderTextboxMarkerCandidates<Candidate extends MarkerDeleteCandidate>(
-  candidates: Candidate[],
-): Candidate[] {
-  return [...candidates].sort((left, right) => {
-    if (left.lineIndex !== right.lineIndex) {
-      return left.lineIndex - right.lineIndex;
-    }
-
-    const leftStart = getCandidateTextStart(left);
-    const rightStart = getCandidateTextStart(right);
-    if (leftStart !== rightStart) {
-      return leftStart - rightStart;
-    }
-
-    if (Math.abs(left.markerSortLeft - right.markerSortLeft) > 1) {
-      return left.markerSortLeft - right.markerSortLeft;
-    }
-
-    return left.markerNumInPage - right.markerNumInPage;
-  });
-}
-
-export function isMeaningfulWord(text: string): boolean {
-  return /[\p{L}\p{N}]/u.test(text);
-}
-
-function projectYOnStroke(stats: StrokeStats, x: number): number {
-  void x;
-  return stats.center.y;
-}
-
-export function buildWordCandidates(
-  measurement: NativeDetailedMeasurement,
-  textRect: Rect,
-  stroke: StrokeStats,
-  calibration: EditMarkerCalibration,
-): WordCandidate[] {
-  return buildPageWordCandidates(
-    measurement,
-    textRect,
-    calibration,
-    stroke.rect,
-    absoluteCenterX => projectYOnStroke(stroke, absoluteCenterX),
-  );
 }
 
 export function buildStrokeStats(points: Array<{x: number; y: number}>): StrokeStats | null {
@@ -213,40 +152,4 @@ export function buildStrokeStatsFromRect(rect: Rect): StrokeStats | null {
     {x: fallbackRect.left, y: centerY},
     {x: fallbackRect.right, y: centerY},
   ]);
-}
-
-/**
- * A vertical of a replace mark's strike (`isReplaceVertical`) that also stands on the strike's line
- * of text: at least half its height overlaps the line.
- */
-function isLineVertical(candidate: MarkerDeleteCandidate, strokeAnalysis: MarkerStrokeAnalysis): boolean {
-  const rect = strokeAnalysis.strokeStats.rect;
-  return (
-    strokeAnalysis.marker.uuid !== candidate.markerUuid &&
-    isReplaceVertical(candidate.strokeStats.rect, rect) &&
-    rectOverlapHeight(candidate.lineRect, rect) >= rectHeight(rect) * 0.5
-  );
-}
-
-/** The two verticals across a strike on its line (technical-design-fine-marks.md §3), or []. */
-export function findBestReplaceModifierPair<Analysis extends MarkerStrokeAnalysis>(
-  candidate: MarkerDeleteCandidate,
-  strokeAnalyses: Analysis[],
-): Analysis[] {
-  return closestVerticalPair(
-    strokeAnalyses.filter(analysis => isLineVertical(candidate, analysis)),
-    analysis => analysis.strokeStats.rect,
-  );
-}
-
-/** The loop after a delete candidate's strike, if one of the strokes is such a loop. */
-export function findReplaceLoop<Analysis extends MarkerStrokeAnalysis>(
-  candidate: MarkerDeleteCandidate,
-  strokeAnalyses: Analysis[],
-): Analysis | null {
-  return nearestLoop(
-    candidate.strokeStats.rect,
-    strokeAnalyses.filter(analysis => analysis.marker.uuid !== candidate.markerUuid),
-    analysis => analysis.strokeStats.rect,
-  );
 }
