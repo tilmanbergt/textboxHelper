@@ -58,19 +58,23 @@ npm run check
 ./buildPlugin.ps1
 ```
 
-Commit before a build you will test seriously, so the build matches a commit. Install
-`build\outputs\textboxHelper.snplg` over the existing plugin and test on a copy of a note.
+Builds are labelled for the release being worked on (`nextVersion` in `package.json`):
+`0.3.0-alpha+a1b2c3d`, or `0.3.0-beta+a1b2c3d` with `./buildPlugin.ps1 -Stage beta`; `.dirty` at
+the end means uncommitted changes. Set the next version once per release with
+`npm run next-version -- <x.y.z>` and commit it. Commit before a build you will test seriously,
+so the label names the commit. Install `build\outputs\manuscript-<label>.snplg` over the existing
+plugin and test on a copy of a note; the plugin list shows `0.3.0-alpha`.
 
 ## 4. Releases
 
-Releases are made from `main`, as GitHub pre-releases while the plugin is experimental.
+Releases are made from `main`. A release is a normal GitHub release; add `--prerelease` to mark one as experimental.
 
 1. Check the release checklist in `DEVELOPMENT-POLICY.md` §8.
-2. Set the version: `npm version <x.y.z> --no-git-tag-version` (updates `package.json` and
-   `package-lock.json`), then in `PluginConfig.json` set `versionName` to the same version and
-   raise `versionCode` by one.
+2. Set the version: `node scripts/version.mjs --set-version <x.y.z>` (`package.json`,
+   `package-lock.json`, `PluginConfig.json` `versionName`; the build writes the versionCode).
 3. In `CHANGELOG.md`, add `## [<x.y.z>] - <date>` under `## [Unreleased]`, so the entries move
-   into the release and `[Unreleased]` stays empty.
+   into the release and `[Unreleased]` stays empty
+   (`node scripts/version.mjs --stamp-changelog <x.y.z> <YYYY-MM-DD>`).
 4. Write the release notes to `build\release-notes-<x.y.z>.md` (from the CHANGELOG section,
    plus the install line) and commit:
    ```powershell
@@ -78,19 +82,18 @@ Releases are made from `main`, as GitHub pre-releases while the plugin is experi
    git add -A
    git commit -m "Release <x.y.z>"
    ```
-5. Build and copy the result under its release name:
-   ```powershell
-   ./buildPlugin.ps1
-   Copy-Item build\outputs\textboxHelper.snplg build\textboxHelper-<x.y.z>.snplg -Force
-   ```
-   `build\outputs\` can also hold older `.snplg` files; always copy `textboxHelper.snplg` by name.
-6. Device check (§8 of the policy): install over the previous release; the plugin list shows the
-   new version.
-7. Tag, push and publish:
+5. Tag, then build. The build of the tagged, clean release commit is labelled `<x.y.z>`:
    ```powershell
    git tag -a v<x.y.z> -m "Release <x.y.z>"
+   ./buildPlugin.ps1
+   ```
+   The result is `build\outputs\manuscript-<x.y.z>.snplg`.
+6. Device check (§8 of the policy): install over the previous release; the plugin list shows the
+   new version.
+7. Push and publish:
+   ```powershell
    git push
    git push origin v<x.y.z>
-   gh release create v<x.y.z> build\textboxHelper-<x.y.z>.snplg --title "Textbox Tools <x.y.z>" --notes-file build\release-notes-<x.y.z>.md --prerelease
+   gh release create v<x.y.z> build\outputs\manuscript-<x.y.z>.snplg --title "Manuscript <x.y.z>" --notes-file build\release-notes-<x.y.z>.md
    ```
 8. Open the release page: text and `.snplg` are there.
