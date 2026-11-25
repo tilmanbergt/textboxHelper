@@ -146,7 +146,7 @@ export default function ChangeSide({
 }
 
 /** A tagged snippet's text: tap to edit (the Supernote's handwriting input fills the field). */
-function PenText({
+export function PenText({
   pen,
   editing,
   onEditing,
@@ -223,7 +223,7 @@ const STATUS_HINT: Record<PenOperationStatus, string> = {
 };
 
 /** The picture taken when tagging; without one, the handwriting drawn from its stored strokes. */
-function Handwriting({view}: {view: PenEditView}): React.JSX.Element {
+export function Handwriting({view}: {view: PenEditView}): React.JSX.Element {
   const [strokes, setStrokes] = useState<number[][] | null | undefined>(undefined);
   useEffect(() => {
     let alive = true;
@@ -322,7 +322,7 @@ function SwapDetail({
 }
 
 /** Each edge of the change (Place; Start and End; or a swap's three) with ‹ › to move it. */
-function EdgeControl({
+export function EdgeControl({
   view,
   disabled,
   onNudge,

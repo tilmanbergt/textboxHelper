@@ -26,11 +26,12 @@ export type ManuscriptEntry = {
   operation: RecognizedEditOperation;
 };
 
-export type AttentionItem = {key: string; page: number; item: ToDecideItem};
+/** One item of To decide in the card's list, with the page it is on. */
+export type DecideEntry = {key: string; page: number; item: ToDecideItem};
 
 export type ManuscriptView = {
   entries: ManuscriptEntry[];
-  attention: AttentionItem[];
+  toDecide: DecideEntry[];
   /** The ready changes of every read page, page by page. */
   plans: EditMarkerApplyPlan[];
   readyCount: number;
@@ -44,7 +45,7 @@ export const entryKey = (page: number, operationId: string) => `${page}:${operat
 export function combinePages(pages: Record<number, PageReview>): ManuscriptView {
   const view: ManuscriptView = {
     entries: [],
-    attention: [],
+    toDecide: [],
     plans: [],
     readyCount: 0,
     pendingCount: 0,
@@ -64,7 +65,7 @@ export function combinePages(pages: Record<number, PageReview>): ManuscriptView 
       }
     });
     preview.toDecide.forEach(item => {
-      view.attention.push({key: `${page}:${item.key}`, page, item});
+      view.toDecide.push({key: `${page}:${item.key}`, page, item});
     });
     if (preview.applyPlan && preview.canApply) {
       view.plans.push(preview.applyPlan);

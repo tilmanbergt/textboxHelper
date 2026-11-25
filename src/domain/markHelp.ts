@@ -136,7 +136,7 @@ export const MARK_HELP: MarkHelpEntry[] = [
     needsText: false,
     draw: 'Under the line, straight up at the gap, on above the next word (or falling), plus a second short line next to the upright (_||‾).',
     keep: [
-      'Without the second line a step is the middle of a swap, or listed under Ignored.',
+      'Without the second line a step is the middle of a swap, or listed under To decide.',
       'The rest becomes a textbox of its own; paragraphs below move down.',
     ],
   },
@@ -181,8 +181,8 @@ export const REVIEW_HELP: HelpBlock[] = [
     text: 'It is recognized while you read; until then a grey placeholder stands in. On the right, tap the recognized text to correct it with the Supernote keyboard’s handwriting input, then Done. The handwriting is shown below it.',
   },
   {
-    title: 'Needs attention',
-    text: 'Above the list: tagged text without a mark, and marks that could not be used, each with the reason. A card also says so right after tagging. Select mark: draw the mark (or lasso the one you drew), lasso only the mark and tap Insertion or Replacement within 5 minutes.',
+    title: 'To decide',
+    text: 'The second tab: a numbered mark whose place stayed open (move it with ‹ › and tap Here), tagged text with a ? (Select mark, or Insert right here), and strokes on the text that read as no clear mark (read them as one of the marks offered, Ignore, or Remove). Select mark: draw the mark (or lasso the one you drew), lasso only the mark and tap Insertion or Replacement within 5 minutes.',
   },
   {
     title: 'A comma, a space, a letter',

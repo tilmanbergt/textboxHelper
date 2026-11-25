@@ -79,7 +79,7 @@ export function guessLetter(rect: Rect, views: TextboxView[], want: Want = () =>
 }
 
 /** The words of a textbox a part covers, as a strike's words (for a place the user confirmed). */
-function wordsIn(view: TextboxView, start: number, end: number): StrikeWord[] {
+export function wordsIn(view: TextboxView, start: number, end: number): StrikeWord[] {
   return (view.layout?.words ?? [])
     .filter(word => word.end > start && word.start < end)
     .map(word => ({

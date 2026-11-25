@@ -47,6 +47,7 @@ const base = (overrides: Partial<MarkerPreviewBase> = {}): MarkerPreviewBase => 
   drafts: [replaceDraft],
   toDecide: [],
   markPoints: {},
+  pageRects: [],
   textboxes: [textbox],
   insertions: [],
   penEdits: [{id: 'pe1', kind: 'replacement', number: 1, pictureUri: null}],

@@ -232,6 +232,8 @@ export type MarkerPreviewBase = {
   toDecide: ToDecideItem[];
   /** The points of the page's mark strokes by number (flat x,y), for the pictures of To decide. */
   markPoints: Record<number, number[]>;
+  /** Every textbox of the page, for To decide's page map. */
+  pageRects: Rect[];
   textboxes: MarkerTextboxBase[];
   insertions: InsertionDraft[];
   penEdits: PenEditView[];

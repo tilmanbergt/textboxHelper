@@ -135,6 +135,7 @@ describe('assembly with edge nudges', () => {
     drafts,
     toDecide: [],
     markPoints: {},
+    pageRects: [],
     textboxes: [textbox],
     insertions: [],
     penEdits: [],

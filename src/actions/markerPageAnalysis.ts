@@ -18,7 +18,8 @@ import {resolvePage, type PageResult, type PageStroke, type StrokeOwner, type St
 import type {Reading} from '../domain/marks/reading';
 import {NO_MARK_FOR_TEXT} from '../domain/marks/reasons';
 import {readingOfStoredMark} from '../domain/marks/storedMark';
-import {boundsOfFlat, isIgnored, strokesById, unclearItems, type ToDecideItem} from '../domain/marks/toDecide';
+import {decideOptions} from '../domain/marks/decide';
+import {boundsOfFlat, isIgnored, paragraphOf, strokesById, unclearItems, type ToDecideItem} from '../domain/marks/toDecide';
 import type {TextboxView} from '../domain/marks/textboxView';
 import {readPageSizeForDiagnostics} from '../supernote/noteElements';
 import type {PenEditEntry} from '../domain/penEditModel';
@@ -231,8 +232,11 @@ async function analyzePage(
   });
   const pairedPenEditIds = new Set(placedLinked.filter(item => item.place.kind === 'placed').map(item => item.linked.owner.id));
   const allStrokes = strokesById([...strokes, ...linkedStrokes]);
+  const numbers = new Map([...allStrokes.values()].map(stroke => [stroke.id, stroke.numInPage]));
   const toDecide: ToDecideItem[] = [
-    ...unclearItems(result.refused, allStrokes, views).filter(item => !item.ignore || !isIgnored(item.ignore, ignoredKeys)),
+    ...unclearItems(result.refused, allStrokes, views)
+      .filter(item => !item.ignore || !isIgnored(item.ignore, ignoredKeys))
+      .map(item => ({...item, options: decideOptions(item.readings, views, numbers)})),
     ...pen.entries.filter(entry => entry.kind === 'unpaired').map(entry => noMarkItem(entry, pen.snippetRects.get(entry.id) ?? entry.rect)),
     ...placedLinked.flatMap(item => (item.place.kind === 'open' ? [placeOpenOfLinked(item.linked, item.place, allStrokes)] : [])),
   ];
@@ -280,11 +284,19 @@ async function analyzePage(
     notePath,
     page,
     drafts,
-    toDecide,
+    toDecide: toDecide.map(item => ({
+      ...item,
+      ...(item.guess ? {text: views.find(view => view.uuid === item.guess?.uuid)?.text ?? ''} : {}),
+      paragraph: paragraphOf(item.guess ? {uuid: item.guess.uuid} : {rect: item.rect}, views),
+    })),
     markPoints: Object.fromEntries([...allStrokes.values()].map(stroke => [stroke.numInPage, flatPoints(stroke)])),
+    pageRects: views.map(view => ({...view.rect})),
     textboxes: sortTextElements([...groupedTextboxes.values()]).map(toTextboxBase),
     insertions: placed.gaps,
-    penEdits: pen.views.filter(view => pairedPenEditIds.has(view.id) || insertedIds.has(view.id)),
+    // The texts of the changes, and those in To decide (their text is shown and can be corrected).
+    penEdits: pen.views.filter(
+      view => pairedPenEditIds.has(view.id) || insertedIds.has(view.id) || toDecide.some(item => item.penEditId === view.id),
+    ),
     penStates: pen.states,
   };
   const endAssemble = startTiming('page.assemble', {page});

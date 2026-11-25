@@ -45,7 +45,7 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 
 - The NOTE toolbar button "Manuscript" reads every edit mark on the current page
 - Every change in reading order, the changed text in full with a few words around it; the selected change on the right with its text, its edges and Drop
-- "Needs attention" above the list: tagged text without a mark, marks that couldn't be used, with the reason
+- To decide, next to the changes: a numbered mark whose place stayed open (‹ › and Here), tagged text with a "?" (Select mark, Insert right here), strokes on the text that read as no clear mark (read as one of the marks offered, Ignore, Remove)
 - The whole note: a page strip with each page's count of changes; tap a page, or read them all
 - Apply every ready change of the pages read after the preview; one backup of those pages is written first
 - Outline: the note's linked files and headings on the left, the open heading's paragraphs on the right, details below; change a heading's level (with or without its subheadings), move paragraphs within a heading or to another one, move files, set aside or delete a section; statuses (open, review, final) and a filter for edits waiting or not final; headings of chosen levels get a NOTE title for the table of contents

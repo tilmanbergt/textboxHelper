@@ -52,6 +52,7 @@ const base = (text: string, drafts: OperationDraft[]): MarkerPreviewBase => ({
   drafts,
   toDecide: [],
   markPoints: {},
+  pageRects: [],
   textboxes: [textboxOf(text)],
   insertions: [],
   penEdits: [],

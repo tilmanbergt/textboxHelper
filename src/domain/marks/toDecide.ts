@@ -6,6 +6,7 @@ import type {Refusal, StrokeRef} from './pass2';
 import type {MarkKind, Reading} from './reading';
 import {STROKES_NO_MARK} from './reasons';
 import type {TextboxView} from './textboxView';
+import type {DecideOption} from './decide';
 
 /**
  * To decide (technical-design-mark-dialogue.md §5.2, decision 6): what the review can't make a
@@ -51,6 +52,12 @@ export type ToDecideItem = {
   ignore?: IgnoreKey;
   /** Unclear: its strokes' numbers (a change that took them along hides the item). */
   strokeNums?: number[];
+  /** The text of the textbox at its place (for ‹ › and the result line). */
+  text?: string;
+  /** Which paragraph of the page it is at (1 = the first in reading order), for its row. */
+  paragraph?: number;
+  /** Unclear: one option per reading pass 1 found (`decide.ts`). */
+  options?: DecideOption[];
 };
 
 const KIND_NAMES: Record<MarkKind, string> = {
@@ -341,4 +348,15 @@ export function withIgnored(file: IgnoredMarks, notePath: string, page: number, 
   const pages = file.notes[notePath] ?? {};
   const keys = pages[String(page)] ?? [];
   return {version: 1, notes: {...file.notes, [notePath]: {...pages, [String(page)]: [...keys, key]}}};
+}
+
+/** Which paragraph of the page (1-based, in reading order) a rect or place is at; undefined when none. */
+export function paragraphOf(at: {rect?: Rect | null; uuid?: string}, views: TextboxView[]): number | undefined {
+  const ordered = [...views].sort((a, b) => (Math.abs(a.rect.top - b.rect.top) > 1 ? a.rect.top - b.rect.top : a.rect.left - b.rect.left));
+  const index = at.uuid
+    ? ordered.findIndex(view => view.uuid === at.uuid)
+    : at.rect
+    ? ordered.findIndex(view => intersects(at.rect as Rect, view.rect))
+    : -1;
+  return index >= 0 ? index + 1 : undefined;
 }

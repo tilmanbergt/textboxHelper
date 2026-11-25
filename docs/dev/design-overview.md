@@ -131,7 +131,9 @@ nearest sensible place. What the review can't make a change of is `toDecide`
 the text no family placed (strike-family scribbles close together over a line as one item), with
 the readings pass 1 found; handwriting beside the text isn't listed. Ignore is remembered per note
 and page (`storage/ignoredMarks.ts`). The user layer (`marks/userLayer.ts`: Here, ‹ ›, a chosen
-reading) goes on top; a pen edit stores Here as `confirmed`.
+reading) goes on top; a pen edit stores Here as `confirmed`. The Review tab shows Changes and To
+decide (`screens/manuscript/ToDecideList.tsx`, `ToDecideSide.tsx` with `ui/PageMap.tsx`); the
+options an unclear mark offers and the edges and result of a place are `marks/decide.ts`.
 
 `actions/markerPageAnalysis.ts` orchestrates one page: it reads the elements and strokes
 (`supernote/markerStrokeRead.ts`), takes out tagged strokes and linked marks, runs pass 2 with lazy measuring -

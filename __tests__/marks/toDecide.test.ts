@@ -156,3 +156,24 @@ describe('Ignore remembers an item per note and page (§5.4)', () => {
     expect(parseIgnoredMarks('not json')).toEqual({version: 1, notes: {}});
   });
 });
+
+describe('what To decide offers (§5.3)', () => {
+  const {decideOptions, decideView} = require('../../src/domain/marks/decide') as typeof import('../../src/domain/marks/decide');
+  const TEXT = 'the big red car and more words here';
+
+  it('an unclear slash through a space offers the slash at its nearest letter, with why', () => {
+    const strokes = page(slash(x(19) + 9, MID, 60, 40));
+    const views = [view(A)];
+    const [item] = unclearItems(resolvePage(strokes, views).refused, strokesById(strokes), views);
+    const [option] = decideOptions(item.readings, views, new Map([['s1', 1]]));
+    expect(option).toMatchObject({label: 'Slash', reason: expect.stringContaining('one letter'), at: {start: 18, end: 19}, text: TEXT});
+    expect(option.draft?.range).toEqual({kind: 'delete', start: 18, end: 19});
+  });
+
+  it('shows a place with its edges moved, and the text as it will read', () => {
+    const place = {uuid: 'tb1', numInPage: 1, lineIndex: 0, start: 4, end: 7};
+    expect(decideView(TEXT, place, null, 'small')).toMatchObject({start: 4, end: 7, result: 'the small red car and more words …'});
+    expect(decideView(TEXT, place, [0, 4], '').edges.map(edge => edge.label)).toEqual(['Start', 'End']);
+    expect(decideView(TEXT, {...place, end: 4}, [1], 'X')).toMatchObject({start: 5, end: 5, edges: [{label: 'Place'}]});
+  });
+});

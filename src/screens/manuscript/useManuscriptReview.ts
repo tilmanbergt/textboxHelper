@@ -19,6 +19,7 @@ import {
 import {forgetPages, openCachedNote} from '../../actions/manuscriptCache';
 import {currentPenStates, readMarkerPage, type MarkerPageRead} from '../../actions/markerPageAnalysis';
 import {
+  confirmPenEditPlace,
   placePenEditHere,
   resetRecognition,
   setPenEditCorrection,
@@ -45,6 +46,8 @@ import {usePageChecks} from './usePageChecks';
 import {usePenRecognitionQueue} from './usePenRecognitionQueue';
 import {useTimingsExport} from './useTimingsExport';
 import type {PunctuationChar} from '../../domain/marks/shapes/punct';
+import type {ToDecideItem} from '../../domain/marks/toDecide';
+import {rememberIgnored} from '../../storage/ignoredMarks';
 
 export interface ManuscriptReview {
   note: NoteInfo | null;
@@ -72,6 +75,14 @@ export interface ManuscriptReview {
   setPunctChar: (operationId: string, char: PunctuationChar) => void;
   /** "Insert right here": tagged text without a usable mark goes in where its handwriting starts. */
   placeHere: (page: number, id: string) => void;
+  /**
+   * Here on a place that stayed open (technical-design-mark-dialogue.md §2.7): a pen edit stores
+   * it (`confirmed`, with its edges) and the page is read again; an unclear plain mark becomes the
+   * change of the reading chosen (`option`), kept while the review is open.
+   */
+  here: (page: number, item: ToDecideItem, edges: EdgeShift | null, option?: number) => void;
+  /** Ignore an unclear mark: remembered for this page, and the page is read again. */
+  ignore: (page: number, item: ToDecideItem) => void;
   loading: boolean;
   busy: boolean;
   applied: boolean;
@@ -112,6 +123,8 @@ export function useManuscriptReview(): ManuscriptReview {
   // Edge nudges of plain marks: kept while the review is open (a pen edit's go with it).
   const [plainShifts, setPlainShifts] = useState<Record<string, EdgeShift>>({});
   const [swapOptions, setSwapOptions] = useState<RowOptions>({});
+  // Unclear plain marks made a change with Here: by page and item, the reading chosen.
+  const [chosen, setChosen] = useState<Record<number, Record<string, number>>>({});
   const noteRef = useRef<NoteInfo | null>(null);
 
   /** Reads pages one after the other; each shows in the list as soon as it is read. */
@@ -129,6 +142,7 @@ export function useManuscriptReview(): ManuscriptReview {
       }
       try {
         const {preview} = await readMarkerPage(info.notePath, page, {reuse});
+        setChosen(current => ({...current, [page]: {}}));
         setAnalyses(current => ({...current, [page]: {state: 'read', preview}}));
         setPenStates(current => ({...current, ...(preview.base?.penStates ?? {})}));
       } catch (error) {
@@ -222,26 +236,38 @@ export function useManuscriptReview(): ManuscriptReview {
     }
   };
 
-  // Re-assembled whenever a pen edit's text arrives or changes; no new measuring.
+  // Re-assembled whenever a pen edit's text arrives or changes; no new measuring. An unclear mark
+  // the user made a change of with Here goes from To decide to the changes.
   const pages = useMemo(() => {
     const assembled: Record<number, PageReview> = {};
     for (const [key, review] of Object.entries(analyses)) {
-      assembled[Number(key)] =
-        review.state === 'read' && review.preview.base
-          ? {
-              state: 'read',
-              preview: assembleMarkerPreview(
-                review.preview.base,
-                penStates,
-                review.preview.fontWarning,
-                plainShifts,
-                swapOptions,
-              ),
-            }
-          : review;
+      const page = Number(key);
+      const base = review.state === 'read' ? review.preview.base : null;
+      if (review.state !== 'read' || !base) {
+        assembled[page] = review;
+        continue;
+      }
+      const made = chosen[page] ?? {};
+      const extra = base.toDecide.flatMap(item => {
+        const option = made[item.key];
+        const draft = option === undefined ? null : item.options?.[option]?.draft;
+        return draft ? [draft] : [];
+      });
+      assembled[page] = {
+        state: 'read',
+        preview: assembleMarkerPreview(
+          extra.length > 0
+            ? {...base, drafts: [...base.drafts, ...extra], toDecide: base.toDecide.filter(item => made[item.key] === undefined)}
+            : base,
+          penStates,
+          review.preview.fontWarning,
+          plainShifts,
+          swapOptions,
+        ),
+      };
     }
     return assembled;
-  }, [analyses, penStates, plainShifts, swapOptions]);
+  }, [analyses, chosen, penStates, plainShifts, swapOptions]);
   const view = useMemo(() => combinePages(pages), [pages]);
 
   // Status: the font warning of a page read, unless something else is said.
@@ -363,6 +389,7 @@ export function useManuscriptReview(): ManuscriptReview {
       clearMarkerDiagnostics();
       setPlainShifts({});
       setSwapOptions({});
+      setChosen({});
       return read(readPageList(analyses), keepStatus, reuse);
     },
     [analyses, read, stop],
@@ -524,30 +551,76 @@ export function useManuscriptReview(): ManuscriptReview {
     [setRowOption],
   );
 
-  const placeHere = useCallback(
-    (page: number, id: string) => {
+  /** Stores something about a page's pen edit or marks, then reads the page again. */
+  const storeAndReread = useCallback(
+    (page: number, write: () => Promise<void>, failure: string) => {
       if (loading || busy || applied) {
         return;
       }
       setBusy(true);
       stop()
-        .then(() => placePenEditHere(id))
+        .then(write)
         .then(async () => {
           forgetPages(noteRef.current?.notePath ?? '', [page]);
           await read([page], true);
         })
         .catch(error => {
-          console.warn('[Manuscript] insert here not stored', String(error));
-          setStatus({kind: 'error', text: 'Could not store "Insert right here". Please try again.'});
+          console.warn('[Manuscript] not stored', String(error));
+          setStatus({kind: 'error', text: failure});
         })
         .finally(() => setBusy(false));
     },
     [applied, busy, loading, read, stop],
   );
 
+  const placeHere = useCallback(
+    (page: number, id: string) =>
+      storeAndReread(page, () => placePenEditHere(id), 'Could not store "Insert right here". Please try again.'),
+    [storeAndReread],
+  );
+
+  const here = useCallback(
+    (page: number, item: ToDecideItem, edges: EdgeShift | null, option?: number) => {
+      const penId = item.penEditId;
+      if (penId) {
+        storeAndReread(
+          page,
+          async () => {
+            await setPenEditEdges(penId, edges);
+            await confirmPenEditPlace(penId);
+          },
+          'Could not store the place. Please try again.',
+        );
+        return;
+      }
+      const draft = option === undefined ? null : item.options?.[option]?.draft;
+      if (!draft || busy || applied) {
+        return;
+      }
+      setChosen(current => ({...current, [page]: {...current[page], [item.key]: option as number}}));
+      if (edges && edges.length > 0) {
+        setPlainShifts(current => ({...current, [draft.operation.id]: edges}));
+      }
+    },
+    [applied, busy, storeAndReread],
+  );
+
+  const ignore = useCallback(
+    (page: number, item: ToDecideItem) => {
+      const notePath = noteRef.current?.notePath;
+      const key = item.ignore;
+      if (notePath && key) {
+        storeAndReread(page, () => rememberIgnored(notePath, page, key), 'Could not remember Ignore. Please try again.');
+      }
+    },
+    [storeAndReread],
+  );
+
   return {
     note,
     pages,
+    here,
+    ignore,
     view,
     readPages,
     recheckPage,

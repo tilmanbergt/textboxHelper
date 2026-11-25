@@ -2,30 +2,33 @@
  * The Manuscript card's Review tab (technical-design-manuscript.md §4, §6; canvas row
  * "Manuscript").
  *
- * The page strip: every page of the note with its count of changes (✓ none, ? not read yet);
- * tapping a page shows only its changes (and reads it first), "Read n pages" reads the rest.
- * "Needs attention": pen text without a mark and marks that couldn't be used, one at a time with
- * Select mark › and Drop. Left: the changes in reading order, each with its changed text in full
- * and a few words of context, and Drop. Right, the side bar: the selected change (the first one on
- * open), with its text to correct, its edges and its actions; Drop asks there, so rows never change
- * height.
+ * The page strip: every page of the note with its count of changes and items to decide (✓ none,
+ * ? not read yet); tapping a page shows only its own (and reads it first), "Read n pages" reads
+ * the rest. Two tabs, Changes n · To decide m (technical-design-mark-dialogue.md §5.3). Changes:
+ * left, the changes in reading order, each with its changed text in full and a few words of
+ * context, and Drop; right, the side bar for the selected change, with its text to correct, its
+ * edges and its actions. To decide: left, what the review can't make a change of on its own;
+ * right, its side (`ToDecideSide`). Drop asks in the side bar, so rows never change height.
  */
 import React, {useEffect, useMemo, useState} from 'react';
 import {Pressable, StyleSheet, Text, View, type LayoutChangeEvent} from 'react-native';
 import {dropItemOfToDecide, dropItemOfOperation, type DropItem} from '../../actions/editMarkerDrop';
-import {chipLabel, unreadPages, type AttentionItem, type ManuscriptEntry} from '../../domain/manuscriptPages';
+import {chipLabel, unreadPages, type ManuscriptEntry} from '../../domain/manuscriptPages';
 import {firstWords, lastWords} from '../../domain/markerHunks';
 import type {ChangeHunk, PenTextState} from '../../domain/markerTypes';
 import {plural} from '../../domain/plural';
 import {estimateLines, segmentsText} from '../../domain/textPages';
 import {NO_MARKS} from '../../domain/helpTexts';
 import ChipRow from '../../ui/ChipRow';
+import CountTabs from '../../ui/CountTabs';
 import EmptyState from '../../ui/EmptyState';
 import PagedSection from '../../ui/PagedSection';
 import PillButton from '../../ui/PillButton';
 import {renderSegments} from '../../ui/Segments';
 import {COLORS, FONT, LINE_HEIGHT, RADII, SPACING} from '../../ui/theme';
-import ChangeSide, {DropConfirm} from './ChangeSide';
+import ChangeSide, {DropConfirm, type PenDetail} from './ChangeSide';
+import ToDecideList from './ToDecideList';
+import ToDecideSide, {penOf} from './ToDecideSide';
 import type {ManuscriptReview} from './useManuscriptReview';
 
 /** Words of context a list row shows on each side of a change. */
@@ -40,6 +43,7 @@ const ROW_SIDES = 32 + 96 + 2 * SPACING.md + 2 * (SPACING.sm + ROW_BORDER);
 const ROW_CHAR_WIDTH_SHARE = 0.6;
 
 type PageFilter = 'all' | `${number}`;
+type ReviewList = 'changes' | 'decide';
 type PendingDrop = {title: string; page: number; items: DropItem[]; withHandwriting: boolean; forAttention: boolean};
 
 interface Props {
@@ -67,7 +71,8 @@ export default function ReviewTab({
   const [editing, setEditing] = useState(false);
   const [pendingDrop, setPendingDrop] = useState<PendingDrop | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [attentionIndex, setAttentionIndex] = useState(0);
+  const [list, setList] = useState<ReviewList>('changes');
+  const [decideKey, setDecideKey] = useState<string | null>(null);
   const [listWidth, setListWidth] = useState(0);
   const [pageFilter, setPageFilter] = useState<PageFilter>('all');
 
@@ -79,7 +84,7 @@ export default function ReviewTab({
   }, [showPage]);
 
   const entries = useMemo(() => onPage(view.entries, pageFilter), [view.entries, pageFilter]);
-  const attention = useMemo(() => onPage(view.attention, pageFilter), [view.attention, pageFilter]);
+  const toDecide = useMemo(() => onPage(view.toDecide, pageFilter), [view.toDecide, pageFilter]);
   useEffect(() => setPendingDrop(null), [view]);
 
   // A new set of changes selects the first one (or the one whose mark was just selected); a pen
@@ -91,8 +96,19 @@ export default function ReviewTab({
   const firstKey = focused?.key ?? entries[0]?.key ?? null;
   useEffect(() => {
     setSelectedKey(firstKey);
-    setAttentionIndex(0);
   }, [changeKey, firstKey]);
+  // A text whose mark was selected but still can't be placed is shown in To decide.
+  const focusedDecide = focusPenEditId && !focused ? view.toDecide.find(entry => entry.item.penEditId === focusPenEditId) ?? null : null;
+  useEffect(() => {
+    if (focusedDecide) {
+      setList('decide');
+      setDecideKey(focusedDecide.key);
+    }
+  }, [focusedDecide]);
+  const decided = toDecide.find(entry => entry.key === decideKey) ?? toDecide[0] ?? null;
+  const decidedReview = decided ? pages[decided.page] : undefined;
+  const decidedPen =
+    decided && decidedReview?.state === 'read' ? penOf(decidedReview.preview.penEdits, decided.item.penEditId) : null;
 
   const selected = entries.find(entry => entry.key === selectedKey) ?? entries[0] ?? null;
   const selectedPreview = selected ? pages[selected.page] : undefined;
@@ -194,25 +210,36 @@ export default function ReviewTab({
           />
         </View>
       ) : null}
-      {attention.length > 0 ? (
-        <AttentionLine
-          items={attention}
-          index={Math.min(attentionIndex, attention.length - 1)}
-          onIndex={setAttentionIndex}
-          disabled={busy || loading || applied}
-          onSelectMark={id => review.selectMark(id, onClose)}
-          onPlaceHere={item => item.item.penEditId && review.placeHere(item.page, item.item.penEditId)}
-          onDrop={item => {
-            const dropItem = dropItemOfToDecide(item.item);
-            if (dropItem) {
-              askDrop(`Drop ${item.item.summary.toLowerCase()}?`, item.page, [dropItem], true);
-            }
+      <View style={styles.tabs}>
+        <CountTabs<ReviewList>
+          tabs={[
+            {key: 'changes', label: 'Changes', count: entries.length},
+            {key: 'decide', label: 'To decide', count: toDecide.length},
+          ]}
+          activeKey={list}
+          onChange={key => {
+            setEditing(false);
+            setPendingDrop(null);
+            setList(key);
           }}
         />
-      ) : null}
+      </View>
       <View style={styles.columns}>
         <View style={styles.list} onLayout={(event: LayoutChangeEvent) => setListWidth(event.nativeEvent.layout.width)}>
-          {listWidth > 0 ? (
+          {list === 'decide' ? (
+            <ToDecideList
+              entries={toDecide}
+              selectedKey={decided?.key ?? null}
+              onSelect={key => {
+                setEditing(false);
+                setPendingDrop(null);
+                setDecideKey(key);
+              }}
+              penStates={review.penStates}
+              severalPages={pageCount > 1}
+              resetKey={`${pageFilter}|${toDecide.map(entry => entry.key).join('|')}`}
+            />
+          ) : listWidth > 0 ? (
             <PagedSection
               header={header}
               rows={entries}
@@ -247,8 +274,45 @@ export default function ReviewTab({
           ) : null}
         </View>
         <View style={styles.side}>
-          {pendingDrop?.forAttention ? (
-            dropConfirm
+          {list === 'decide' ? (
+            decided ? (
+              <ToDecideSide
+                entry={decided}
+                pageRects={decidedReview?.state === 'read' ? decidedReview.preview.base?.pageRects ?? [] : []}
+                pen={
+                  decidedPen
+                    ? {
+                        view: decidedPen,
+                        status: penStatusOf(review.penStates[decidedPen.id]),
+                        text: penTextNow(review.penStates[decidedPen.id]),
+                      }
+                    : null
+                }
+                insert={decidedPen ? penTextNow(review.penStates[decidedPen.id]) : ''}
+                busy={busy || loading || applied}
+                editing={editing && !!decidedPen}
+                onEditing={setEditing}
+                onSaveText={text => decidedPen && review.correct(decidedPen.id, text)}
+                onHere={(edges, option) => review.here(decided.page, decided.item, edges, option)}
+                onSelectMark={() => decided.item.penEditId && review.selectMark(decided.item.penEditId, onClose)}
+                onPlaceHere={() => decided.item.penEditId && review.placeHere(decided.page, decided.item.penEditId)}
+                onIgnore={() => review.ignore(decided.page, decided.item)}
+                onDrop={
+                  !applied && dropItemOfToDecide(decided.item)
+                    ? () =>
+                        askDrop(
+                          decided.item.kind === 'unclear'
+                            ? 'Remove these strokes from the page?'
+                            : `Drop ${decided.item.summary.toLowerCase()}?`,
+                          decided.page,
+                          [dropItemOfToDecide(decided.item) as DropItem],
+                          true,
+                        )
+                    : null
+                }
+                dropConfirm={pendingDrop?.forAttention ? dropConfirm : null}
+              />
+            ) : null
           ) : selected ? (
             <ChangeSide
               operation={selected.operation}
@@ -291,14 +355,14 @@ export default function ReviewTab({
   );
 }
 
-/** What the header says about the review: pages, edits, recognizing, attention. */
+/** What the header says about the review: pages, edits, recognizing, to decide. */
 export function reviewContext(review: ManuscriptReview): string {
   const {note, view, loading} = review;
   return [
     note && note.pageCount > 1 ? plural(note.pageCount, 'page') : note ? `Page ${note.currentPage + 1}` : null,
     loading && view.entries.length === 0 ? null : plural(view.entries.length, 'edit'),
     view.pendingCount > 0 ? `${view.pendingCount} recognizing` : null,
-    view.attention.length > 0 ? `${view.attention.length} need${view.attention.length === 1 ? 's' : ''} attention` : null,
+    view.toDecide.length > 0 ? `${view.toDecide.length} to decide` : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -315,6 +379,14 @@ function rowText(hunk: ChangeHunk): string {
     hunk.after,
     ROW_CONTEXT_WORDS,
   )}`;
+}
+
+/** A To decide text's state for its pen text: being recognized until its text is known. */
+function penStatusOf(state: PenTextState | undefined): PenDetail['status'] {
+  if (!state || state.status === 'recognizing' || state.status === 'waiting') {
+    return 'recognizing';
+  }
+  return state.status === 'done' ? 'ready' : state.status;
 }
 
 /** The text a snippet has now: the correction, else the recognition. */
@@ -368,72 +440,6 @@ function HunkRow({
   );
 }
 
-/** One item that needs attention at a time, with ‹ › when there are more. */
-function AttentionLine({
-  items,
-  index,
-  onIndex,
-  disabled,
-  onSelectMark,
-  onPlaceHere,
-  onDrop,
-}: {
-  items: AttentionItem[];
-  index: number;
-  onIndex: (index: number) => void;
-  disabled: boolean;
-  onSelectMark: (penEditId: string) => void;
-  onPlaceHere: (item: AttentionItem) => void;
-  onDrop: (item: AttentionItem) => void;
-}): React.JSX.Element {
-  const {page, item} = items[index];
-  const name = `p.${page + 1} · ${item.summary}`;
-  return (
-    <View style={styles.attention}>
-      <Text style={styles.attentionTitle}>Needs attention</Text>
-      <Text style={styles.attentionText} numberOfLines={2}>
-        <Text style={styles.attentionName}>{name}: </Text>
-        {item.reason}
-      </Text>
-      {item.penEditId ? (
-        <PillButton
-          size="small"
-          label="Select mark ›"
-          onPress={() => onSelectMark(item.penEditId as string)}
-          disabled={disabled}
-        />
-      ) : null}
-      {item.penEditId && item.canPlaceHere ? (
-        <PillButton size="small" label="Insert right here" onPress={() => onPlaceHere(items[index])} disabled={disabled} />
-      ) : null}
-      {dropItemOfToDecide(item) ? (
-        <PillButton size="small" label="Drop" onPress={() => onDrop(items[index])} disabled={disabled} />
-      ) : null}
-      {items.length > 1 ? (
-        <View style={styles.attentionPager}>
-          <PillButton
-            size="small"
-            label="‹"
-            accessibilityLabel="Previous item"
-            onPress={() => onIndex(index - 1)}
-            disabled={index === 0}
-          />
-          <Text style={styles.meta}>
-            {index + 1} / {items.length}
-          </Text>
-          <PillButton
-            size="small"
-            label="›"
-            accessibilityLabel="Next item"
-            onPress={() => onIndex(index + 1)}
-            disabled={index === items.length - 1}
-          />
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   tab: {
     flex: 1,
@@ -441,6 +447,10 @@ const styles = StyleSheet.create({
   strip: {
     marginHorizontal: SPACING.xl,
     marginTop: SPACING.base,
+  },
+  tabs: {
+    marginHorizontal: SPACING.xl,
+    marginTop: SPACING.sm,
   },
   columns: {
     flex: 1,
@@ -510,34 +520,5 @@ const styles = StyleSheet.create({
     fontSize: FONT.small,
     lineHeight: LINE_HEIGHT.small,
     color: COLORS.muted,
-  },
-  attention: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.md,
-    marginHorizontal: SPACING.xl,
-    marginTop: SPACING.base,
-    padding: SPACING.sm,
-    borderWidth: 2,
-    borderColor: COLORS.accent,
-    borderRadius: RADII.md,
-  },
-  attentionTitle: {
-    fontSize: FONT.small,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  attentionText: {
-    flex: 1,
-    fontSize: FONT.small,
-    color: COLORS.text,
-  },
-  attentionName: {
-    fontWeight: '700',
-  },
-  attentionPager: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
   },
 });

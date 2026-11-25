@@ -256,8 +256,8 @@ function ManuscriptCard({
           entry => entry.operation.penEditId === focusPenEditId,
         )
       ? 'Mark found: the change is in the list now.'
-      : changes.attention.some(item => item.item.penEditId === focusPenEditId)
-      ? 'Mark selected, but the text still needs attention: see the line above the list.'
+      : changes.toDecide.some(item => item.item.penEditId === focusPenEditId)
+      ? 'Mark selected, but its place is still open: see To decide.'
       : null;
   const status = jumpError
     ? {kind: 'error' as const, text: jumpError}
