@@ -21,6 +21,12 @@ export type MarkHelpEntry = {
 
 export type HelpBlock = {title: string; text: string};
 
+/**
+ * A block of Getting started (technical-design-release-readiness.md §5.1): text, optionally the
+ * overview rows of some marks below it, and the cheat sheet button.
+ */
+export type StartBlock = HelpBlock & {marks?: string[]; cheatSheet?: boolean};
+
 export const MARK_HELP: MarkHelpEntry[] = [
   {
     id: 'delete',
@@ -211,5 +217,31 @@ export const REVIEW_HELP: HelpBlock[] = [
   {
     title: 'Wrong words picked?',
     text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/Manuscript/fonts and open Manuscript again. Settings has the calibration and, under Diagnostics, Report a problem: one file for a bug report.',
+  },
+];
+
+/** Getting started, the first pages of the help (technical-design-release-readiness.md §5.1). */
+export const GETTING_STARTED: StartBlock[] = [
+  {
+    title: 'What Manuscript does',
+    text: 'Your text sits in textboxes in a note. You mark edits by pen as on paper, Manuscript reads the marks, shows every change, and applies the ones you want. Text files come in and go out through Files.',
+  },
+  {
+    title: 'The buttons',
+    text: 'Manuscript (note toolbar): the card - Review lists the marks of the pages and applies them, Outline shows headings and paragraphs to move, Files imports, links and exports, Settings. Insertion or Replacement (lasso toolbar): lasso handwriting you wrote right after a mark to make it the new text. Comment or Image (lasso toolbar): keep handwriting beside the text as a comment or an image. Textbox Tools (lasso toolbar, with textboxes selected): split, join, clean up.',
+  },
+  {
+    title: 'The core marks',
+    text: 'More marks - letters, spaces, punctuation, swaps, paragraphs - on the next pages.',
+    marks: ['delete', 'replace', 'insert'],
+  },
+  {
+    title: 'First things to do',
+    text: 'Import a text: Manuscript → Files → Import a text file. Put the cheat sheet of the marks on a page to keep it at hand. Then mark something and open Manuscript.',
+    cheatSheet: true,
+  },
+  {
+    title: 'Good to know',
+    text: 'Your text is backed up before every change. Manuscript is developed on the A5 X; other devices are beta. Something wrong? Settings → Diagnostics → Report a problem writes one file for a bug report.',
   },
 ];

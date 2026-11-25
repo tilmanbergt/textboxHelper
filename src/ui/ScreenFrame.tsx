@@ -54,8 +54,14 @@ interface Props {
   context?: string;
   back?: {label: string; onPress: () => void};
   actions?: FrameButton[];
-  /** Help behind "?": a text (domain/helpTexts.ts), or the edit-marker help with pictures. */
-  help?: {title: string; text: string} | {title: string; marks: true};
+  /**
+   * Help behind "?": a text (domain/helpTexts.ts), or the help with Getting started and the marks.
+   * `firstStart` opens that help when the screen opens and calls `onFirstStartDone` when it is
+   * closed (technical-design-release-readiness.md §5.2); `onCheatSheet` shows the cheat sheet button.
+   */
+  help?:
+    | {title: string; text: string}
+    | {title: string; marks: true; firstStart?: boolean; onFirstStartDone?: () => void; onCheatSheet?: () => void};
   onClose?: () => void;
   status?: FrameStatus | null;
   primary?: FramePrimary;
@@ -78,7 +84,18 @@ export default function ScreenFrame({
   screenKey,
   children,
 }: Props): React.JSX.Element {
-  const [helpOpen, setHelpOpen] = useState(false);
+  const startsWithHelp = !!help && 'marks' in help && !!help.firstStart;
+  const [helpOpen, setHelpOpen] = useState(startsWithHelp);
+  const [firstStart, setFirstStart] = useState(startsWithHelp);
+  const closeHelp = () => {
+    setHelpOpen(false);
+    if (firstStart) {
+      setFirstStart(false);
+      if (help && 'marks' in help) {
+        help.onFirstStartDone?.();
+      }
+    }
+  };
 
   // Status and button changes during a long run come without a touch, so they ask for a redraw.
   const primaryLabel = primary ? (primary.busy ? primary.busyLabel ?? primary.label : primary.label) : '';
@@ -118,7 +135,21 @@ export default function ScreenFrame({
         <ErrorBoundary onReport={reportCrash} onClose={onClose}>
           {children}
         </ErrorBoundary>
-        {help && helpOpen && 'marks' in help && <MarkHelp title={help.title} onClose={() => setHelpOpen(false)} />}
+        {help && helpOpen && 'marks' in help && (
+          <MarkHelp
+            title={help.title}
+            onClose={closeHelp}
+            firstStart={firstStart}
+            onCheatSheet={
+              help.onCheatSheet
+                ? () => {
+                    closeHelp();
+                    help.onCheatSheet?.();
+                  }
+                : undefined
+            }
+          />
+        )}
         {help && helpOpen && 'text' in help && (
           <HelpOverlay title={help.title} text={help.text} onClose={() => setHelpOpen(false)} />
         )}

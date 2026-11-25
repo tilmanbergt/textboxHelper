@@ -27,6 +27,7 @@ const LASSO_PANEL = new Set([
   'src/screens/tools/TextboxToolsScreen.tsx',
   'src/screens/tools/ToolsDetailsScreen.tsx',
   'src/screens/manuscript/outline/OutlineTab.tsx',
+  'src/domain/markHelp.ts',
 ]);
 
 describe('product name', () => {

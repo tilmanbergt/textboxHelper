@@ -50,6 +50,8 @@ export type PluginSettings = {
   export: ExportSettings;
   markers: {calibration: TextboxMeasurementCalibration};
   outline: OutlineSettings;
+  /** Getting started has been shown once on the first start (technical-design-release-readiness.md §5.2). */
+  onboarding: {seen: boolean};
 };
 
 export const DEFAULT_OUTLINE_SETTINGS: OutlineSettings = {
@@ -69,6 +71,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   },
   markers: {calibration: DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION},
   outline: DEFAULT_OUTLINE_SETTINGS,
+  onboarding: {seen: false},
 };
 
 /** Calibration values beyond this are a mistake, not a correction. */
@@ -238,6 +241,7 @@ export function parseSettings(json: string | null): PluginSettings {
     export: parseExport(raw.export),
     markers: {calibration: parseCalibration(raw.markers)},
     outline: parseOutline(raw.outline),
+    onboarding: {seen: asObject(raw.onboarding).seen === true},
   };
 }
 

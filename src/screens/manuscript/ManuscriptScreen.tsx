@@ -29,6 +29,7 @@ import ScreenFrame, {type FramePrimary, type FrameStatus} from '../../ui/ScreenF
 import {COLORS, FONT, SPACING} from '../../ui/theme';
 import {noteHasTextboxes} from '../../actions/noteContent';
 import {runHousekeepingOnce} from '../../actions/housekeeping';
+import {getSettings, updateSettings} from '../../storage/settingsFile';
 import ExportScreen from '../export/ExportScreen';
 import ImportScreen from '../import/ImportScreen';
 import FilesTab from './files/FilesTab';
@@ -90,6 +91,10 @@ function ManuscriptCard({
   );
   const outline = useOutline(review.note, review.pages, records);
   const [view, setView] = useState<'card' | 'settings' | 'import' | 'export'>('card');
+  const firstStart = useRef(!getSettings().onboarding.seen);
+  const markOnboardingSeen = useCallback(() => {
+    updateSettings(settings => ({...settings, onboarding: {seen: true}}));
+  }, []);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('outline');
   const [importFolder, setImportFolder] = useState(false);
   const [tab, setTabState] = useState<Tab>(initialTab ?? 'review');
@@ -301,7 +306,13 @@ function ManuscriptCard({
       title="Manuscript"
       context={[reviewContext(review), files].filter(Boolean).join(' · ')}
       actions={[{label: 'Settings', onPress: () => openSettings('outline')}]}
-      help={{title: 'Edit marks', marks: true}}
+      help={{
+        title: 'Help',
+        marks: true,
+        // Getting started opens once, on the first start (technical-design-release-readiness.md §5.2).
+        firstStart: firstStart.current,
+        onFirstStartDone: markOnboardingSeen,
+      }}
       onClose={onClose}
       status={status}
       primary={primary}

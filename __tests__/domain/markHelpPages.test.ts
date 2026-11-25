@@ -1,11 +1,13 @@
-import {MARK_HELP, MARK_HELP_KEYS, REVIEW_HELP} from '../../src/domain/markHelp';
+import {GETTING_STARTED, MARK_HELP, MARK_HELP_KEYS, REVIEW_HELP} from '../../src/domain/markHelp';
 import {
   MARK_HELP_LAYOUT as L,
   entryTextHeight,
   estimateLines,
   markHelpPages,
   overviewKeysHeight,
+  overviewPage,
   pageOfMark,
+  startBlockHeight,
   type MarkHelpPage,
 } from '../../src/domain/markHelpPages';
 
@@ -29,6 +31,13 @@ function pageHeight(page: MarkHelpPage, width: number): number {
         const entry = MARK_HELP.find(e => e.id === placed.id)!;
         return sum + (index > 0 ? L.sectionGap : 0) + L.titleHeight + 2 * L.gap + placed.picture.height + entryTextHeight(entry, width);
       }, 0)
+    );
+  }
+  if (page.kind === 'start') {
+    return (
+      L.headingHeight +
+      L.footerHeight +
+      page.blocks.reduce((sum, block, index) => sum + (index > 0 ? L.sectionGap : 0) + startBlockHeight(block, width), 0)
     );
   }
   return (
@@ -102,5 +111,39 @@ describe('markHelpPages', () => {
     expect(page).toBeGreaterThan(0);
     expect(pages[page]).toMatchObject({kind: 'marks'});
     expect(pageOfMark(pages, 'nothing')).toBe(-1);
+  });
+
+  it('Getting started comes first, every block once, then the overview', () => {
+    const pages = markHelpPages(MARK_HELP, REVIEW_HELP, KEYS, PICTURES, 654, 760, GETTING_STARTED);
+    const start = pages.filter(p => p.kind === 'start');
+    expect(start.length).toBeGreaterThan(0);
+    expect(start.length).toBeLessThanOrEqual(3);
+    expect(pages.slice(0, start.length).every(p => p.kind === 'start')).toBe(true);
+    expect(pages[0]).toMatchObject({kind: 'start', first: true});
+    expect(start.flatMap(p => (p.kind === 'start' ? p.blocks.map(b => b.title) : []))).toEqual(GETTING_STARTED.map(b => b.title));
+    expect(overviewPage(pages)).toBe(start.length);
+    expect(pages[overviewPage(pages)]).toMatchObject({kind: 'overview', first: true});
+    expect(pageOfMark(pages, 'swap')).toBeGreaterThan(start.length);
+  });
+
+  it.each([
+    [654, 760],
+    [888, 450],
+  ])('Getting started pages fit the box (%i x %i)', (width, height) => {
+    const pages = markHelpPages(MARK_HELP, REVIEW_HELP, KEYS, PICTURES, width, height, GETTING_STARTED);
+    for (const page of pages.filter(p => p.kind === 'start')) {
+      if (page.kind === 'start' && page.blocks.length > 1) {
+        expect(pageHeight(page, width)).toBeLessThanOrEqual(height);
+      }
+    }
+  });
+
+  it('the core marks block names marks that exist', () => {
+    const ids = new Set(MARK_HELP.map(e => e.id));
+    for (const block of GETTING_STARTED) {
+      for (const id of block.marks ?? []) {
+        expect(ids.has(id)).toBe(true);
+      }
+    }
   });
 });

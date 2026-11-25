@@ -1,11 +1,11 @@
 /**
- * How the edit-marker help is split into pages (technical-design-mark-help.md §4): the overview
- * of all marks first, then the marks with their pictures (two on a page when they fit, else
+ * How the edit-marker help is split into pages (technical-design-mark-help.md §4): Getting started
+ * first (technical-design-release-readiness.md §5.1), then the overview of all marks, then the marks with their pictures (two on a page when they fit, else
  * one), then the blocks about the review. Nothing scrolls, so every page must fit the measured
  * box. Text heights are estimated from the text length, generously, because the pages are fixed
  * before anything is drawn; ui/MarkHelp.tsx draws with the same sizes as `MARK_HELP_LAYOUT`.
  */
-import type {HelpBlock, MarkHelpEntry} from './markHelp';
+import type {HelpBlock, MarkHelpEntry, StartBlock} from './markHelp';
 import {estimateLines as estimateTextLines} from './textPages';
 
 /** Sizes (dp) shared with ui/MarkHelp.tsx, so estimate and drawing agree. */
@@ -25,6 +25,10 @@ export const MARK_HELP_LAYOUT = {
   bulletIndent: 18,
   /** Smallest picture height when a picture has to shrink to fit a page alone. */
   minPictureHeight: 80,
+  /** The cheat sheet button on a Getting started page, with its gap. */
+  buttonHeight: 56,
+  /** The footer line on the first start ("This is shown once…"). */
+  footerHeight: 44,
 } as const;
 
 /** Lines of help text at the help's font size. */
@@ -48,6 +52,7 @@ export type PictureSize = {width: number; height: number};
 export type PlacedEntry = {id: string; picture: PictureSize};
 
 export type MarkHelpPage =
+  | {kind: 'start'; blocks: StartBlock[]; first: boolean}
   | {kind: 'overview'; ids: string[]; first: boolean}
   | {kind: 'marks'; entries: PlacedEntry[]}
   | {kind: 'text'; blocks: HelpBlock[]};
@@ -59,9 +64,43 @@ export function overviewKeysHeight(keys: string[], width: number): number {
   return keys.reduce<number>((sum, key) => sum + estimateLines(key, width - 70) * L.lineHeight + L.gap, L.gap);
 }
 
+/** The height of a Getting started block: title, text, its mark rows and the button. */
+export function startBlockHeight(block: StartBlock, width: number): number {
+  const L = MARK_HELP_LAYOUT;
+  return (
+    L.titleHeight +
+    estimateLines(block.text, width) * L.lineHeight +
+    (block.marks?.length ?? 0) * L.rowHeight +
+    (block.cheatSheet ? L.buttonHeight : 0)
+  );
+}
+
+/** Getting started's pages: blocks as they fit, with room kept for the footer line on every page. */
+export function startPages(blocks: StartBlock[], width: number, height: number): MarkHelpPage[] {
+  const L = MARK_HELP_LAYOUT;
+  const room = height - L.headingHeight - L.footerHeight;
+  const pages: MarkHelpPage[] = [];
+  let current: StartBlock[] = [];
+  let used = 0;
+  for (const block of blocks) {
+    const own = startBlockHeight(block, width);
+    if (current.length > 0 && used + L.sectionGap + own > room) {
+      pages.push({kind: 'start', blocks: current, first: pages.length === 0});
+      current = [];
+      used = 0;
+    }
+    used += (current.length > 0 ? L.sectionGap : 0) + own;
+    current.push(block);
+  }
+  if (current.length > 0) {
+    pages.push({kind: 'start', blocks: current, first: pages.length === 0});
+  }
+  return pages;
+}
+
 /**
  * The pages for a box of `width` × `height` dp. `pictures` gives each mark's picture size at
- * its natural display width (already no wider than the box).
+ * its natural display width (already no wider than the box). `gettingStarted` comes first.
  */
 export function markHelpPages(
   entries: MarkHelpEntry[],
@@ -70,9 +109,10 @@ export function markHelpPages(
   pictures: Record<string, PictureSize>,
   width: number,
   height: number,
+  gettingStarted: StartBlock[] = [],
 ): MarkHelpPage[] {
   const L = MARK_HELP_LAYOUT;
-  const pages: MarkHelpPage[] = [];
+  const pages: MarkHelpPage[] = startPages(gettingStarted, width, height);
 
   // Overview: as many rows as fit above the keys; more rows go on a second overview page.
   const rowRoom = height - L.headingHeight - overviewKeysHeight(keys, width);
@@ -125,6 +165,11 @@ export function markHelpPages(
     pages.push({kind: 'text', blocks: blockPage});
   }
   return pages;
+}
+
+/** The first page of "Marks at a glance". */
+export function overviewPage(pages: MarkHelpPage[]): number {
+  return Math.max(0, pages.findIndex(page => page.kind === 'overview'));
 }
 
 /** The page that shows a mark's picture, for the overview's "p. n ›". */
