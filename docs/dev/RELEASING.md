@@ -84,6 +84,23 @@ Every push to any branch is checked and built on GitHub (`.github/workflows/chec
 A newer push to the same branch cancels a build that is still running. `npm run test-notes`
 writes the same notes to `build\TESTING.md` for a local build.
 
+### Betas
+
+A beta is a test version of the release being worked on (`nextVersion`) that anyone can install.
+Make one when that release is feature-complete on `main`, before the release itself:
+
+1. `CHANGELOG.md` `[Unreleased]` reads well for testers (it becomes the beta's text) and is pushed.
+2. GitHub → **Actions** → **beta** → **Run workflow**, branch `main` → **Run workflow**
+   (works from the phone too).
+3. About 20 minutes later the Releases page has the **pre-release** "Manuscript 0.3.0 beta 1"
+   (tag `v0.3.0-beta.1`) with the `.snplg`, labelled `0.3.0-beta+a1b2c3d`, and `TESTING.md` since
+   the last release. The next run makes beta 2.
+
+The workflow refuses to run on another branch, without a `nextVersion` above the current version,
+with an empty `[Unreleased]`, or when the build has uncommitted changes. Pre-releases never become
+the "Latest" release. They stay on the Releases page after the release; delete one there (and its
+tag) if it was a mistake.
+
 ## 4. Releases
 
 Releases are made from `main`. A release is a normal GitHub release; add `--prerelease` to mark one as experimental.
