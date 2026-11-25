@@ -1,7 +1,7 @@
 # Security policy
 
-Textbox Tools (being renamed to Manuscript) is a plugin for the Supernote, made by one person in
-their spare time. This page says which versions get security fixes, how to report a vulnerability
+Manuscript (formerly Textbox Tools) is a plugin for the Supernote, made by one person in their
+spare time. This page says which versions get security fixes, how to report a vulnerability
 privately, and what the plugin touches.
 
 ## Supported versions

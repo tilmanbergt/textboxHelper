@@ -15,9 +15,9 @@ export async function saveTimings(): Promise<string> {
     throw new Error('No timings recorded yet.');
   }
   const createdAt = new Date().toISOString();
-  const fileName = `textboxhelper-timings-${createdAt.replace(/[:.]/g, '-')}.json`;
+  const fileName = `manuscript-timings-${createdAt.replace(/[:.]/g, '-')}.json`;
   return writeJsonExportFile(fileName, {
-    kind: 'textboxhelper-timings',
+    kind: 'manuscript-timings',
     version: 1,
     // The build label (0.3.0-alpha+a1b2c3d): which build recorded the timings.
     plugin: BUILD_INFO.label,

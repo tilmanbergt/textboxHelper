@@ -1,4 +1,4 @@
-# Textbox Tools development policy
+# Manuscript development policy
 
 > **About this document.** The one document that says what has to be true after every change and
 > before every release. It applies to everyone who changes the code - in practice mostly Claude,
@@ -70,7 +70,7 @@ The architecture as built is described in `design-overview.md`. These rules are 
   `[[links]]`, the plugin's own file) on import and Update, and lists the folder's `.txt` files
   (`technical-design-linked-files.md`); it never deletes or renames a user's file.
   It reads font files from `/system/fonts`, `MyStyle/fonts` and
-  `MyStyle/TextboxHelper/fonts`. A new place needs a line in the README and in
+  `MyStyle/Manuscript/fonts`. A new place needs a line in the README and in
   `supernote-host-facts.md` if the host restricts it.
 - **Host calls are checked.** Every `sn-plugin-lib` call's result is checked for success; a
   failure becomes an error with a message the user can understand.

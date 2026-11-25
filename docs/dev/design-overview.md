@@ -1,4 +1,4 @@
-# Textbox Tools - design overview
+# Manuscript - design overview
 
 > **About this document.** How the plugin is built and why: the flow from a button press to a
 > changed note, the layers, the features and where they live. Living document:
@@ -296,7 +296,7 @@ rendering is described in `supernote-host-facts.md` §4. `src/supernote/textboxM
 single source of truth for textbox height; its pure half (calibration, fallback estimate, empty
 lines) is `src/domain/textboxLayout.ts`. The module measures in the textbox's own font. A font
 the plugin can't open in the NOTE app's folder is loaded from a readable copy (`MyStyle/fonts`,
-then `MyStyle/TextboxHelper/fonts`, `src/domain/fontPaths.ts`); `typefaceStatus` in every result
+then `MyStyle/Manuscript/fonts`, `src/domain/fontPaths.ts`); `typefaceStatus` in every result
 says which font was used. When no copy is found, the measurement remembers the font, and the
 marker preview, the textbox actions and the import append a warning to their message
 (`resetFontWarnings`/`getFontWarning` in `textboxMetrics.ts`).

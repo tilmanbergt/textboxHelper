@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Textbox Tools are listed here, newest first.
+All notable changes to Manuscript (formerly Textbox Tools) are listed here, newest first.
 
 ## [Unreleased]
 
@@ -61,6 +61,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Changed
 
+- The plugin is now called **Manuscript** (it was Textbox Tools); the lasso panel for split, join and clean-up keeps the name Textbox Tools. It installs over the old version, with your settings and pen edits. **Move fonts you copied to `MyStyle/TextboxHelper/fonts` to `MyStyle/Manuscript/fonts`**: the old folder is no longer read. Files the plugin saves to EXPORT start with `manuscript-`.
 - Tagged text without a mark keeps a "?" on the page instead of a number; numbers are given only when the text is linked to its mark and count only linked texts, so they stay in order. Select mark turns the "?" into the next number. The card after tagging says "No mark found for this text" and offers Select mark now or Later.
 - Select mark on strokes that are no clear mark changes nothing and shows "Not a clear mark" with a picture of the strokes, why, Try again and Cancel.
 - A number on the page always shows up in the review: a tagged mark that can't be placed (erased, over two lines, on a font plugins can't read, its caret gone) is listed with why and the nearest place it could go, instead of "not recognized". A tagged mark is no longer also listed as a stray mark.
@@ -82,7 +83,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 - Insert-space mark: a ∧ or V with a small cross (+, × or #) at its tip puts a space in there, e.g. inside "thisword".
 - A caret inside a word now lands on the letter it points at: the plugin measures where every letter is drawn instead of assuming all letters are equally wide.
 - A step mark on its own now needs a second short line next to its upright (_||‾) to break a paragraph; a step alone is the middle piece of a swap, or is listed under To decide with how to make either. Before tagged text, a step still works alone. Steps may also be drawn falling (‾|_).
-- Marks on a textbox whose font plugins can't read are now ignored instead of guessed: its words would be measured in a standard font and a mark could hit the wrong word. The review lists them under To decide with the font's name and says in its status line which font to copy to MyStyle/TextboxHelper/fonts. Insertions between two paragraphs still work.
+- Marks on a textbox whose font plugins can't read are now ignored instead of guessed: its words would be measured in a standard font and a mark could hit the wrong word. The review lists them under To decide with the font's name and says in its status line which font to copy to MyStyle/Manuscript/fonts. Insertions between two paragraphs still work.
 - The plugin is now called Textbox Tools everywhere (plugin list, screens, permission request). Its identity is unchanged: updates install over the previous version, and the folders in MyStyle keep their names.
 - Textbox Tools (the lasso screen) is new and never scrolls: the actions on the left, After and Before of the chosen action on the right, paged. Split Paragraphs is now on this screen too. An action that doesn't fit the selection is greyed with the reason ("needs exactly 1 textbox", "nothing to clean"); when only one action fits, it is already chosen. The button names the action ("Apply Join Text Boxes"); after it the screen shows the result and the backup's file name. "Log All Textboxes" moved to Details.
 - Import Text File has a new screen: "Choose ›" opens the Supernote file selector in INBOX (only `.txt` files, folders inside INBOX work too) instead of a typed file name. The preview updates by itself after every change and draws the planned pages to scale; font size and margins moved to "Layout". The help is behind "?".

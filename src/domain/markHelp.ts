@@ -164,7 +164,7 @@ export const MARK_HELP: MarkHelpEntry[] = [
 /** The keys under the overview. */
 export const MARK_HELP_KEYS = {
   text: 'Right after the mark, write the new words anywhere on the page, lasso them and tap Insertion or Replacement in the lasso toolbar.',
-  numbers: 'Grey numbers are placed by Textbox Tools when you tag text. They pair the text with its mark; you never write them.',
+  numbers: 'Grey numbers are placed by Manuscript when you tag text. They pair the text with its mark; you never write them.',
 };
 
 export const REVIEW_HELP: HelpBlock[] = [
@@ -210,6 +210,6 @@ export const REVIEW_HELP: HelpBlock[] = [
   },
   {
     title: 'Wrong words picked?',
-    text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/TextboxHelper/fonts and open Manuscript again. Settings has the calibration and, under Diagnostics, Save Diagnostics for a bug report.',
+    text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/Manuscript/fonts and open Manuscript again. Settings has the calibration and, under Diagnostics, Save Diagnostics for a bug report.',
   },
 ];

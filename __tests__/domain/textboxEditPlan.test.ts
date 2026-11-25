@@ -159,7 +159,7 @@ describe('backup', () => {
     expect(payload.texts[0]).toMatchObject({uuid: 'a', textContentFull: 'Hello  world', fontSize: 36, fontPath: null});
     const summary = buildClipboardSummary({...payload, createdAt: '2026-11-15T12:00:00.000Z'});
     expect(summary).toBe(
-      'textboxHelper clean backup\nCreated: 2026-11-15T12:00:00.000Z\nNote: /note.note\nPage: 3\n\n#1\nHello  world\n',
+      'Manuscript clean backup\nCreated: 2026-11-15T12:00:00.000Z\nNote: /note.note\nPage: 3\n\n#1\nHello  world\n',
     );
   });
 });

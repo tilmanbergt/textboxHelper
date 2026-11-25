@@ -239,7 +239,7 @@ export function writeAccessText(access: WriteAccess): string {
   if (!access.written) {
     return `Can't write in ${access.folder.split('/').slice(-1)[0] || access.folder}: ${access.error ?? 'unknown reason'}`;
   }
-  return `Can write here (${access.written}).${access.deleted ? '' : ' The probe file could not be deleted: .textbox-tools-probe.txt'}`;
+  return `Can write here (${access.written}).${access.deleted ? '' : ' The probe file could not be deleted: .manuscript-probe.txt'}`;
 }
 
 export type SourceWriteMode = 'file' | 'copy' | 'export';

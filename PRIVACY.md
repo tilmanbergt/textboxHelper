@@ -1,6 +1,6 @@
 # Privacy and data
 
-Textbox Tools (being renamed to Manuscript) is a local plugin for the Supernote. There is no
+Manuscript (formerly Textbox Tools) is a local plugin for the Supernote. There is no
 account, no server and no telemetry, and it has **no network permission**: `PluginConfig.json`
 asks only for reading and writing files. Nothing it reads or writes leaves the device.
 
@@ -23,12 +23,12 @@ asks only for reading and writing files. Nothing it reads or writes leaves the d
 - **Text files you import or link**, wherever you choose them with the Supernote file selector
   (it opens in INBOX or the folder of your last file). A linked file is written back only when
   you apply changes or tap "Update", and never when it was changed outside the plugin since.
-  "Check write access" writes and removes a small probe file (`.textbox-tools-probe.txt`) in that
+  "Check write access" writes and removes a small probe file (`.manuscript-probe.txt`) in that
   folder.
 - **Folders you link**: the `.txt` files directly in them are listed.
 - **EXPORT**: DOCX exports, and diagnostics or timings files when you save them (Manuscript →
   Settings → Diagnostics).
-- **`MyStyle/TextboxHelper/fonts`** (and `MyStyle/fonts`): only read, to measure text in fonts
+- **`MyStyle/Manuscript/fonts`** (and `MyStyle/fonts`): only read, to measure text in fonts
   you copied there.
 
 ## Cleaning up

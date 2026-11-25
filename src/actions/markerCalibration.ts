@@ -58,7 +58,7 @@ export async function saveEditMarkerDiagnostics(): Promise<string> {
     throw new Error('No page has been read yet.');
   }
   const createdAt = new Date().toISOString();
-  const fileName = `textboxhelper-marker-diagnostics-${createdAt.replace(/[:.]/g, '-')}.json`;
+  const fileName = `manuscript-marker-diagnostics-${createdAt.replace(/[:.]/g, '-')}.json`;
   return writeJsonExportFile(fileName, {
     kind: 'edit-marker-diagnostics',
     createdAt,

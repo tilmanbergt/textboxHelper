@@ -1,6 +1,6 @@
-# Contributing to Textbox Tools
+# Contributing to Manuscript
 
-Thanks for your interest! Textbox Tools is a hobby project, maintained by one person in spare
+Thanks for your interest! Manuscript is a hobby project, maintained by one person in spare
 time, so response times vary.
 
 ## Reporting bugs

@@ -148,7 +148,7 @@ function App(): React.JSX.Element | null {
     case 'permission':
       return (
         <ScreenFrame
-          title="Textbox Tools"
+          title="Manuscript"
           onClose={closePluginView}
           status={{kind: 'error', text: 'Missing permission: allow file read and write access for this plugin.'}}>
           {null}

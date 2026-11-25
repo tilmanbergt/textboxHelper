@@ -2,7 +2,7 @@ import type {Point, Rect} from './textboxModel';
 
 /**
  * How pen edits are recognized on the page (technical-design-pen-edits.md §3.1, §3.2): their ids,
- * the `userData` Textbox Tools writes into its own page elements (tag icon, number textboxes), the
+ * the `userData` the plugin writes into its own page elements (tag icon, number textboxes), the
  * icon shapes and where icon and numbers go.
  *
  * The page is the truth for which pen edits exist: an entry belongs to a page when its tag icon is
@@ -81,7 +81,7 @@ export function isPenEditElement(element: {userData?: unknown}): boolean {
   return parsePenEditUserData(element.userData) !== null;
 }
 
-/** True for the badges and numbers Textbox Tools placed itself (not the user's strokes). */
+/** True for the badges and numbers the plugin placed itself (not the user's strokes). */
 export function isPenEditDecoration(element: {userData?: unknown}): boolean {
   const role = parsePenEditUserData(element.userData)?.role;
   return role === 'snippet' || role === 'snippetnum' || role === 'markring' || role === 'marknum';

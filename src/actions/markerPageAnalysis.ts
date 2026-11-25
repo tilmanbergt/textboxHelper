@@ -167,7 +167,7 @@ async function analyzePage(
   const {notePath, page, pageElements} = context;
   const pen = await timed('page.penContext', () => loadPenEditContext(notePath, page, pageElements), {page});
 
-  // Tagged snippets' handwriting and Textbox Tools' own badges and numbers are never markers.
+  // Tagged snippets' handwriting and the plugin's own badges and numbers are never markers.
   const markers = pageElements.filter(
     element => isSupportedEditMarkerElement(element) && !pen.isExcluded(element),
   );

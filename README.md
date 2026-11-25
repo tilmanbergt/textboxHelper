@@ -1,18 +1,19 @@
-# Textbox Tools
+# Manuscript
 
-Textbox Tools is an experimental Supernote NOTE plugin for structured text editing inside notes.
+Manuscript (formerly Textbox Tools) is a Supernote NOTE plugin for working on a typed text by pen:
+mark edits by hand, review them, apply them; import text files and export.
 
 It targets the Android-based Supernote plugin runtime only. It does not support iOS.
 
 ## Status
 
-Textbox Tools is experimental and in beta.
+Manuscript is in beta.
 
 The plugin directly modifies NOTE page elements. Please test it on copied notes before using it on important notebooks.
 
 ## Main Features
 
-### Textbox Tools
+### Textbox Tools (lasso panel)
 
 - Split one textbox into sentence-based or paragraph-based textboxes
 - Join selected textboxes in reading order
@@ -83,8 +84,8 @@ Edit markers, Split, Join and Import measure text in the textbox's font, so they
 word sits. The system font and fonts you installed yourself (in `MyStyle/fonts`) work as they are.
 
 The fonts that come with the Supernote, such as 851tegakizatsu, sit in a folder plugins can't
-read. For those, put a copy of the font file in `MyStyle/TextboxHelper/fonts`, named exactly like
-the font, for example `MyStyle/TextboxHelper/fonts/851tegakizatsu.ttf`. 851 Tegaki Zatsu is a
+read. For those, put a copy of the font file in `MyStyle/Manuscript/fonts`, named exactly like
+the font, for example `MyStyle/Manuscript/fonts/851tegakizatsu.ttf`. 851 Tegaki Zatsu is a
 free font by 8:51:22 pm (http://pm85122.onamae.jp/); rename the downloaded
 `851tegaki_zatsu_normal_0883.ttf`.
 

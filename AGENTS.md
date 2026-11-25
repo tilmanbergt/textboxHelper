@@ -1,6 +1,6 @@
-# Textbox Tools - notes for agents and reviewers
+# Manuscript - notes for agents and reviewers
 
-Textbox Tools is a Supernote NOTE plugin (React Native + `sn-plugin-lib`, one native Kotlin
+Manuscript (formerly Textbox Tools) is a Supernote NOTE plugin (React Native + `sn-plugin-lib`, one native Kotlin
 module). The rules for every change are in `docs/dev/DEVELOPMENT-POLICY.md`; this file doesn't
 repeat them: it says what a code review looks for.
 

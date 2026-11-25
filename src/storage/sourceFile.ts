@@ -76,9 +76,9 @@ export type WriteAccess = {
 
 /** Writes, reads back and deletes a small probe file in `folder` (Check write access). */
 export async function checkWriteAccess(folder: string): Promise<WriteAccess> {
-  const probe = `${folder}/.textbox-tools-probe.txt`;
+  const probe = `${folder}/.manuscript-probe.txt`;
   try {
-    const written = await writeTextFile(probe, `Textbox Tools write check ${new Date().toISOString()}\n`);
+    const written = await writeTextFile(probe, `Manuscript write check ${new Date().toISOString()}\n`);
     return {folder, written, deleted: await deleteFile(probe), error: null};
   } catch (error) {
     return {folder, written: null, deleted: false, error: error instanceof Error ? error.message : String(error)};

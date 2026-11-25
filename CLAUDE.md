@@ -1,6 +1,6 @@
-# Working on Textbox Tools
+# Working on Manuscript
 
-Textbox Tools is a Supernote NOTE plugin (React Native +
+Manuscript (formerly Textbox Tools; the lasso panel keeps that name) is a Supernote NOTE plugin (React Native +
 `sn-plugin-lib`, one native Kotlin module) for editing textboxes inside notes: split, join,
 clean up, handwritten edit markers, text import and DOCX export. Its identity never changes:
 pluginID `wkx45auazdre2crs`, pluginKey `textboxHelper`. A new pluginID would install as a
