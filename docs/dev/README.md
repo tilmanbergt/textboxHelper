@@ -87,11 +87,13 @@ no history and no open work:
 - `design-overview.md`: how the plugin is built, and why.
 - `supernote-host-facts.md`: how the Supernote and its plugin host behave where the SDK
   documentation is silent or unclear.
-- `RELEASING.md`: git, commits, builds and releases.
+- `RELEASING.md`: git, commits, builds, betas and releases.
+- `GITHUB-GUIDE.md`: which GitHub button or workflow to use when.
 - this `README.md`.
 
 In the repository root: `CLAUDE.md` (short instructions for Claude), `AGENTS.md` (code review
-guidelines), `CONTRIBUTING.md`, `CHANGELOG.md`.
+guidelines), `CONTRIBUTING.md`, `CHANGELOG.md`, `PRIVACY.md`, `SECURITY.md`; `.github/` holds the
+workflows, the issue forms and the pull request template.
 
 **Historical documents** live in `docs/dev/history/`: technical designs (`technical-design-*.md`,
 requirements, design, as built) and device test records. They are written once and not updated
