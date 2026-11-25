@@ -1,67 +1,20 @@
 {
   "about": "Handwriting in the margin and below the text, and a word written over the text: none of it is a mark.",
   "changes": [],
-  "ignored": [
+  "toDecide": [
     {
-      "summary": "Ignored marker 2",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 2
-    },
-    {
-      "summary": "Ignored marker 3",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 3
-    },
-    {
-      "summary": "Ignored marker 4",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 4
-    },
-    {
-      "summary": "Ignored marker 5",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 5
-    },
-    {
-      "summary": "Ignored marker 6",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 6
-    },
-    {
-      "summary": "Ignored marker 7",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 7
-    },
-    {
-      "summary": "Ignored marker 8",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 8
-    },
-    {
-      "summary": "Ignored marker 9",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 9
-    },
-    {
-      "summary": "Ignored marker 10",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 10
-    },
-    {
-      "summary": "Ignored marker 11",
+      "kind": "unclear",
+      "summary": "Strokes over the text",
       "reason": "The marker is too short to classify reliably.",
-      "stroke": 11,
-      "removable": [
-        11
-      ]
-    },
-    {
-      "summary": "Ignored marker 12",
-      "reason": "The marker is too short to classify reliably.",
-      "stroke": 12,
-      "removable": [
+      "strokes": [
+        11,
         12
-      ]
+      ],
+      "removable": [
+        11,
+        12
+      ],
+      "words": "car"
     }
   ],
   "after": [],

@@ -16,19 +16,26 @@
       ]
     }
   ],
-  "ignored": [
+  "toDecide": [
     {
-      "summary": "Ignored marker 3",
+      "kind": "unclear",
+      "summary": "Strike",
       "reason": "The font locked.ttf can't be read by plugins, so marks on this textbox can't be placed. Copy the font file to MyStyle/TextboxHelper/fonts and open the review again.",
-      "stroke": 3,
+      "strokes": [
+        3
+      ],
       "removable": [
         3
+      ],
+      "words": "paragraph",
+      "readings": [
+        "strike"
       ]
     },
     {
+      "kind": "placeOpen",
       "summary": "Insertion 1",
       "reason": "The font locked.ttf can't be read by plugins, so marks on this textbox can't be placed. Copy the font file to MyStyle/TextboxHelper/fonts and open the review again.",
-      "stroke": 0,
       "penEdit": 1,
       "canPlaceHere": true
     }

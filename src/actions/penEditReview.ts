@@ -55,8 +55,12 @@ export type PenEditContext = {
   entries: PenEditEntry[];
   /** True for the pen edits' badges, numbers and snippet strokes: never marker candidates. */
   isExcluded: (element: Element) => boolean;
-  /** The pen edit whose replace mark has this strike, if any. */
-  strikeOwner: (element: Element) => PenEditEntry | undefined;
+  /**
+   * Each entry's mark strokes on the page now: tagged `mark`, or found by their stored places.
+   * They are kept out of pass 1 and placed from the entry's stored mark
+   * (technical-design-mark-dialogue.md §5.1).
+   */
+  marks: Map<string, Element[]>;
   /** Each entry's snippet on the page now (its strokes' bounds, or where it was tagged, shifted). */
   snippetRects: Map<string, Rect>;
   /** Each insertion's caret as it is on the page now: its tip moved with the caret. */
@@ -69,7 +73,7 @@ export type PenEditContext = {
 export const EMPTY_PEN_EDIT_CONTEXT: PenEditContext = {
   entries: [],
   isExcluded: element => isPenEditDecoration(element),
-  strikeOwner: () => undefined,
+  marks: new Map(),
   snippetRects: new Map(),
   carets: new Map(),
   states: {},
@@ -277,7 +281,10 @@ export async function loadPenEditContext(
   // places (element uuids are not identities, host facts §3).
   const excludedRects: Rect[] = [];
   const snippetRects = new Map<string, Rect>();
-  const strikeRects = new Map<string, Rect>();
+  const marks = new Map<string, Element[]>();
+  const untagged = pageElements
+    .filter(element => parsePenEditUserData(element.userData) === null && isSupportedEditMarkerElement(element))
+    .map(element => ({element, rect: elementRect(element)}));
   const carets: PenEditContext['carets'] = new Map();
   for (const entry of onPage) {
     const resolved = resolvePenEdit(entry, pageElements);
@@ -290,9 +297,26 @@ export async function loadPenEditContext(
       unionRects(rects) ??
         shiftRect(entry.rect, resolved.shift.dx, resolved.shift.dy),
     );
-    const markRect = resolved.strike ? elementRect(resolved.strike) : null;
-    if (entry.mark?.kind === 'replace' && markRect) {
-      strikeRects.set(entry.id, markRect);
+    // A replace mark's strokes: tagged, or the strike and the loop, verticals and number circle
+    // at their stored places, moved like the strike.
+    const strikeRect = resolved.strike ? elementRect(resolved.strike) : null;
+    if (entry.mark?.kind === 'replace' && resolved.strike) {
+      const others =
+        resolved.markElements.length > 0
+          ? resolved.markElements.filter(element => element !== resolved.strike)
+          : matchByRects(
+              [...entry.mark.modifierRects, ...(entry.mark.numberRect ? [entry.mark.numberRect] : [])],
+              untagged.filter(item => item.element !== resolved.strike),
+              strikeRect ? rectShift(entry.mark.strikeRect, strikeRect) : {dx: 0, dy: 0},
+            ).map(item => item.element);
+      const markStrokes = [resolved.strike, ...others];
+      marks.set(entry.id, markStrokes);
+      markStrokes.forEach(element => {
+        const rect = elementRect(element);
+        if (rect) {
+          excludedRects.push(rect);
+        }
+      });
     }
     const caretRect =
       entry.mark?.kind === 'caret'
@@ -303,6 +327,7 @@ export async function loadPenEditContext(
           )
         : null;
     if (entry.mark?.kind === 'caret' && caretRect) {
+      marks.set(entry.id, resolved.markElements);
       // A caret (one stroke or two) is never a delete marker; its tip moves with it.
       resolved.markElements.forEach(element => {
         const rect = elementRect(element);
@@ -317,34 +342,16 @@ export async function loadPenEditContext(
       });
     }
   }
-  const caretIds = new Set(
-    onPage.filter(entry => entry.mark?.kind === 'caret').map(entry => entry.id),
-  );
-  const byId = new Map(onPage.map(entry => [entry.id, entry]));
+  const onPageIds = new Set(onPage.map(entry => entry.id));
 
+  // Every linked mark's strokes stay out of pass 1: they are placed from the stored mark.
   const isExcluded = (element: Element): boolean => {
     const tag = parsePenEditUserData(element.userData);
     if (tag) {
-      return tag.role !== 'mark' || caretIds.has(tag.id);
+      return tag.role !== 'mark' || onPageIds.has(tag.id);
     }
     const rect = elementRect(element);
     return !!rect && excludedRects.some(other => rectsMatch(rect, other));
-  };
-  const strikeOwner = (element: Element): PenEditEntry | undefined => {
-    const tag = parsePenEditUserData(element.userData);
-    if (tag?.role === 'mark' && strikeRects.has(tag.id)) {
-      return byId.get(tag.id);
-    }
-    const rect = elementRect(element);
-    if (!rect) {
-      return undefined;
-    }
-    for (const [id, strikeRect] of strikeRects) {
-      if (rectsMatch(rect, strikeRect)) {
-        return byId.get(id);
-      }
-    }
-    return undefined;
   };
 
   const entries = [...onPage].sort((a, b) => (a.number ?? Infinity) - (b.number ?? Infinity));
@@ -362,7 +369,7 @@ export async function loadPenEditContext(
   return {
     entries,
     isExcluded,
-    strikeOwner,
+    marks,
     snippetRects,
     carets,
     states,
@@ -697,6 +704,11 @@ export async function startSelectMark(
   await changePenEditIndex(current =>
     setAwaitingMark(current, id, from, new Date()),
   );
+}
+
+/** Here on a pen edit whose place stayed open: the review takes the nearest place it found. */
+export async function confirmPenEditPlace(id: string): Promise<void> {
+  await changePenEditIndex(current => updatePenEdit(current, id, entry => ({...entry, confirmed: true})));
 }
 
 /** The text stops waiting for its mark (Cancel on the "Not a clear mark" card). */

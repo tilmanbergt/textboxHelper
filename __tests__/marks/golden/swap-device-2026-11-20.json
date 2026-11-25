@@ -74,7 +74,7 @@
       }
     }
   ],
-  "ignored": [],
+  "toDecide": [],
   "after": [
     {
       "textbox": 3,

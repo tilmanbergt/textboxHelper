@@ -7,7 +7,7 @@ import {GOLDEN_PAGES} from './golden/pages';
 
 /**
  * The golden record (technical-design-mark-dialogue.md §3): for every page below, the changes and
- * ignored marks today's review gives, recorded in `golden/<page>.json`. Moving the mark logic
+ * the To decide items the review gives, recorded in `golden/<page>.json`. Moving the mark logic
  * must give the same lists, except where a step's commit names an intended change.
  *
  * Record again (only for an intended change, listed in the commit):
@@ -19,6 +19,7 @@ jest.mock('react-native-fs', () => ({}));
 jest.mock('../../src/supernote/noteElements', () => require('./golden/host').noteElementsMock);
 jest.mock('../../src/supernote/textboxMetrics', () => require('./golden/host').textboxMetricsMock);
 jest.mock('../../src/storage/penEditStore', () => require('./golden/host').penEditStoreMock);
+jest.mock('../../src/storage/ignoredMarks', () => ({readIgnoredMarks: async () => [], rememberIgnored: async () => undefined}));
 jest.mock('../../src/utils/editMarkerLog', () => ({logEditMarker: () => undefined, markerDiagnostics: {clear: () => undefined}}));
 
 const GOLDEN_DIR = path.join(__dirname, 'golden');
@@ -29,7 +30,7 @@ function clean<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
 }
 
-/** What the review shows for a page: its changes, the ignored marks, and the text after Apply. */
+/** What the review shows for a page: its changes, To decide, and the text after Apply. */
 function record(preview: EditMarkerPreview) {
   return clean({
     changes: preview.operations.map(operation => ({
@@ -49,13 +50,17 @@ function record(preview: EditMarkerPreview) {
       closeUp: operation.closeUp ? {gapStart: operation.closeUp.gapStart, gapEnd: operation.closeUp.gapEnd} : undefined,
       join: operation.join ? {below: operation.join.belowNumInPage} : undefined,
     })),
-    ignored: preview.ignoredMarkers.map(item => ({
+    toDecide: preview.toDecide.map(item => ({
+      kind: item.kind,
       summary: item.summary,
       reason: item.reason,
-      stroke: item.markerNumInPage,
-      penEdit: item.penEditNumber,
-      canPlaceHere: item.canPlaceHere,
+      penEdit: item.number ?? undefined,
+      strokes: item.strokeNums,
       removable: item.removableNums,
+      words: item.words || undefined,
+      readings: item.readings.length > 0 ? item.readings.map(reading => reading.kind) : undefined,
+      guess: item.guess ? [item.guess.numInPage, item.guess.start, item.guess.end] : undefined,
+      canPlaceHere: item.canPlaceHere,
     })),
     after: (preview.applyPlan?.textMutations ?? []).map(mutation => ({textbox: mutation.numInPage, text: mutation.nextText})),
     newParagraphs: (preview.applyPlan?.insertions ?? []).map(insertion => ({

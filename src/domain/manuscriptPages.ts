@@ -2,9 +2,9 @@ import type {
   ChangeHunk,
   EditMarkerApplyPlan,
   EditMarkerPreview,
-  IgnoredEditMarker,
   RecognizedEditOperation,
 } from './markerTypes';
+import type {ToDecideItem} from './marks/toDecide';
 
 /**
  * The Manuscript card across the whole note (technical-design-manuscript.md §4.2): which pages are
@@ -26,7 +26,7 @@ export type ManuscriptEntry = {
   operation: RecognizedEditOperation;
 };
 
-export type AttentionItem = {key: string; page: number; marker: IgnoredEditMarker};
+export type AttentionItem = {key: string; page: number; item: ToDecideItem};
 
 export type ManuscriptView = {
   entries: ManuscriptEntry[];
@@ -63,8 +63,8 @@ export function combinePages(pages: Record<number, PageReview>): ManuscriptView 
         view.entries.push({key: entryKey(page, hunk.operationId), page, hunk, operation});
       }
     });
-    preview.ignoredMarkers.forEach((marker, index) => {
-      view.attention.push({key: `${page}:ignored:${index}`, page, marker});
+    preview.toDecide.forEach(item => {
+      view.attention.push({key: `${page}:${item.key}`, page, item});
     });
     if (preview.applyPlan && preview.canApply) {
       view.plans.push(preview.applyPlan);
@@ -88,7 +88,7 @@ export function chipLabel(page: number, review: PageReview | undefined): string 
   if (review.state === 'failed') {
     return `${name} !`;
   }
-  const count = review.preview.hunks.length + review.preview.ignoredMarkers.length;
+  const count = review.preview.hunks.length + review.preview.toDecide.length;
   return count === 0 ? `${name} ✓` : `${name} · ${count}`;
 }
 
@@ -127,7 +127,7 @@ export function listChanged(before: PageReview | undefined, after: EditMarkerPre
   const keys = (preview: EditMarkerPreview) =>
     JSON.stringify([
       preview.hunks.map(hunk => [hunk.label, hunk.before, hunk.after, hunk.segments]),
-      preview.ignoredMarkers.map(marker => marker.reason),
+      preview.toDecide.map(item => [item.kind, item.reason]),
     ]);
   return keys(before.preview) !== keys(after);
 }

@@ -547,3 +547,5 @@ marker 11", "Ignored marker 12", … today).
   toDecide table test.
 
 S4 waits for the answers.
+
+**Answers (Tilman):** the recommendations for Q5, Q6 and Q7.

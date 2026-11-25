@@ -6,25 +6,30 @@ import {buildRecognizeRect, isStraightLineGeometryElement, isSupportedEditMarker
 import {buildTextboxLogSummary, countElementTypes, createEmptyPreview} from '../domain/markerText';
 import type {
   EditMarkerPreview,
-  IgnoredEditMarker,
   MarkerPreviewBase,
   MarkerTextboxBase,
   OperationDraft,
   PenTextState,
 } from '../domain/markerTypes';
-import {draftOf, ignoredOf, textboxesOf} from '../domain/marks/drafts';
-import {boundsOf} from '../domain/marks/markStroke';
-import {resolvePage, type PageResult, type PageStroke, type StrokeOwner} from '../domain/marks/pass2';
+import {draftOf, textboxesOf} from '../domain/marks/drafts';
+import {placeLinked, type LinkedPlace} from '../domain/marks/linked';
+import {boundsOf, type MarkStroke} from '../domain/marks/markStroke';
+import {resolvePage, type PageResult, type PageStroke, type StrokeOwner, type StrokeRef} from '../domain/marks/pass2';
+import type {Reading} from '../domain/marks/reading';
+import {NO_MARK_FOR_TEXT} from '../domain/marks/reasons';
+import {readingOfStoredMark} from '../domain/marks/storedMark';
+import {boundsOfFlat, isIgnored, strokesById, unclearItems, type ToDecideItem} from '../domain/marks/toDecide';
 import type {TextboxView} from '../domain/marks/textboxView';
 import {readPageSizeForDiagnostics} from '../supernote/noteElements';
 import type {PenEditEntry} from '../domain/penEditModel';
 import {parsePenEditUserData, penEditNumberText} from '../domain/penEditTags';
 import {isNormalTextElement, sortTextElements} from '../domain/textboxEditPlan';
 import {pageFingerprint, snippetIdsOnPage, type FingerprintElement} from '../domain/pageFingerprint';
-import {DEFAULT_FONT_SIZE} from '../domain/textboxModel';
+import {DEFAULT_FONT_SIZE, type Rect} from '../domain/textboxModel';
 import {loadMarkerStrokeStats, readStrokePath} from '../supernote/markerStrokeRead';
 import {readPageContext, recycleElements, type PageContext} from '../supernote/noteElements';
 import {resetFontWarnings} from '../supernote/textboxMetrics';
+import {readIgnoredMarks} from '../storage/ignoredMarks';
 import {readPenEditIndex} from '../storage/penEditStore';
 import {logEditMarker} from '../utils/editMarkerLog';
 import {perfEvent, startTiming, timed} from '../utils/perf';
@@ -170,19 +175,41 @@ async function analyzePage(
   }
 
   const measurer = createTextboxMeasurer(calibration);
-  const strokes = await timed('page.strokes', () => readPageStrokes(markers), {page, markers: markers.length});
-  const markerById = new Map(markers.map(marker => [marker.uuid, marker]));
-  const ownerOf = (strokeId: string): StrokeOwner | undefined => {
-    const marker = markerById.get(strokeId);
-    const entry = marker ? pen.strikeOwner(marker) : undefined;
-    return entry ? {id: entry.id, number: entry.number, mark: entry.mark} : undefined;
-  };
+  // The free strokes, and apart from them the strokes of every linked mark (kept out of pass 1).
+  const linkedElements = [...pen.marks.values()].flat();
+  const [strokes, linkedStrokes, ignoredKeys] = await timed(
+    'page.strokes',
+    () => Promise.all([readPageStrokes(markers), readPageStrokes(linkedElements), readIgnoredMarks(notePath, page)]),
+    {page, markers: markers.length},
+  );
+  const linkedById = new Map(linkedStrokes.map(item => [item.id, item]));
+  const linked: LinkedMark[] = pen.entries
+    .filter(entry => entry.kind === 'replacement')
+    .map(entry => {
+      const items = (pen.marks.get(entry.id) ?? []).map(element => linkedById.get(element.uuid)).filter((item): item is PageStroke => !!item);
+      const markStrokes = items.map(item => item.stroke).filter((stroke): stroke is MarkStroke => !!stroke);
+      return {
+        owner: {id: entry.id, number: entry.number, mark: entry.mark},
+        reading: entry.mark ? readingOfStoredMark(entry.mark, markStrokes) : null,
+        refs: new Map(items.map(item => [item.id, {id: item.id, numInPage: item.numInPage}])),
+        confirmed: !!entry.confirmed,
+      };
+    });
 
-  // Pass 1 and pass 2 (technical-design-mark-dialogue.md §5.1): what the strokes are and where
-  // they act, on plain views of the textboxes; only the textboxes pass 2 asks for are measured.
-  const {result, measured} = await timed('page.marks', () => resolveMeasured(strokes, pageTextboxes, measurer, ownerOf), {page});
+  // Pass 1 and pass 2 (technical-design-mark-dialogue.md §5.1): what the free strokes are and
+  // where they and the linked marks act, on plain views of the textboxes; only the textboxes
+  // pass 2 asks for are measured.
+  const {result, placedLinked, views, measured} = await timed(
+    'page.marks',
+    () => resolveMeasured(strokes, linked, pageTextboxes, measurer),
+    {page},
+  );
   result.trace.forEach(entry => logEditMarker(entry.stage, entry.payload));
-  result.lockedViews.forEach(uuid => {
+  const lockedViews = new Set([
+    ...result.lockedViews,
+    ...placedLinked.map(item => (item.place.kind === 'open' ? item.place.locked?.uuid : undefined)).filter((uuid): uuid is string => !!uuid),
+  ]);
+  lockedViews.forEach(uuid => {
     const textbox = pageTextboxes.find(item => item.uuid === uuid);
     const measurement = measured.get(uuid);
     if (textbox && measurement) {
@@ -192,7 +219,8 @@ async function analyzePage(
 
   const textboxByUuid = new Map(pageTextboxes.map(textbox => [textbox.uuid, textbox]));
   const groupedTextboxes = new Map<string, TextElement>();
-  const drafts: OperationDraft[] = result.marks.map(mark => {
+  const pageMarks = [...result.marks, ...placedLinked.flatMap(item => (item.place.kind === 'placed' ? [item.place.mark] : []))];
+  const drafts: OperationDraft[] = pageMarks.map(mark => {
     textboxesOf(mark).forEach(uuid => {
       const textbox = textboxByUuid.get(uuid);
       if (textbox) {
@@ -201,9 +229,13 @@ async function analyzePage(
     });
     return draftOf(mark);
   });
-  const ignoredMarkers: IgnoredEditMarker[] = result.refused.map(ignoredOf);
-  const pairedPenEditIds = new Set(result.pairedPenEditIds);
-  ignoredMarkers.push(...unpairedPenEdits(pen.entries, pairedPenEditIds, new Set(result.lockedPenEditIds)));
+  const pairedPenEditIds = new Set(placedLinked.filter(item => item.place.kind === 'placed').map(item => item.linked.owner.id));
+  const allStrokes = strokesById([...strokes, ...linkedStrokes]);
+  const toDecide: ToDecideItem[] = [
+    ...unclearItems(result.refused, allStrokes, views).filter(item => !item.ignore || !isIgnored(item.ignore, ignoredKeys)),
+    ...pen.entries.filter(entry => entry.kind === 'unpaired').map(entry => noMarkItem(entry, pen.snippetRects.get(entry.id) ?? entry.rect)),
+    ...placedLinked.flatMap(item => (item.place.kind === 'open' ? [placeOpenOfLinked(item.linked, item.place, allStrokes)] : [])),
+  ];
 
   // Insertions: into the paragraph their caret points to, or as a new paragraph between two.
   const pageWidth = pen.entries.some(entry => entry.placement === 'here') ? await pageWidthOf(notePath, page) : 0;
@@ -217,10 +249,21 @@ async function analyzePage(
     {page},
   );
   placed.ignored.forEach(({entry, reason}) => {
-    // Its caret was missing or unclear: it can go where its handwriting is. One already placed
-    // there that didn't fit keeps Select mark only.
-    ignoredMarkers.push({
-      ...penEditIgnored(entry, `Insertion ${penEditNumberText(entry.number)}`, reason),
+    // Its caret is gone or doesn't say where: its place stays open. It can also go where its
+    // handwriting is; one already placed there that didn't fit keeps Select mark only.
+    const caretStrokes = (pen.marks.get(entry.id) ?? []).map(element => allStrokes.get(element.uuid)).filter((stroke): stroke is MarkStroke => !!stroke);
+    toDecide.push({
+      kind: 'placeOpen',
+      key: `open:${entry.id}`,
+      summary: `Insertion ${penEditNumberText(entry.number)}`,
+      reason,
+      penEditId: entry.id,
+      number: entry.number,
+      rect: caretStrokes.length > 0 ? boundsOfFlat(caretStrokes.map(flatPoints)) : null,
+      strokes: caretStrokes.map(flatPoints),
+      words: '',
+      readings: [],
+      guess: null,
       ...(entry.placement === 'here' ? {} : {canPlaceHere: true}),
     });
   });
@@ -237,7 +280,8 @@ async function analyzePage(
     notePath,
     page,
     drafts,
-    ignored: ignoredMarkers,
+    toDecide,
+    markPoints: Object.fromEntries([...allStrokes.values()].map(stroke => [stroke.numInPage, flatPoints(stroke)])),
     textboxes: sortTextElements([...groupedTextboxes.values()]).map(toTextboxBase),
     insertions: placed.gaps,
     penEdits: pen.views.filter(view => pairedPenEditIds.has(view.id) || insertedIds.has(view.id)),
@@ -256,8 +300,8 @@ async function analyzePage(
       number: entry.number,
       paired: pairedPenEditIds.has(entry.id),
     })),
-    ignoredMarkerCount: preview.ignoredMarkers.length,
-    ignoredReasons: preview.ignoredMarkers.map(marker => marker.reason),
+    toDecideCount: preview.toDecide.length,
+    toDecide: preview.toDecide.map(item => [item.kind, item.reason]),
   });
 
   const locked = measurer.lockedTextboxes();
@@ -274,27 +318,50 @@ async function analyzePage(
  * run again until it asks for none. Every round measures more, so this ends; a textbox is measured
  * once per review (`markerMeasure.ts`).
  */
+/** A linked replace mark to place: whose it is, its reading, its strokes by id, and Here. */
+type LinkedMark = {owner: StrokeOwner; reading: Reading | null; refs: Map<string, StrokeRef>; confirmed: boolean};
+
+/**
+ * Pass 2 with lazy measuring: run on the textboxes measured so far, measure the ones it asked for,
+ * run again until it asks for none. Every round measures more, so this ends; a textbox is measured
+ * once per review (`markerMeasure.ts`). The linked marks are placed in the same rounds.
+ */
 async function resolveMeasured(
   strokes: PageStroke[],
+  linked: LinkedMark[],
   textboxes: TextElement[],
   measurer: TextboxMeasurer,
-  ownerOf: (strokeId: string) => StrokeOwner | undefined,
-): Promise<{result: PageResult; measured: Map<string, MeasuredTextbox>}> {
+): Promise<{
+  result: PageResult;
+  placedLinked: Array<{linked: LinkedMark; place: LinkedPlace}>;
+  views: TextboxView[];
+  measured: Map<string, MeasuredTextbox>;
+}> {
   const measured = new Map<string, MeasuredTextbox | null>();
   for (;;) {
     const views: TextboxView[] = textboxes.map(textbox => viewOf(textbox, measured));
-    const result = resolvePage(strokes, views, {ownerOf});
-    const wanted = result.wanted.filter(uuid => !measured.has(uuid));
-    if (wanted.length === 0) {
+    const result = resolvePage(strokes, views);
+    const wanted = new Set(result.wanted);
+    const want = (view: TextboxView) => {
+      if (!view.measured) {
+        wanted.add(view.uuid);
+      }
+    };
+    const placedLinked = linked.map(item => ({
+      linked: item,
+      place: placeLinked(item.reading, item.owner, item.refs, views, {confirmed: item.confirmed, want}),
+    }));
+    const missing = [...wanted].filter(uuid => !measured.has(uuid));
+    if (missing.length === 0) {
       const done = new Map<string, MeasuredTextbox>();
       measured.forEach((value, uuid) => {
         if (value) {
           done.set(uuid, value);
         }
       });
-      return {result, measured: done};
+      return {result, placedLinked, views, measured: done};
     }
-    for (const uuid of wanted) {
+    for (const uuid of missing) {
       const textbox = textboxes.find(item => item.uuid === uuid);
       measured.set(uuid, textbox ? await measurer.measure(textbox) : null);
     }
@@ -367,47 +434,50 @@ async function logContext(context: PageContext, markers: Element[], textboxes: T
   });
 }
 
-function penEditIgnored(entry: PenEditEntry, summary: string, reason: string): IgnoredEditMarker {
+/** Tagged text without a mark ("?"): it waits for Select mark, or goes in right here. */
+function noMarkItem(entry: PenEditEntry, rect: Rect): ToDecideItem {
   return {
-    markerUuid: entry.id,
-    markerNumInPage: 0,
-    summary,
-    reason,
-    penEditNumber: entry.number,
+    kind: 'noMark',
+    key: `nomark:${entry.id}`,
+    summary: `Text ${penEditNumberText(entry.number)}`,
+    reason: NO_MARK_FOR_TEXT,
     penEditId: entry.id,
+    number: entry.number,
+    rect,
+    strokes: [],
+    words: '',
+    readings: [],
+    guess: null,
+    canPlaceHere: true,
   };
 }
 
-/** Tagged text without a mark, and tagged replacements whose mark wasn't recognized. */
-function unpairedPenEdits(
-  entries: PenEditEntry[],
-  pairedPenEditIds: Set<string>,
-  lockedPenIds: Set<string>,
-): IgnoredEditMarker[] {
-  const withoutMark = entries
-    .filter(entry => entry.kind === 'unpaired')
-    .map(entry => ({
-      ...penEditIgnored(
-        entry,
-        `Text ${penEditNumberText(entry.number)}`,
-        'No replace mark or caret was found just before it. Select mark, then draw or lasso its mark - or insert it right here as a new paragraph.',
-      ),
-      canPlaceHere: true,
-    }));
-  const markNotFound = entries
-    .filter(entry => entry.kind === 'replacement' && !pairedPenEditIds.has(entry.id))
-    .map(entry =>
-      penEditIgnored(
-        entry,
-        `Replacement ${penEditNumberText(entry.number)}`,
-        lockedPenIds.has(entry.id)
-          ? "Its replace mark is on a textbox whose font can't be read by plugins. Copy the font file to MyStyle/TextboxHelper/fonts and open the review again."
-          : entry.mark
-          ? 'Its replace mark was not recognized on the page (erased, or not over a textbox).'
-          : 'No replace mark was found just before it when it was tagged.',
-      ),
-    );
-  return [...withoutMark, ...markNotFound];
+/** A linked replace mark that didn't place: its number shows, its place stays open. */
+function placeOpenOfLinked(item: LinkedMark, place: Extract<LinkedPlace, {kind: 'open'}>, strokes: Map<string, MarkStroke>): ToDecideItem {
+  const parts = [...item.refs.keys()].map(id => strokes.get(id)).filter((stroke): stroke is MarkStroke => !!stroke);
+  const pictures = parts.map(flatPoints);
+  return {
+    kind: 'placeOpen',
+    key: `open:${item.owner.id}`,
+    summary: `Replacement ${penEditNumberText(item.owner.number)}`,
+    reason: place.reason,
+    penEditId: item.owner.id,
+    number: item.owner.number,
+    rect: pictures.length > 0 ? boundsOfFlat(pictures) : null,
+    strokes: pictures,
+    words: '',
+    readings: item.reading ? [item.reading] : [],
+    guess: place.guess,
+  };
+}
+
+/** A stroke's points as a flat x,y list (a straight line: its rect's middle line). */
+function flatPoints(stroke: MarkStroke): number[] {
+  if (stroke.points && stroke.points.length > 0) {
+    return stroke.points.flatMap(point => [point.x, point.y]);
+  }
+  const y = (stroke.rect.top + stroke.rect.bottom) / 2;
+  return [stroke.rect.left, y, stroke.rect.right, y];
 }
 
 type InlineInsertion = Awaited<ReturnType<typeof placeCaretInsertions>>['inline'][number];

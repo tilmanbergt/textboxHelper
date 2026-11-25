@@ -60,18 +60,18 @@
       "penEdit": 7
     }
   ],
-  "ignored": [
+  "toDecide": [
     {
+      "kind": "noMark",
       "summary": "Text 5",
-      "reason": "No replace mark or caret was found just before it. Select mark, then draw or lasso its mark - or insert it right here as a new paragraph.",
-      "stroke": 0,
+      "reason": "No mark was found just before it. Select a mark for it, or insert it right here as a new paragraph.",
       "penEdit": 5,
       "canPlaceHere": true
     },
     {
+      "kind": "placeOpen",
       "summary": "Insertion 4",
       "reason": "Its caret is no longer on the page.",
-      "stroke": 0,
       "penEdit": 4,
       "canPlaceHere": true
     }

@@ -7,6 +7,7 @@ import type {Rect, TextboxData} from './textboxModel';
 import type {PunctuationChar} from './marks/shapes/punct';
 import type {CaretInsertMode} from './marks/place/point';
 import type {SwapZones} from './marks/place/swap';
+import type {ToDecideItem} from './marks/toDecide';
 
 /**
  * Types of the edit-marker recognition: what the preview shows, the plan that is applied, and the
@@ -129,24 +130,6 @@ export type RecognizedEditOperation = {
   join?: JoinInfo;
 };
 
-export type IgnoredEditMarker = {
-  markerUuid: string;
-  markerNumInPage: number;
-  summary: string;
-  reason: string;
-  /** Set when the ignored item is a tagged snippet, not a marker stroke. */
-  penEditNumber?: number | null;
-  penEditId?: string;
-  /** Set for tagged text without a usable mark: "Insert right here" is offered (fine-marks §8). */
-  canPlaceHere?: boolean;
-  /**
-   * The stroke numbers "Remove" deletes for a marker that landed on a textbox (with a replace
-   * mark's verticals or loop). Unset for strokes that may be ordinary handwriting: those are
-   * never offered for removal.
-   */
-  removableNums?: number[];
-};
-
 /**
  * One change as the review lists it (technical-design-manuscript.md §4.3): the changed text in
  * full, with the text before and after it in its textbox as context.
@@ -170,7 +153,8 @@ export type EditMarkerPreview = {
   /** Set when a textbox font couldn't be read and word positions were measured in a standard font. */
   fontWarning: string | null;
   operations: RecognizedEditOperation[];
-  ignoredMarkers: IgnoredEditMarker[];
+  /** What the review can't make a change of on its own (technical-design-mark-dialogue.md §5.2). */
+  toDecide: ToDecideItem[];
   canApply: boolean;
   applyPlan: EditMarkerApplyPlan | null;
   /** The analysis the preview is assembled from; re-assembled when a pen edit's text changes. */
@@ -245,7 +229,9 @@ export type MarkerPreviewBase = {
   notePath: string;
   page: number;
   drafts: OperationDraft[];
-  ignored: IgnoredEditMarker[];
+  toDecide: ToDecideItem[];
+  /** The points of the page's mark strokes by number (flat x,y), for the pictures of To decide. */
+  markPoints: Record<number, number[]>;
   textboxes: MarkerTextboxBase[];
   insertions: InsertionDraft[];
   penEdits: PenEditView[];

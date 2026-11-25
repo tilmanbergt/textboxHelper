@@ -1,31 +1,20 @@
 import {formatOperationSnippet} from '../markerText';
-import type {EditMarkerOperationKind, IgnoredEditMarker, OperationDraft} from '../markerTypes';
+import type {EditMarkerOperationKind, OperationDraft} from '../markerTypes';
 import {trailingDash} from '../paragraphJoin';
 import {breakCommaTie} from '../punctText';
 import {spaceSnippet} from '../spaceMark';
 import {swapSummary} from '../swapText';
-import type {PageMark, Refusal, StrokeRef} from './pass2';
+import type {PageMark, StrokeRef} from './pass2';
 import {closeUpSnippet, punctuationAtGap} from './place/closeUp';
 import {bracketSnippet} from './place/exact';
 
 /**
  * The review's rows from pass 2 (technical-design-mark-dialogue.md §5.1 step 7): one draft per
- * placed mark - its range in the textbox's text and how the review names it - and one ignored row
- * per mark that was not placed. Pure.
+ * placed mark - its range in the textbox's text and how the review names it. What wasn't placed
+ * goes to To decide (`toDecide.ts`). Pure.
  */
 
 const nums = (strokes: StrokeRef[]) => strokes.map(stroke => stroke.numInPage);
-
-/** An ignored mark as the review lists it ("Ignored marker 12"), with the strokes Remove may take. */
-export function ignoredOf(refusal: Refusal): IgnoredEditMarker {
-  return {
-    markerUuid: refusal.first.id,
-    markerNumInPage: refusal.first.numInPage,
-    summary: `Ignored marker ${refusal.first.numInPage}`,
-    reason: refusal.reason,
-    ...(refusal.removable ? {removableNums: refusal.removable} : {}),
-  };
-}
 
 function base(first: StrokeRef, id: string, kind: OperationDraft['operation']['kind'], strokes: number[]) {
   return {id, kind, markerUuid: first.id, markerNumInPage: first.numInPage, consumedMarkerNums: strokes};

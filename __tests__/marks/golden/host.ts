@@ -270,10 +270,13 @@ export function servePage(spec: PageSpec): void {
       const rects = drawn.map(item => rectOf(item.points));
       if (edit.mark.kind === 'replace') {
         const strike = edit.mark.erased ? {left: 2000, top: 2000, right: 2100, bottom: 2004} : rects[0];
+        // A slash's second stroke is the user's own circle for the number.
+        const numberRect = edit.mark.slash && !edit.mark.erased ? rects[1] : undefined;
         mark = {
           kind: 'replace',
           strikeRect: strike,
-          modifierRects: edit.mark.erased ? [] : rects.slice(1),
+          modifierRects: edit.mark.erased || edit.mark.slash ? [] : rects.slice(1),
+          ...(numberRect ? {numberRect} : {}),
           ...(edit.mark.exact || edit.mark.slash ? {bounds: 'exact' as const} : {}),
           ...(edit.mark.slash ? {slash: true} : {}),
         };

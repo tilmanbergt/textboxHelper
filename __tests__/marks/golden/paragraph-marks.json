@@ -27,22 +27,32 @@
       ]
     }
   ],
-  "ignored": [
+  "toDecide": [
     {
-      "summary": "Ignored marker 6",
+      "kind": "unclear",
+      "summary": "Paragraph mark",
       "reason": "It is at a paragraph's start or end, which is already a paragraph break.",
-      "stroke": 6,
+      "strokes": [
+        6
+      ],
       "removable": [
         6
+      ],
+      "readings": [
+        "sideways"
       ]
     },
     {
-      "summary": "Ignored marker 5",
+      "kind": "unclear",
+      "summary": "Strokes over the text",
       "reason": "A swap middle piece (or a step) without a start and an end corner. A paragraph break needs a second short line next to its upright (_||‾).",
-      "stroke": 5,
+      "strokes": [
+        5
+      ],
       "removable": [
         5
-      ]
+      ],
+      "words": "thirteen"
     }
   ],
   "after": [

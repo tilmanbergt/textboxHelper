@@ -4,7 +4,7 @@ import {spaceRefusal} from '../spaceMark';
 import type {PenEditMark} from '../penEditModel';
 import type {Rect} from '../textboxModel';
 import {intersects, type MarkStroke} from './markStroke';
-import {findCarets, readArc, readAtCaret, readParagraphMark, readSlash, verticalsFor, loopFor} from './pass1';
+import {findCarets, loopFor, loopReading, readArc, readAtCaret, readParagraphMark, readSlash, strikeReading, verticalsFor} from './pass1';
 import type {Place, PlaceAt} from './place';
 import {gapBetween, placeArc, type ArcPlace} from './place/closeUp';
 import {locateCaret, type CaretInsertMode, type CaretTarget} from './place/point';
@@ -32,7 +32,7 @@ import type {CaretTextbox, TextboxView} from './textboxView';
 // ---------------------------------------------------------------------------------------------
 
 /** Says that a textbox's layout is needed. */
-type Want = (view: TextboxView) => void;
+export type Want = (view: TextboxView) => void;
 
 /** How far around a mark's tip the textboxes in its column are looked at (pixels). */
 const TIP_REACH_X = 120;
@@ -145,7 +145,7 @@ function placePoint(reading: Reading, views: TextboxView[], want: Want): Place {
   );
 }
 
-function placeSlashReading(reading: Reading, views: TextboxView[], want: Want): {place: Place; raw: SlashPlace | null} {
+export function placeSlashReading(reading: Reading, views: TextboxView[], want: Want): {place: Place; raw: SlashPlace | null} {
   const slash = (reading.shape as {slash: Parameters<typeof placeSlash>[0]}).slash;
   let raw: SlashPlace | null = null;
   for (const box of readableNear(reading.rects[0], views, want)) {
@@ -227,7 +227,20 @@ export type PageStroke = StrokeRef & {stroke: MarkStroke | null};
 export type StrokeOwner = {id: string; number: number | null; mark: PenEditMark | null};
 
 /** A mark that was ignored: its first stroke, why, and the strokes "Remove" may take (null: none). */
-export type Refusal = {first: StrokeRef; reason: string; removable: number[] | null};
+/**
+ * A mark that was not placed: its strokes (the first one names it), why, the strokes Remove may
+ * take (null: none, they may be handwriting away from the text) and the readings pass 1 found for
+ * them (offered in To decide).
+ */
+export type Refusal = {
+  first: StrokeRef;
+  strokes: StrokeRef[];
+  reason: string;
+  removable: number[] | null;
+  readings: Reading[];
+  /** Refused by the strike family, stroke by stroke: such strokes close together form one item. */
+  strike?: boolean;
+};
 
 export type PageMark =
   | {
@@ -254,10 +267,6 @@ export type PageResult = {
   marks: PageMark[];
   /** In the order the review lists them. */
   refused: Refusal[];
-  /** Tagged replacements whose mark was found. */
-  pairedPenEditIds: string[];
-  /** Tagged replacements whose strike is on a textbox whose font can't be read. */
-  lockedPenEditIds: string[];
   /** Textboxes whose unreadable font kept a mark from being placed (for the review's one line). */
   lockedViews: string[];
   /** Textboxes pass 2 needs measured: run again with them measured. */
@@ -295,14 +304,11 @@ function directlyBelow(upper: Rect, lower: Rect, views: TextboxView[]): boolean 
 /**
  * The review's pass 2 on one page (technical-design-mark-dialogue.md §5.1 steps 3, 5, 6): every
  * free stroke read with pass 1, family by family in the order of consumption, and placed.
- * `ownerOf`: the tagged text a stroke is the mark of.
  */
 export function resolvePage(
   page: PageStroke[],
   views: TextboxView[],
-  options: {ownerOf?: (strokeId: string) => StrokeOwner | undefined} = {},
 ): PageResult {
-  const ownerOf = options.ownerOf ?? (() => undefined);
   const wanted = new Set<string>();
   const want: Want = view => {
     if (!view.measured) {
@@ -315,14 +321,13 @@ export function resolvePage(
   const shapeMarks: PageMark[] = [];
   const shapeRefused: Refusal[] = [];
   const lockedViews = new Set<string>();
-  const pairedPenEditIds = new Set<string>();
   const consumed = new Set<string>();
 
   const refOf = new Map(page.map(item => [item.id, {id: item.id, numInPage: item.numInPage}]));
   const refs = (ids: string[]): StrokeRef[] => ids.map(id => refOf.get(id)).filter((ref): ref is StrokeRef => !!ref);
-  const refusedFor = (ids: string[], reason: string): Refusal => {
+  const refusedFor = (ids: string[], reason: string, readings: Reading[] = []): Refusal => {
     const parts = refs(ids);
-    return {first: parts[0], reason, removable: parts.map(part => part.numInPage)};
+    return {first: parts[0], strokes: parts, reason, removable: parts.map(part => part.numInPage), readings};
   };
   // The shape families read drawn strokes with their points; straight lines only ever strike.
   const strokes = page
@@ -368,7 +373,7 @@ export function resolvePage(
         : target?.kind === 'gap'
         ? "It is at a paragraph's start or end, which is already a paragraph break."
         : "It doesn't point between two lines of a paragraph.";
-    shapeRefused.push(refusedFor(reading.strokes, reason));
+    shapeRefused.push(refusedFor(reading.strokes, reason, [reading]));
   }
 
   // 2. A ∧ or V with a filled circle between its legs (punctuation) or a cross at its tip (space).
@@ -393,7 +398,7 @@ export function resolvePage(
     log(reading.kind === 'punct' ? 'punctuationMark' : 'spaceMark', {markerNums: refs(reading.strokes).map(ref => ref.numInPage), tip, punct: reading.punct ?? null, target});
     if (target?.kind !== 'text' || !view) {
       const fallback = reading.kind === 'punct' ? 'The punctuation mark must point into a line of text.' : 'The space mark must point into a line of text.';
-      shapeRefused.push(refusedFor(reading.strokes, target?.kind === 'unclear' ? target.reason : fallback));
+      shapeRefused.push(refusedFor(reading.strokes, target?.kind === 'unclear' ? target.reason : fallback, [reading]));
       continue;
     }
     if (reading.kind === 'punct') {
@@ -410,7 +415,7 @@ export function resolvePage(
     }
     const refusal = spaceRefusal(view.text, target.offset);
     if (refusal) {
-      shapeRefused.push(refusedFor(reading.strokes, refusal));
+      shapeRefused.push(refusedFor(reading.strokes, refusal, [reading]));
       continue;
     }
     shapeMarks.push({kind: 'space', strokes: refs(reading.strokes), view, offset: target.offset, ...(target.uncertain ? {uncertain: target.uncertain} : {})});
@@ -490,7 +495,7 @@ export function resolvePage(
     use([stroke.id]);
     const view = viewOf.get(place.uuid);
     if (place.kind === 'refused') {
-      shapeRefused.push(refusedFor([stroke.id], place.reason));
+      shapeRefused.push(refusedFor([stroke.id], place.reason, [reading]));
     } else if (place.kind === 'gap') {
       if (view) {
         shapeMarks.push({kind: 'closeUp', strokes: refs([stroke.id]), view, start: place.start, end: place.end, where: `line ${place.lineIndex + 1}`});
@@ -560,16 +565,12 @@ export function resolvePage(
     }
     use([stroke.id]);
     if (raw.kind === 'refused') {
-      shapeRefused.push(refusedFor([stroke.id], raw.reason));
+      shapeRefused.push(refusedFor([stroke.id], raw.reason, [reading]));
       continue;
     }
     const view = viewOf.get(raw.uuid);
     if (!view) {
       continue;
-    }
-    const owner = ownerOf(stroke.id);
-    if (owner) {
-      pairedPenEditIds.add(owner.id);
     }
     // The user's own circle for the number at the slash's top goes with it (fine-marks §2.2).
     use(reading.strokes);
@@ -580,20 +581,16 @@ export function resolvePage(
       lineIndex: raw.lineIndex,
       offset: raw.offset,
       ...(raw.uncertain ? {uncertain: raw.uncertain} : {}),
-      ...(owner ? {owner} : {}),
     });
   }
 
   // 6. Strikes and replace marks: every stroke still free, in page order.
-  const lines = resolveStrikes(page, consumed, views, want, ownerOf, log);
-  lines.pairedPenEditIds.forEach(id => pairedPenEditIds.add(id));
+  const lines = resolveStrikes(page, consumed, views, want, log);
   lines.lockedViews.forEach(uuid => lockedViews.add(uuid));
 
   return {
     marks: [...lines.marks, ...shapeMarks],
     refused: [...shapeRefused, ...lines.refused],
-    pairedPenEditIds: [...pairedPenEditIds],
-    lockedPenEditIds: lines.lockedPenEditIds,
     lockedViews: [...lockedViews],
     wanted: [...wanted],
     trace,
@@ -638,17 +635,15 @@ function resolveStrikes(
   consumed: Set<string>,
   views: TextboxView[],
   want: Want,
-  ownerOf: (strokeId: string) => StrokeOwner | undefined,
   log: (stage: string, payload: Record<string, unknown>) => void,
-): {marks: PageMark[]; refused: Refusal[]; pairedPenEditIds: string[]; lockedPenEditIds: string[]; lockedViews: string[]} {
+): {marks: PageMark[]; refused: Refusal[]; lockedViews: string[]} {
   const refused: Refusal[] = [];
-  const lockedPenEditIds = new Set<string>();
   const lockedViews = new Set<string>();
   const candidates: Candidate[] = [];
   const freeItems = page.filter(item => !consumed.has(item.id));
   for (const item of freeItems) {
     if (!item.stroke) {
-      refused.push({first: item, reason: NO_GEOMETRY, removable: null});
+      refused.push({first: item, strokes: [item], reason: NO_GEOMETRY, removable: null, readings: [], strike: true});
       continue;
     }
     const placed = placeStrike(item.stroke, views, strikeShapeRefusal(item.stroke.rect), want);
@@ -663,20 +658,23 @@ function resolveStrikes(
     }
     if (placed.locked) {
       lockedViews.add(placed.locked.uuid);
-      const owner = ownerOf(item.id);
-      if (owner) {
-        lockedPenEditIds.add(owner.id);
-      }
     }
-    refused.push({first: item, reason: placed.reason, removable: placed.removable ? [item.numInPage] : null});
+    const shapeOk = strikeShapeRefusal(item.stroke.rect) === null;
+    refused.push({
+      first: item,
+      strokes: [item],
+      reason: placed.reason,
+      removable: placed.removable ? [item.numInPage] : null,
+      readings: shapeOk ? [strikeReading(item.stroke)] : [],
+      strike: true,
+    });
   }
   candidates.sort(byMarkerPosition);
 
   // The modifiers a strike may take: every free stroke (straight lines too).
   const pool = freeItems.map(item => item.stroke).filter((stroke): stroke is MarkStroke => !!stroke);
-  type Info = {pair: MarkStroke[]; numberCircle?: MarkStroke; owner?: StrokeOwner; ignoredReason?: string};
+  type Info = {pair: MarkStroke[]; numberCircle?: MarkStroke; ignoredReason?: string};
   const info = new Map<string, Info>();
-  const pairedPenEditIds = new Set<string>();
   const textboxes = [...new Map(candidates.map(candidate => [candidate.view.uuid, candidate.view])).values()].sort(byReadingOrder);
   for (const view of textboxes) {
     const used = new Set<string>();
@@ -691,29 +689,21 @@ function resolveStrikes(
       })
       .map(entry => ({...entry, numberCircle: entry.pair.length === 2 ? numberCircleAt(entry.pair[1], pool, entry.pair) : undefined}));
     for (const entry of entries) {
-      const owner = ownerOf(entry.candidate.stroke.id);
-      // A strike selected as a snippet's mark (Select mark) may stand alone: the user said it is a
-      // replace mark (technical-design-pen-edits-2.md §4.2).
-      const declaredAlone = entry.pair.length === 0 && owner?.mark?.kind === 'replace' && owner.mark.modifierRects.length === 0;
-      if (!declaredAlone) {
-        if (entry.pair.length === 0 || entry.pair.some(stroke => used.has(stroke.id))) {
-          continue;
-        }
-        entry.pair.forEach(stroke => used.add(stroke.id));
-        if (entry.numberCircle) {
-          used.add(entry.numberCircle.id);
-        }
+      if (entry.pair.length === 0 || entry.pair.some(stroke => used.has(stroke.id))) {
+        continue;
       }
-      if (owner) {
-        pairedPenEditIds.add(owner.id);
+      entry.pair.forEach(stroke => used.add(stroke.id));
+      if (entry.numberCircle) {
+        used.add(entry.numberCircle.id);
       }
       // Two verticals mark exact places: without text they delete exactly what is between them
-      // (technical-design-fine-marks.md §3.2). A loop without text has nothing to do.
+      // (technical-design-fine-marks.md §3.2). A loop takes the text tagged after it, and a linked
+      // mark is placed apart (`marks/linked.ts`): here a loop has nothing to do.
       const verticals = entry.pair.length === 2;
       info.set(entry.candidate.stroke.id, {
         pair: entry.pair,
         ...(entry.numberCircle ? {numberCircle: entry.numberCircle} : {}),
-        ...(owner ? {owner} : verticals ? {} : {ignoredReason: REPLACE_WITHOUT_TEXT}),
+        ...(verticals ? {} : {ignoredReason: REPLACE_WITHOUT_TEXT}),
       });
     }
   }
@@ -724,13 +714,19 @@ function resolveStrikes(
     const strike = {id: candidate.stroke.id, numInPage: candidate.stroke.numInPage};
     const entry = info.get(candidate.stroke.id);
     if (entry?.ignoredReason) {
-      refused.push({first: strike, reason: entry.ignoredReason, removable: [strike.numInPage, ...entry.pair.map(stroke => stroke.numInPage)]});
+      refused.push({
+        first: strike,
+        strokes: [strike, ...entry.pair.map(stroke => ({id: stroke.id, numInPage: stroke.numInPage}))],
+        reason: entry.ignoredReason,
+        removable: [strike.numInPage, ...entry.pair.map(stroke => stroke.numInPage)],
+        readings: entry.pair.length === 1 ? [loopReading(candidate.stroke, entry.pair[0])] : [],
+      });
       continue;
     }
     const taken = usedRanges.get(candidate.view.uuid) ?? new Set<string>();
     const words = candidate.words.filter(word => !taken.has(`${word.start}-${word.end}`));
     if (words.length === 0) {
-      refused.push({first: strike, reason: DUPLICATE_STRIKE, removable: [strike.numInPage]});
+      refused.push({first: strike, strokes: [strike], reason: DUPLICATE_STRIKE, removable: [strike.numInPage], readings: [], strike: true});
       continue;
     }
     words.forEach(word => taken.add(`${word.start}-${word.end}`));
@@ -744,10 +740,9 @@ function resolveStrikes(
       words,
       span: strikeSpan(words, candidate.stroke.rect, pair.length === 2 ? pair.map(stroke => stroke.rect) : null),
       consumed: [strike.numInPage, ...pair.map(stroke => stroke.numInPage), ...(entry?.numberCircle ? [entry.numberCircle.numInPage] : [])],
-      ...(entry?.owner ? {owner: entry.owner} : {}),
     });
   }
-  return {marks, refused, pairedPenEditIds: [...pairedPenEditIds], lockedPenEditIds: [...lockedPenEditIds], lockedViews: [...lockedViews]};
+  return {marks, refused, lockedViews: [...lockedViews]};
 }
 
 /**

@@ -12,7 +12,7 @@
  */
 import React, {useEffect, useMemo, useState} from 'react';
 import {Pressable, StyleSheet, Text, View, type LayoutChangeEvent} from 'react-native';
-import {dropItemOfIgnored, dropItemOfOperation, type DropItem} from '../../actions/editMarkerDrop';
+import {dropItemOfToDecide, dropItemOfOperation, type DropItem} from '../../actions/editMarkerDrop';
 import {chipLabel, unreadPages, type AttentionItem, type ManuscriptEntry} from '../../domain/manuscriptPages';
 import {firstWords, lastWords} from '../../domain/markerHunks';
 import type {ChangeHunk, PenTextState} from '../../domain/markerTypes';
@@ -201,11 +201,11 @@ export default function ReviewTab({
           onIndex={setAttentionIndex}
           disabled={busy || loading || applied}
           onSelectMark={id => review.selectMark(id, onClose)}
-          onPlaceHere={item => item.marker.penEditId && review.placeHere(item.page, item.marker.penEditId)}
+          onPlaceHere={item => item.item.penEditId && review.placeHere(item.page, item.item.penEditId)}
           onDrop={item => {
-            const dropItem = dropItemOfIgnored(item.marker);
+            const dropItem = dropItemOfToDecide(item.item);
             if (dropItem) {
-              askDrop(`Drop ${item.marker.summary.toLowerCase()}?`, item.page, [dropItem], true);
+              askDrop(`Drop ${item.item.summary.toLowerCase()}?`, item.page, [dropItem], true);
             }
           }}
         />
@@ -386,8 +386,8 @@ function AttentionLine({
   onPlaceHere: (item: AttentionItem) => void;
   onDrop: (item: AttentionItem) => void;
 }): React.JSX.Element {
-  const {page, marker: item} = items[index];
-  const name = `p.${page + 1} · ${item.penEditNumber !== undefined ? item.summary : `Mark ${item.markerNumInPage}`}`;
+  const {page, item} = items[index];
+  const name = `p.${page + 1} · ${item.summary}`;
   return (
     <View style={styles.attention}>
       <Text style={styles.attentionTitle}>Needs attention</Text>
@@ -406,7 +406,7 @@ function AttentionLine({
       {item.penEditId && item.canPlaceHere ? (
         <PillButton size="small" label="Insert right here" onPress={() => onPlaceHere(items[index])} disabled={disabled} />
       ) : null}
-      {dropItemOfIgnored(item) ? (
+      {dropItemOfToDecide(item) ? (
         <PillButton size="small" label="Drop" onPress={() => onDrop(items[index])} disabled={disabled} />
       ) : null}
       {items.length > 1 ? (

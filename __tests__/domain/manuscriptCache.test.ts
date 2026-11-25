@@ -92,7 +92,7 @@ describe('check order and list changes', () => {
   const preview = (labels: string[]): EditMarkerPreview =>
     ({
       hunks: labels.map(label => ({operationId: label, label, before: 'a', segments: [], after: 'b', meta: ''})),
-      ignoredMarkers: [],
+      toDecide: [],
     } as unknown as EditMarkerPreview);
 
   it('tells when a page shows a different list', () => {

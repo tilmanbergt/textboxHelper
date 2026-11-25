@@ -16,23 +16,6 @@
       ]
     },
     {
-      "kind": "replace",
-      "summary": "Replace \"b[et]a\" -> \"BETA\"",
-      "detail": "Textbox 1, line 1 - 1 word",
-      "textbox": 1,
-      "line": 0,
-      "textStart": 7,
-      "words": [
-        "b[et]a"
-      ],
-      "strokes": [
-        4,
-        5,
-        6
-      ],
-      "penEdit": 1
-    },
-    {
       "kind": "split",
       "summary": "Paragraph break",
       "detail": "Textbox 1 · between two lines",
@@ -110,6 +93,23 @@
       ]
     },
     {
+      "kind": "replace",
+      "summary": "Replace \"b[et]a\" -> \"BETA\"",
+      "detail": "Textbox 1, line 1 - 1 word",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 7,
+      "words": [
+        "b[et]a"
+      ],
+      "strokes": [
+        4,
+        5,
+        6
+      ],
+      "penEdit": 1
+    },
+    {
       "kind": "insert",
       "summary": "Insert \"new\"",
       "detail": "Textbox 1 · between words",
@@ -145,38 +145,7 @@
       }
     }
   ],
-  "ignored": [
-    {
-      "summary": "Ignored marker 25",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 25
-    },
-    {
-      "summary": "Ignored marker 26",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 26
-    },
-    {
-      "summary": "Ignored marker 27",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 27
-    },
-    {
-      "summary": "Ignored marker 28",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 28
-    },
-    {
-      "summary": "Ignored marker 29",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 29
-    },
-    {
-      "summary": "Ignored marker 30",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 30
-    }
-  ],
+  "toDecide": [],
   "after": [
     {
       "textbox": 1,

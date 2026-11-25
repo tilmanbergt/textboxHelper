@@ -38,16 +38,15 @@
       }
     }
   ],
-  "ignored": [
+  "toDecide": [
     {
-      "summary": "Ignored marker 8",
+      "kind": "unclear",
+      "summary": "Strokes over the text",
       "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 8
-    },
-    {
-      "summary": "Ignored marker 9",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 9
+      "strokes": [
+        8
+      ],
+      "words": "more words"
     }
   ],
   "after": [

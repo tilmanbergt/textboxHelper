@@ -51,11 +51,18 @@
       }
     }
   ],
-  "ignored": [
+  "toDecide": [
     {
-      "summary": "Ignored marker 10",
+      "kind": "unclear",
+      "summary": "Strike",
       "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 10
+      "strokes": [
+        10
+      ],
+      "words": "book here",
+      "readings": [
+        "strike"
+      ]
     }
   ],
   "after": [

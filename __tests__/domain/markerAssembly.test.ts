@@ -45,7 +45,8 @@ const base = (overrides: Partial<MarkerPreviewBase> = {}): MarkerPreviewBase => 
   notePath: '/n.note',
   page: 17,
   drafts: [replaceDraft],
-  ignored: [],
+  toDecide: [],
+  markPoints: {},
   textboxes: [textbox],
   insertions: [],
   penEdits: [{id: 'pe1', kind: 'replacement', number: 1, pictureUri: null}],
@@ -218,18 +219,24 @@ describe('assembleMarkerPreview', () => {
     expect(waiting.applyPlan).toBeNull();
   });
 
-  it('hides marker strokes used by a change from Ignored, but keeps ignored pen edits', () => {
+  it('hides an unclear mark whose strokes a change took along, but keeps pen edits', () => {
+    const item = (key: string, kind: 'unclear' | 'placeOpen', strokeNums?: number[]) => ({
+      kind,
+      key,
+      summary: '',
+      reason: 'too short',
+      rect: null,
+      strokes: [],
+      words: '',
+      readings: [],
+      guess: null,
+      ...(strokeNums ? {strokeNums} : {penEditId: key}),
+    });
     const preview = assembleMarkerPreview(
-      base({
-        ignored: [
-          {markerUuid: 'v', markerNumInPage: 5, summary: '', reason: 'too short'},
-          {markerUuid: 'x', markerNumInPage: 30, summary: '', reason: 'too short'},
-          {markerUuid: 'pe9', markerNumInPage: 0, summary: 'Replacement 9', reason: 'no mark', penEditNumber: 9, penEditId: 'pe9'},
-        ],
-      }),
+      base({toDecide: [item('v', 'unclear', [5]), item('x', 'unclear', [30]), item('pe9', 'placeOpen')]}),
       {pe1: state()},
     );
-    expect(preview.ignoredMarkers.map(marker => marker.markerUuid)).toEqual(['x', 'pe9']);
+    expect(preview.toDecide.map(entry => entry.key)).toEqual(['x', 'pe9']);
   });
 });
 
@@ -285,8 +292,9 @@ describe('swaps and spaces in the assembly', () => {
     const crossing = draft('x', 10, 18, {markerNumInPage: 7, consumedMarkerNums: [7]});
     const preview = assembleMarkerPreview(base({drafts: [crossing, swapDraft], penEdits: []}), {});
     expect(preview.operations.map(op => op.kind)).toEqual(['delete']);
-    expect(preview.ignoredMarkers[0].reason).toContain('reaches over an edge');
-    expect(preview.ignoredMarkers[0].removableNums).toEqual([9]);
+    expect(preview.toDecide[0].reason).toContain('reaches over an edge');
+    expect(preview.toDecide[0].removableNums).toEqual([9]);
+    expect(preview.toDecide[0].kind).toBe('unclear');
   });
 
   it('puts a space in at its place', () => {

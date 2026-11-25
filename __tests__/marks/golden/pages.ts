@@ -114,7 +114,7 @@ const slashLinked: PageSpec = {
   name: 'slash-linked',
   about: 'A slash through the r of "red" with tagged text after it: the letter is replaced; its own circle for the number goes with it.',
   textboxes: [A],
-  strokes: [{name: 's1', drawn: slash(x(8) + 9, MID, 65, 40)}, circle(x(8) + 20, MID - 40, 12)],
+  strokes: [{name: 's1', drawn: [...slash(x(8) + 9, MID, 65, 40), ...circle(x(8) + 20, MID - 40, 12)]}],
   penEdits: [{number: 1, kind: 'replacement', text: 'b', handwriting: below('b', 0), after: 's1', mark: {kind: 'replace', item: 's1', slash: true}}],
 };
 

@@ -16,22 +16,33 @@
       ]
     }
   ],
-  "ignored": [
+  "toDecide": [
     {
-      "summary": "Ignored marker 2",
+      "kind": "unclear",
+      "summary": "Strike",
       "reason": "The marker crosses multiple rendered lines or does not align with a single line.",
-      "stroke": 2,
+      "strokes": [
+        2
+      ],
       "removable": [
         2
+      ],
+      "words": "one two three five six seven",
+      "readings": [
+        "strike"
       ]
     },
     {
-      "summary": "Ignored marker 4",
+      "kind": "unclear",
+      "summary": "Strokes over the text",
       "reason": "The marker is too tall relative to its width.",
-      "stroke": 4,
+      "strokes": [
+        4
+      ],
       "removable": [
         4
-      ]
+      ],
+      "words": "nine"
     }
   ],
   "after": [

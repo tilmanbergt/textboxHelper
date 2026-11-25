@@ -1,4 +1,4 @@
-import {DUPLICATE_STRIKE, resolvePage, type PageMark, type PageResult, type StrokeOwner} from '../../src/domain/marks/pass2';
+import {DUPLICATE_STRIKE, resolvePage, type PageMark, type PageResult} from '../../src/domain/marks/pass2';
 import type {TextboxView} from '../../src/domain/marks/textboxView';
 import {arc, at, caret, circle, cross, loop, page, slash, strike, swap, textbox, view, type Drawn} from './build';
 
@@ -42,12 +42,9 @@ type Case = {
   name: string;
   strokes: Drawn[];
   boxes?: TextboxView[];
-  owners?: Record<string, StrokeOwner>;
   marks: string[];
   refused: string[];
 };
-
-const OWNER: StrokeOwner = {id: 'pe-1', number: 1, mark: null};
 
 const TABLES: Record<string, Case[]> = {
   point: [
@@ -110,20 +107,6 @@ const TABLES: Record<string, Case[]> = {
       refused: ['3: The marker does not land clearly inside exactly one main-layer textbox', '1: Replace mark without new text (remove 1+3)'],
     },
     {
-      name: 'a strike with a loop and tagged text replaces the words',
-      strokes: [strike(x(12) + 2, x(15) - 2, MID), loop(x(15) + 20, MID)],
-      owners: {s1: OWNER},
-      marks: ['replace 1+2 [12, 15)'],
-      refused: ['2: The marker is too short to classify reliably (remove 2)'],
-    },
-    {
-      name: 'a strike chosen alone with Select mark replaces the words',
-      strokes: [strike(x(12) + 2, x(15) - 2, MID)],
-      owners: {s1: {...OWNER, mark: {kind: 'replace', strikeRect: {left: 0, top: 0, right: 1, bottom: 1}, modifierRects: []}}},
-      marks: ['replace 1 [12, 15)'],
-      refused: [],
-    },
-    {
       name: 'a second strike over the same word takes nothing',
       strokes: [strike(x(4) + 3, x(7) - 3, MID), strike(x(4) + 5, x(7) - 1, MID + 3)],
       marks: ['delete 1 [4, 7)'],
@@ -178,7 +161,7 @@ const TABLES: Record<string, Case[]> = {
 
 describe.each(Object.entries(TABLES))('passes 1 and 2 on a page: %s', (_need, cases) => {
   it.each(cases.map(item => [item.name, item] as const))('%s', (_name, item) => {
-    const result = resolvePage(page(...item.strokes), item.boxes ?? [view(A)], {ownerOf: id => item.owners?.[id]});
+    const result = resolvePage(page(...item.strokes), item.boxes ?? [view(A)]);
     expect(result.marks.map(summary)).toEqual(item.marks);
     expect(refusals(result)).toEqual(item.refused);
     expect(result.wanted).toEqual([]);
@@ -199,9 +182,8 @@ describe('measuring only what a mark needs', () => {
     expect(resolvePage(page(strike(200, 420, 900)), [view(A, {measured: false})]).wanted).toEqual([]);
   });
 
-  it('keeps a tagged replacement whose strike is on a locked font for the review to explain', () => {
-    const result = resolvePage(page(strike(x(4) + 3, x(7) - 3, MID)), [view(A, {locked: true})], {ownerOf: () => OWNER});
-    expect(result.lockedPenEditIds).toEqual(['pe-1']);
+  it('notes the textbox whose font kept a strike from being placed', () => {
+    const result = resolvePage(page(strike(x(4) + 3, x(7) - 3, MID)), [view(A, {locked: true})]);
     expect(result.lockedViews).toEqual(['tb1']);
   });
 });

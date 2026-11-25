@@ -114,6 +114,11 @@ export type PenEditEntry = {
    * paragraph where its handwriting starts (technical-design-fine-marks.md §8). Missing: by its mark.
    */
   placement?: 'here';
+  /**
+   * Here on a mark whose place stayed open (technical-design-mark-dialogue.md §2.7): the review
+   * takes the nearest place it found. Part of the user layer, not of the page's fingerprint.
+   */
+  confirmed?: boolean;
 };
 
 /** Where Select mark was started: the tag's result card, or the review (which opens again). */
@@ -234,6 +239,7 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     awaitingMark: parseAwaitingMark(value.awaitingMark),
     edges: parseEdges(value.edges),
     ...(value.placement === 'here' ? {placement: 'here' as const} : {}),
+    ...(value.confirmed === true ? {confirmed: true} : {}),
   };
 }
 
@@ -421,6 +427,7 @@ export function linkPenEdit(index: PenEditIndex, id: string, mark: PenEditMark, 
     number,
     awaitingMark: null,
     placement: undefined,
+    confirmed: undefined,
   }));
 }
 

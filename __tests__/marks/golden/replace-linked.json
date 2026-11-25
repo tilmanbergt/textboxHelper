@@ -50,28 +50,28 @@
       "penEdit": 5
     }
   ],
-  "ignored": [
+  "toDecide": [
     {
-      "summary": "Ignored marker 16",
-      "reason": "The marker is too short to classify reliably.",
-      "stroke": 16,
-      "removable": [
-        16
-      ]
-    },
-    {
-      "summary": "Ignored marker 15",
+      "kind": "unclear",
+      "summary": "Strike with a loop",
       "reason": "Replace mark without new text: write the new words right after it, lasso them and tap Insertion or Replacement. (A strike with two short verticals and no text deletes exactly what is between them.)",
-      "stroke": 15,
+      "strokes": [
+        15,
+        16
+      ],
       "removable": [
         15,
         16
+      ],
+      "words": "words here",
+      "readings": [
+        "replaceLoop"
       ]
     },
     {
+      "kind": "placeOpen",
       "summary": "Replacement 4",
-      "reason": "Its replace mark was not recognized on the page (erased, or not over a textbox).",
-      "stroke": 0,
+      "reason": "Its mark is no longer on the page.",
       "penEdit": 4
     }
   ],

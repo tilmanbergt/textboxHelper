@@ -9,3 +9,8 @@ export const VERTICALS_NO_TEXT_REASON =
   'Two verticals across a strike mark exactly what to delete; they take no new text. For new text, draw a small loop after the strike.';
 
 export const MARK_STROKES_UNREADABLE = 'The selected strokes could not be read.';
+
+export const STROKES_NO_MARK = 'These strokes over the text read as no mark.';
+
+export const NO_MARK_FOR_TEXT =
+  'No mark was found just before it. Select a mark for it, or insert it right here as a new paragraph.';

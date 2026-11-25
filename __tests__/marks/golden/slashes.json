@@ -45,13 +45,20 @@
       "uncertain": "The slash is slanted: check the letter."
     }
   ],
-  "ignored": [
+  "toDecide": [
     {
-      "summary": "Ignored marker 5",
+      "kind": "unclear",
+      "summary": "Slash",
       "reason": "A slash marks one letter; to join two words, use the close-up arc.",
-      "stroke": 5,
+      "strokes": [
+        5
+      ],
       "removable": [
         5
+      ],
+      "words": "and more",
+      "readings": [
+        "slash"
       ]
     }
   ],

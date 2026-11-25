@@ -31,19 +31,18 @@
       ]
     }
   ],
-  "ignored": [
+  "toDecide": [
     {
-      "summary": "Ignored marker 4",
+      "kind": "unclear",
+      "summary": "Strokes over the text",
       "reason": "The marker is too short to classify reliably.",
-      "stroke": 4,
+      "strokes": [
+        4
+      ],
       "removable": [
         4
-      ]
-    },
-    {
-      "summary": "Ignored marker 5",
-      "reason": "The marker does not land clearly inside exactly one main-layer textbox.",
-      "stroke": 5
+      ],
+      "words": "the"
     }
   ],
   "after": [

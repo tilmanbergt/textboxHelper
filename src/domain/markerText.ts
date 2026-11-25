@@ -185,7 +185,7 @@ export function createEmptyPreview(): EditMarkerPreview {
     hunks: [],
     fontWarning: null,
     operations: [],
-    ignoredMarkers: [],
+    toDecide: [],
     canApply: false,
     applyPlan: null,
     base: null,

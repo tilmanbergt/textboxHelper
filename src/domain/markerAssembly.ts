@@ -26,7 +26,7 @@ import {
   splitChangeText,
 } from './paragraphMarks';
 import {composeSwap, swapSummary, type ChangeNearSwap} from './swapText';
-import type {IgnoredEditMarker} from './markerTypes';
+import {leftOutItem, type ToDecideItem} from './marks/toDecide';
 import {placePunctuation, punctuationSnippet} from './punctText';
 import {joinParagraphTexts} from './paragraphJoin';
 import type {PunctuationChar} from './marks/shapes/punct';
@@ -211,12 +211,12 @@ export function assembleMarkerPreview(
 ): EditMarkerPreview {
   const rowOptions = swapOptions;
   const blocked = closeUpConflicts(base);
-  const leftOut: IgnoredEditMarker[] = [];
+  const leftOut: ToDecideItem[] = [];
   const operations: RecognizedEditOperation[] = [];
   const displayRanges = new Map<string, TaggedRange[]>();
   const applyRanges = new Map<string, TaggedRange[]>();
   const swapDrafts: MarkerPreviewBase['drafts'] = [];
-  const swapIgnored: IgnoredEditMarker[] = [];
+  const swapIgnored: ToDecideItem[] = [];
   const readyOperations: RecognizedEditOperation[] = [];
   const readyPenIds: string[] = [];
   let pendingCount = 0;
@@ -338,7 +338,7 @@ export function assembleMarkerPreview(
     }
     const blockedReason = blocked.get(operation.id);
     if (blockedReason) {
-      leftOut.push(ignoredOperation(operation, blockedReason));
+      leftOut.push(leftOutItem(operation, blockedReason, base.markPoints));
       continue;
     }
     if (operation.kind === 'closeUp' && operation.closeUp) {
@@ -376,7 +376,7 @@ export function assembleMarkerPreview(
       }
       const place = placePunctuation(original, range.start, info.mode, char);
       if (place.kind === 'refused') {
-        leftOut.push(ignoredOperation(operation, place.reason));
+        leftOut.push(leftOutItem(operation, place.reason, base.markPoints));
         continue;
       }
       const placed: TextMutationRange = {
@@ -513,13 +513,7 @@ export function assembleMarkerPreview(
       ? ({kind: 'conflict', reason: 'Swaps overlap: draw them one after the other.'} as const)
       : composeSwap(original, zones, changes, fixCase);
     if (result.kind === 'conflict') {
-      swapIgnored.push({
-        markerUuid: operation.markerUuid,
-        markerNumInPage: operation.markerNumInPage,
-        summary: operation.summary,
-        reason: result.reason,
-        removableNums: operation.consumedMarkerNums,
-      });
+      swapIgnored.push(leftOutItem(operation, result.reason, base.markPoints));
       continue;
     }
     if (result.kind === 'waiting') {
@@ -611,7 +605,7 @@ export function assembleMarkerPreview(
         ? 'A paragraph break in one of the two paragraphs: apply it first, then join.'
         : null;
       if (reason) {
-        leftOut.push(ignoredOperation(operation, reason));
+        leftOut.push(leftOutItem(operation, reason, base.markPoints));
         continue;
       }
       const removeHyphen = !!info.hyphen && (rowOptions[operation.id]?.removePunct ?? info.removeHyphen);
@@ -708,11 +702,10 @@ export function assembleMarkerPreview(
   const shownMarkerNums = new Set(
     operations.flatMap(operation => operation.consumedMarkerNums),
   );
-  const ignoredMarkers = [
-    ...base.ignored.filter(
-      marker =>
-        marker.penEditId !== undefined ||
-        !shownMarkerNums.has(marker.markerNumInPage),
+  // Strokes a change took along (a loop, a vertical) have their own refusal: not shown then.
+  const toDecide = [
+    ...base.toDecide.filter(
+      item => item.kind !== 'unclear' || !(item.strokeNums ?? []).every(num => shownMarkerNums.has(num)),
     ),
     ...swapIgnored,
     ...leftOut,
@@ -765,22 +758,12 @@ export function assembleMarkerPreview(
     hunks,
     fontWarning,
     operations,
-    ignoredMarkers,
+    toDecide,
     canApply: !!applyPlan,
     applyPlan,
     base,
     penEdits: base.penEdits,
     pendingCount,
-  };
-}
-
-function ignoredOperation(operation: RecognizedEditOperation, reason: string): IgnoredEditMarker {
-  return {
-    markerUuid: operation.markerUuid,
-    markerNumInPage: operation.markerNumInPage,
-    summary: operation.summary,
-    reason,
-    removableNums: operation.consumedMarkerNums,
   };
 }
 

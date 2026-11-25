@@ -123,8 +123,18 @@ The marks are read in two pure passes (`domain/marks/`, technical-design-mark-di
   doesn't place leaves its strokes free for the later families. `marks/drafts.ts` turns the
   result into the review's drafts and ignored rows.
 
+**Linked marks and To decide.** A linked mark (its text has a number) is kept out of pass 1; its
+stored reading (`marks/storedMark.ts` `readingOfStoredMark`, on its strokes as they are now) is
+placed with pass 2 (`marks/linked.ts`): as a change, or "place open" with pass 2's reason and the
+nearest sensible place. What the review can't make a change of is `toDecide`
+(`marks/toDecide.ts`): place open, text without a mark ("?"), and unclear marks - strokes on or over
+the text no family placed (strike-family scribbles close together over a line as one item), with
+the readings pass 1 found; handwriting beside the text isn't listed. Ignore is remembered per note
+and page (`storage/ignoredMarks.ts`). The user layer (`marks/userLayer.ts`: Here, ‹ ›, a chosen
+reading) goes on top; a pen edit stores Here as `confirmed`.
+
 `actions/markerPageAnalysis.ts` orchestrates one page: it reads the elements and strokes
-(`supernote/markerStrokeRead.ts`), takes out tagged strokes, runs pass 2 with lazy measuring -
+(`supernote/markerStrokeRead.ts`), takes out tagged strokes and linked marks, runs pass 2 with lazy measuring -
 `actions/markerMeasure.ts` measures a textbox once per review, only when pass 2 asks for it, and
 locks textboxes whose font can't be read (their marks are ignored) - places insertions at their
 carets and builds the preview in named steps; `actions/markerApply.ts` applies the plan;

@@ -34,7 +34,7 @@
       ]
     }
   ],
-  "ignored": [],
+  "toDecide": [],
   "after": [
     {
       "textbox": 1,
