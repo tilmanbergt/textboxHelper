@@ -34,7 +34,8 @@ git branch -d feature/<short-name>
 - **Message**: short imperative subject (max ~70 characters), an empty line, then details.
 - **"Device test:" block** at the end of the message for every commit with an effect on the
   device: numbered steps, expected results after `->`. Nothing to test:
-  `Device test: none - <reason>`.
+  `Device test: none - <reason>`. The CI build collects these blocks into its `TESTING.md`
+  (§3); a commit without one is flagged there.
 
   ```
   Fix backup path blocked as another plugin's private dir
@@ -64,6 +65,24 @@ the end means uncommitted changes. Set the next version once per release with
 `npm run next-version -- <x.y.z>` and commit it. Commit before a build you will test seriously,
 so the label names the commit. Install `build\outputs\manuscript-<label>.snplg` over the existing
 plugin and test on a copy of a note; the plugin list shows `0.3.0-alpha`.
+
+### Test builds from GitHub
+
+Every push to any branch is checked and built on GitHub (`.github/workflows/check.yml`): job
+`check` runs `npm run check`, job `build` then builds the plugin on Windows like a local build
+(same label, same signing key, so the two install over each other) and keeps it for 30 days:
+
+1. GitHub → **Actions** → the run of the push (branch and commit message are shown).
+2. The run's summary page shows **"Manuscript <label> - what to test"**: the commits since `main`
+   (on `main`: since the last release) with their "Device test:" blocks, newest first, those of
+   the newest push marked **NEW** and commits without a block flagged ⚠; then the lines added to
+   CHANGELOG `[Unreleased]`.
+3. At the bottom under **Artifacts**: `manuscript-<label>` - download, unzip. It holds the
+   `.snplg` and the same notes as `TESTING.md`.
+4. Install the `.snplg` over the existing plugin, as above.
+
+A newer push to the same branch cancels a build that is still running. `npm run test-notes`
+writes the same notes to `build\TESTING.md` for a local build.
 
 ## 4. Releases
 

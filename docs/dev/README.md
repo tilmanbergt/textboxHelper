@@ -35,7 +35,8 @@ npm is the package manager; there is no `yarn.lock`.
 1. `npm run gen` - writes `src/generated/buildInfo.ts` (`scripts/version.mjs`) and bundles the
    help pictures into `src/ui/generated/` (`scripts/gen-mark-images.mjs`);
 2. `node scripts/marks.mjs --check` - every help picture is drawn from the current spec;
-3. `npm run test:scripts` - tests of the scripts (`test-marks.mjs`, `test-versioning.mjs`);
+3. `npm run test:scripts` - tests of the scripts (`test-marks.mjs`, `test-versioning.mjs`,
+   `test-ci-build.mjs`, `test-test-notes.mjs`);
 4. `tsc --noEmit` - zero errors;
 5. `eslint .` - zero errors and zero warnings;
 6. `jest --passWithNoTests` - every test in `__tests__/` passes.
@@ -71,7 +72,8 @@ To change a picture: edit the spec (or `scripts/lib/markDrawing.mjs` for every p
 | `src/screens/` | The views and dialogs of the plugin window. |
 | `src/ui/` | Shared building blocks of the screens: `ScreenFrame`, buttons, tabs, paging (`PagedSection`, `PagedText`), the help (`HelpOverlay`, `MarkHelp`), `theme.ts`; `generated/` holds the bundled help pictures (not committed). |
 | `__tests__/domain/`, `__tests__/ui/` | Jest tests, one file per domain module or group; `ui/` for the help screen and its pictures. |
-| `scripts/` | `marks.mjs`, `gen-mark-images.mjs`, `test-marks.mjs`: drawing, bundling and checking the help pictures. `version.mjs` and `lib/versioning.mjs` (tested by `test-versioning.mjs`): build labels, build info and the release helpers. |
+| `scripts/` | `marks.mjs`, `gen-mark-images.mjs`, `test-marks.mjs`: drawing, bundling and checking the help pictures. `version.mjs` and `lib/versioning.mjs` (tested by `test-versioning.mjs`): build labels, build info and the release helpers. `ci-build.mjs`, `lib/ciBuild.mjs` (`test-ci-build.mjs`): steps of the GitHub builds. `test-notes.mjs`, `lib/testNotes.mjs` (`test-test-notes.mjs`): TESTING.md. |
+| `.github/workflows/` | `check.yml`: checks and a test build on every push. |
 | `src/generated/` | `buildInfo.ts`: version, label and commit of the build (written by `scripts/version.mjs`, not committed). |
 | `docs/user/marks/`, `docs/user/images/marks/` | The help pictures' spec and the drawn PNGs. |
 | `android/.../com/textboxhelper/TextboxMetricsModule.kt` | Native module: Android `StaticLayout` text measurement for textbox sizes and hit testing. |

@@ -13,7 +13,8 @@
     "gen": "node scripts/version.mjs && node scripts/gen-mark-images.mjs",
     "postinstall": "npm run gen",
     "next-version": "node scripts/version.mjs --set-next",
-    "test:scripts": "node scripts/test-marks.mjs && node scripts/test-versioning.mjs",
+    "test-notes": "node scripts/test-notes.mjs --out build/TESTING.md",
+    "test:scripts": "node scripts/test-marks.mjs && node scripts/test-versioning.mjs && node scripts/test-ci-build.mjs && node scripts/test-test-notes.mjs",
     "check": "npm run gen && node scripts/marks.mjs --check && npm run test:scripts && tsc --noEmit && eslint . --max-warnings 0 && jest --passWithNoTests"
   },
   "dependencies": {

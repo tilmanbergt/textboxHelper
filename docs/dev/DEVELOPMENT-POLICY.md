@@ -121,12 +121,16 @@ A change is not done while the docs describe the old behavior.
 
 ## 6. Checks and tests
 
-- **`npm run check`** checks the help pictures, then runs the type check, ESLint and Jest. It
-  passes with zero errors and zero warnings after every step and before every commit.
+- **`npm run check`** writes the build info, checks the help pictures, runs the script tests,
+  then the type check, ESLint and Jest. It passes with zero errors and zero warnings after every
+  step and before every commit.
+- **CI** (`.github/workflows/check.yml`) runs `npm run check` on every push to a branch and on
+  every pull request, then builds the `.snplg` of the push (`RELEASING.md` §3). A red run is fixed
+  before anything else on that branch; a red `main` can't be released.
 - **Jest tests** live in `__tests__/`. New pure logic gets tests, including edge cases; a fixed bug
   gets a test that would have caught it, where its cause is testable without the device.
-- **On the device**, for every change that touches UI, notes, files or device APIs: build with
-  `./buildPlugin.ps1`, install over the previous build, test the changed flow and the actions
+- **On the device**, for every change that touches UI, notes, files or device APIs: take the CI
+  build of the push (or build with `./buildPlugin.ps1`), install it over the previous build, test the changed flow and the actions
   next to it. Test on a copy of a note, never on an important one.
 - A change is only reported as done when the checks passed - and the report says what was
   verified off-device and what still needs a device test.
