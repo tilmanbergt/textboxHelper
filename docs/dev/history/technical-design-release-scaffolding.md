@@ -304,3 +304,26 @@ and the "if your version has it" wording in the bug form goes once R2 is in.
 - **Open branches:** `package.json` scripts, `CHANGELOG [Unreleased]` and policy text overlap with
   mark-dialogue and comments-images. These are small conflicts when `main` is merged into them;
   each one is a text merge.
+
+## 11. As built
+
+Built on `feature/release-scaffolding` in five commits (S1 `5f563d6`, S2 `a6f8b6a`, S3 `d570d2b`,
+S4 `cd2a297`, S5 `dbd206a`), as designed, with these differences:
+
+- **S1:** `buildPlugin.ps1` also gets Kept GTD's fix for Gradle's output: it went into
+  `Build-AndroidApk`'s return value, so a failed Gradle run still counted as success (an array of
+  lines is true). Now `| Out-Host`. The one non-ASCII comment (Step 14) became ASCII. The CHANGELOG
+  heading stamp keeps this repo's style, `## [x.y.z] - date`.
+- **S2:** `scripts/lib/ciBuild.mjs` came complete with S2 (`next-beta` and `notes` too), so its
+  tests are in one place; S3 only adds the workflow. The beta text has no "Please look at" line
+  (no feature areas).
+- **TESTING.md:** a "Device test:" block ends before the commit's trailer paragraph
+  (`Co-Authored-By:`, `Claude-Session:`), which the cloud sessions add to every commit.
+- **S4:** the release commit carries `Device test: the release device check, docs/dev/RELEASING.md
+  section 6.`. `RELEASING.md` follows Kept GTD's numbering (§1 setup … §7 after a release).
+- **S5:** PRIVACY, SECURITY and the issue forms say "Textbox Tools (being renamed to Manuscript)"
+  and name `MyStyle/TextboxHelper/fonts` and "Save Diagnostics" as the code has them now. R1
+  renames them; R2 replaces "Save Diagnostics" by Report a problem in the bug form.
+- **First CI run** (push of S1+S2): job `check` 37 s, job `build` about 8 minutes on
+  windows-latest, green on the first try; artifact `manuscript-0.3.0-alpha+a6f8b6a` (7.6 MB),
+  versionCode 473462, native package present.
