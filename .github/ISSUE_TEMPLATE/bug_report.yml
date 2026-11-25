@@ -11,7 +11,7 @@ body:
     id: version
     attributes:
       label: Plugin version
-      description: Supernote Settings → Apps → Plugins, e.g. "0.3.0" or "0.3.0-beta"
+      description: Supernote Settings → Apps → Plugins, or the first line of Manuscript → Settings → Diagnostics, e.g. "0.3.0"
       placeholder: 0.3.0
     validations:
       required: true
@@ -61,7 +61,8 @@ body:
   - type: textarea
     id: report
     attributes:
-      label: Diagnostics file
+      label: Report file
       description: |
-        If your version has **Report a problem**, attach the file it saves to EXPORT. Otherwise, for edit marks:
-        Manuscript → Settings → Diagnostics → Save Diagnostics. Please look through the file first.
+        Right after the problem: Manuscript → Settings → Diagnostics → **Report a problem** saves
+        `manuscript-report-….json` to EXPORT. Drag it here. Your text is in it only if you ticked
+        "Include the text of this page"; please look through it first.

@@ -6,6 +6,9 @@ All notable changes to Manuscript (formerly Textbox Tools) are listed here, newe
 
 ### Added
 
+- **Report a problem** (Manuscript → Settings → Diagnostics): one file in EXPORT for a bug report, with the version, device, settings, how the last marks were read, the timings and the errors of this session. Your text is only in it when you tick "Include the text of this page". It replaces Save Diagnostics and Save timings.
+- Settings → Diagnostics shows the plugin version and the device in its first line.
+- When a screen fails, it shows "Something went wrong on this screen" with Report a problem and Close instead of an empty card.
 - Comments and images: the new lasso button "Comment or Image" keeps handwriting beside the text as a comment or an image. A small card asks Comment · Image (or Cancel); a comment gets a speech bubble with "C" on the page, an image a plain double frame. They have no number and never change the text: Apply leaves them and their signs alone.
   - Text tagged with "Insertion or Replacement" that has no mark can become a comment or an image, and back: on the "No mark found" card (Select mark now · Comment · Image · Later), on "Not a clear mark" for the text that waits for its mark (the strokes you just selected stay plain handwriting), and in the review under To decide. Its "?" becomes the bubble or the frame.
   - Each comment and image belongs to the paragraph beside it: the one it is written next to, else the one above it, else the one below, on its own page, in the text or the "Set aside" area, and within its own linked file. Headings count.

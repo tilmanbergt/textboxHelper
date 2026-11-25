@@ -210,6 +210,6 @@ export const REVIEW_HELP: HelpBlock[] = [
   },
   {
     title: 'Wrong words picked?',
-    text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/Manuscript/fonts and open Manuscript again. Settings has the calibration and, under Diagnostics, Save Diagnostics for a bug report.',
+    text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/Manuscript/fonts and open Manuscript again. Settings has the calibration and, under Diagnostics, Report a problem: one file for a bug report.',
   },
 ];

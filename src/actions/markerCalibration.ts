@@ -1,11 +1,10 @@
 import type {EditMarkerCalibration} from '../domain/markerTypes';
 import {DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION} from '../domain/textboxLayout';
-import {writeJsonExportFile} from '../storage/exportFile';
 import {logEditMarker, markerDiagnostics} from '../utils/editMarkerLog';
 
 /**
  * The edit-marker calibration (where NOTE draws a textbox's text, tuned in Settings → Calibration)
- * and the diagnostics of the last marker preview. The calibration is kept for the session here and
+ * and the pages in the diagnostics trace of the last marker preview (Report a problem writes it). The calibration is kept for the session here and
  * stored by the review in `settings.json`.
  */
 
@@ -47,24 +46,7 @@ export function noteDiagnosticsPage(page: number): void {
   }
 }
 
-/**
- * Writes the trace of the last edit-marker preview as JSON to the EXPORT folder, only when the
- * user taps "Save Diagnostics". It contains the stages of every marker (sources, stroke and word
- * positions, the reason a marker was ignored) and short text previews of the textboxes involved.
- */
-export async function saveEditMarkerDiagnostics(): Promise<string> {
-  const snapshot = markerDiagnostics.snapshot();
-  if (snapshot.entries.length === 0) {
-    throw new Error('No page has been read yet.');
-  }
-  const createdAt = new Date().toISOString();
-  const fileName = `manuscript-marker-diagnostics-${createdAt.replace(/[:.]/g, '-')}.json`;
-  return writeJsonExportFile(fileName, {
-    kind: 'edit-marker-diagnostics',
-    createdAt,
-    pages: diagnosticsPages.map(page => page + 1),
-    entryCount: snapshot.entries.length,
-    droppedCount: snapshot.droppedCount,
-    entries: snapshot.entries,
-  });
+/** The pages (1-based) whose reading is in the diagnostics trace, for Report a problem. */
+export function diagnosticsPagesRead(): number[] {
+  return diagnosticsPages.map(page => page + 1);
 }

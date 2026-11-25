@@ -11,17 +11,23 @@
  *   and shows its busy label, disabled. A small accessory (a checkbox that belongs to the
  *   primary, e.g. Manuscript's "Also update <file>") can sit right before it.
  *
+ * - The body sits in an ErrorBoundary: a crash of a screen shows "Something went wrong", Report a
+ *   problem and Close instead of an empty card (technical-design-release-readiness.md §4.3).
+ *
  * Header and footer have fixed minimum heights, so nothing in the body moves when the status or
  * the button label changes. A change of `screenKey`, the status text or the button label requests an
  * e-ink refresh: progress arrives without a touch, and e-ink doesn't redraw by itself.
  */
 import React, {useEffect, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
+import ErrorBoundary from './ErrorBoundary';
 import HelpOverlay from './HelpOverlay';
 import MarkHelp from './MarkHelp';
 import PillButton from './PillButton';
 import {COLORS, FONT, SPACING} from './theme';
 import {requestEinkRefresh} from '../utils/screenRefresh';
+import {fileNameOf} from '../domain/userMessage';
+import {writeProblemReport} from '../actions/problemReport';
 
 export interface FrameButton {
   label: string;
@@ -109,7 +115,9 @@ export default function ScreenFrame({
         </View>
       </View>
       <View style={styles.body}>
-        {children}
+        <ErrorBoundary onReport={reportCrash} onClose={onClose}>
+          {children}
+        </ErrorBoundary>
         {help && helpOpen && 'marks' in help && <MarkHelp title={help.title} onClose={() => setHelpOpen(false)} />}
         {help && helpOpen && 'text' in help && (
           <HelpOverlay title={help.title} text={help.text} onClose={() => setHelpOpen(false)} />
@@ -134,6 +142,10 @@ export default function ScreenFrame({
       </View>
     </View>
   );
+}
+
+async function reportCrash(): Promise<string> {
+  return `Saved to EXPORT: ${fileNameOf(await writeProblemReport(false))}`;
 }
 
 const styles = StyleSheet.create({

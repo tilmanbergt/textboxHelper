@@ -93,7 +93,9 @@ The architecture as built is described in `design-overview.md`. These rules are 
 - **Logging:** log lines start with the module in brackets, e.g. `[EditMarkerActions] stage`.
   Every caught error is either shown to the user or logged, with enough context to find the
   cause. Logs never contain more of the user's text than the diagnosis needs; prefer counts and
-  ids.
+  ids. Every `console.error` and `console.warn` also goes into the session's errors
+  (`utils/errorLog.ts`, newest 50, memory only), which **Report a problem** writes to its file:
+  bug reports ask for that file. A screen crash is caught by the error boundary in `ScreenFrame`.
 
 ## 5. Documentation in the same change
 

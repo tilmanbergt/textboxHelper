@@ -26,8 +26,7 @@ asks only for reading and writing files. Nothing it reads or writes leaves the d
   "Check write access" writes and removes a small probe file (`.manuscript-probe.txt`) in that
   folder.
 - **Folders you link**: the `.txt` files directly in them are listed.
-- **EXPORT**: DOCX exports, and diagnostics or timings files when you save them (Manuscript →
-  Settings → Diagnostics).
+- **EXPORT**: DOCX exports, and the file of **Report a problem** when you write one (below).
 - **`MyStyle/Manuscript/fonts`** (and `MyStyle/fonts`): only read, to measure text in fonts
   you copied there.
 
@@ -39,10 +38,16 @@ of a file's text when you unlink it. Manuscript → Settings → Diagnostics →
 the plugin keeps and has **Clean up now**. Your notes, your text files and anything in EXPORT are
 never removed by the clean-up.
 
-## Diagnostics files
+## Report a problem
 
-Diagnostics and timings files in EXPORT contain the plugin version, settings, the positions of
-the marks it read and how long steps took. Diagnostics of a marker preview contain short previews
-of the words a mark touches. Please look through a file before attaching it to a bug report.
+**Report a problem** (Manuscript → Settings → Diagnostics) writes one file to EXPORT,
+`manuscript-report-<time>.json`, for a bug report. It contains the plugin version, the device model
+and Android version, the open note's file name (no folders), page count and page size, the
+settings, how the last marks were read (positions, decisions, the length of the text they touch),
+the recorded timings and the errors and warnings of this session. Your text is in it only when
+you tick **Include the text of this page**: then the textboxes of the current page and the text
+previews of the marks are in it too.
 
-Messages go to the Android system log (`logcat`) on the device; nothing is uploaded.
+The session's errors and warnings are kept in memory only (the newest 50) and are gone when the
+plugin is closed. Messages also go to the Android system log (`logcat`) on the device. Nothing is
+uploaded: you decide whether to attach the file to a bug report, and can look through it first.

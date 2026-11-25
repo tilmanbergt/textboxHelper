@@ -284,7 +284,7 @@ export type PageResult = {
   lockedViews: string[];
   /** Textboxes pass 2 needs measured: run again with them measured. */
   wanted: string[];
-  /** Every decision, for "Save Diagnostics". */
+  /** Every decision, for Report a problem. */
   trace: Array<{stage: string; payload: Record<string, unknown>}>;
 };
 

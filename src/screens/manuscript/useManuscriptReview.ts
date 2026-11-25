@@ -13,7 +13,6 @@ import {
   clearMarkerDiagnostics,
   getEditMarkerCalibration,
   resetEditMarkerCalibration,
-  saveEditMarkerDiagnostics,
   setEditMarkerCalibration,
 } from '../../actions/markerCalibration';
 import {forgetPages, openCachedNote} from '../../actions/manuscriptCache';
@@ -108,7 +107,6 @@ export interface ManuscriptReview {
   refresh: () => void;
   /** Checks every page read so far again; unchanged pages keep their analysis (after an Outline apply). */
   recheck: () => void;
-  saveDiagnostics: () => void;
   timings: ReturnType<typeof useTimingsExport>;
   /** Applies the ready changes of every read page. */
   apply: () => void;
@@ -479,18 +477,6 @@ export function useManuscriptReview(): ManuscriptReview {
 
   const timings = useTimingsExport(setStatus);
 
-  const saveDiagnostics = useCallback(() => {
-    if (loading || busy) {
-      return;
-    }
-    saveEditMarkerDiagnostics()
-      .then(path => setStatus({text: `Diagnostics saved to EXPORT: ${fileNameOf(path)}`}))
-      .catch(error => {
-        console.warn('[Manuscript] diagnostics failed', String(error));
-        setStatus({kind: 'error', text: userMessage(error, 'Could not save the diagnostics.')});
-      });
-  }, [busy, loading]);
-
   const planCount = view.plans.length;
   /** Applies these plans (one per page) after a backup; the card stays open and reads the pages again. */
   const applyPlans = useCallback(
@@ -693,7 +679,6 @@ export function useManuscriptReview(): ManuscriptReview {
     resetCalibration,
     refresh,
     recheck,
-    saveDiagnostics,
     timings,
     apply,
     applyPage,

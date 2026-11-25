@@ -1,7 +1,7 @@
 import {createDiagnosticLog} from '../domain/diagnosticLog';
 
 /**
- * Every stage of the last edit-marker preview, for "Save Diagnostics" in the review screen. Each
+ * Every stage of the last edit-marker preview, for Report a problem (Settings → Diagnostics). Each
  * marker needs about ten entries, so 4,000 cover a full page of markers.
  */
 export const markerDiagnostics = createDiagnosticLog(4000);
