@@ -517,6 +517,30 @@ written. The help page "Change letters" becomes "Delete letters".
 - Pass 2 keeps today's diagnostics as a `trace` the orchestrator logs.
 - One vertical rule everywhere: a vertical may be a straight line (as the review always allowed).
 
+### 13.2.1 As built, S3 to S6
+
+- S3: numbers are given when text is linked to its mark and count only the page's linked texts;
+  text without a mark is stored with `number: null` and shows "?". Select mark gives the next
+  number. Golden record unchanged.
+- S4: a linked mark is placed from its stored reading (`storedMark.ts` `readingOfStoredMark`,
+  `linked.ts` `placeLinked`); a mark no longer on the page is open with `MARK_GONE`, and the
+  nearest place is guessed with `guessPart`. To decide is built in `marks/toDecide.ts`:
+  `unclearItems` groups the strike family's refusals close together on one line (Q7), lists a
+  margin paragraph mark as unclear, and lists each problem once (strokes another item holds are
+  not listed again); `leftOutItem` maps a change the assembly leaves out (Q5: linked → place
+  open, plain → unclear, with no reading of its own). Ignore keys are the rectangle and a hash of
+  the strokes (`storage/ignoredMarks.ts`, matched within 4 px). `userLayer.ts` has
+  `applyUserLayer` and `chosenReading`. The golden record's format got the To decide fields; the
+  changes it recorded are listed in the S4 commit, and the texts after Apply stayed the same.
+- S5: the To decide tab (`ToDecideSide.tsx`) shows one entry (`manuscriptPages.ts` `DecideEntry`)
+  with its options from `marks/decide.ts` (`decideOptions` → `DecideOption`, `decideView` for
+  edges and result). Remove strokes stays (Q6). Golden record unchanged.
+- S6: `markerDiff.ts` `buildResultSegments` applies a textbox's ranges with the apply step's
+  space cleanup (`normalizeTextAfterEdit`, now exported); the preview carries it per textbox in
+  `results` with the number of its changes. `useManuscriptReview` has `applyPage(page)` next to
+  `apply`; the page shown is the page filter, else the selected change's or To decide entry's
+  page. Golden record unchanged.
+
 ### 13.3 Questions before S4 (S3 is done)
 
 **Q5 — Changes the assembly leaves out.** Besides the three kinds of §5.2, today's review lists
