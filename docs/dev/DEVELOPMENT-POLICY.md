@@ -121,12 +121,16 @@ A change is not done while the docs describe the old behavior.
 
 ## 6. Checks and tests
 
-- **`npm run check`** checks the help pictures, then runs the type check, ESLint and Jest. It
-  passes with zero errors and zero warnings after every step and before every commit.
+- **`npm run check`** writes the build info, checks the help pictures, runs the script tests,
+  then the type check, ESLint and Jest. It passes with zero errors and zero warnings after every
+  step and before every commit.
+- **CI** (`.github/workflows/check.yml`) runs `npm run check` on every push to a branch and on
+  every pull request, then builds the `.snplg` of the push (`RELEASING.md` §4). A red run is fixed
+  before anything else on that branch; a red `main` can't be released.
 - **Jest tests** live in `__tests__/`. New pure logic gets tests, including edge cases; a fixed bug
   gets a test that would have caught it, where its cause is testable without the device.
-- **On the device**, for every change that touches UI, notes, files or device APIs: build with
-  `./buildPlugin.ps1`, install over the previous build, test the changed flow and the actions
+- **On the device**, for every change that touches UI, notes, files or device APIs: take the CI
+  build of the push (or build with `./buildPlugin.ps1`), install it over the previous build, test the changed flow and the actions
   next to it. Test on a copy of a note, never on an important one.
 - A change is only reported as done when the checks passed - and the report says what was
   verified off-device and what still needs a device test.
@@ -142,13 +146,13 @@ A change is not done while the docs describe the old behavior.
 - [ ] Device test done, or explicitly listed as still open - §6
 - [ ] Every commit with an effect on the device ends its message with a **"Device test:" block**
       (numbered steps, expected results after `->`), or `Device test: none - <reason>`
-      (format: `RELEASING.md` §2)
+      (format: `RELEASING.md` §3)
 - [ ] Ideas found on the way are on the backlog, not half-built - §1
 - [ ] Step-by-step guide for Tilman given - §9
 
 ## 8. Release checklist
 
-The release steps themselves are in `RELEASING.md` §4. Before a release:
+The release steps themselves are in `RELEASING.md` §5 (`scripts/release.ps1`). Before a release:
 
 - [ ] Everything since the last release meets §7; no open "still needs device test" items, or
       they are consciously accepted and named.
@@ -157,19 +161,23 @@ The release steps themselves are in `RELEASING.md` §4. Before a release:
       release notes.
 - [ ] **README** feature list still true.
 - [ ] **Logging**: no debug-only noise left in hot paths; no more user text logged than needed.
-- [ ] `npm run check` passes on a clean tree.
-- [ ] Device check: install **over the previous release**, every toolbar button opens, the
-      changed flows work, the plugin list shows the new version.
-- [ ] After publishing: the release page has the text and the `.snplg`.
+- [ ] CI is green on `main` for the commit to release (checks and build); `release.ps1` checks it
+      and runs `npm run check` once more on the release commit.
+- [ ] For a minor release: a beta was tested (`RELEASING.md` §4 "Betas"), or consciously skipped.
+- [ ] Device check (`RELEASING.md` §6): install **over the previous release**, every toolbar
+      entry opens, the changed flows work, the plugin list shows the new version.
+- [ ] After publishing: the release page has the text and the `.snplg`; the next version is set.
 
 ## 9. Step-by-step guide after every change
 
-Git, builds, installs and releases run on Tilman's computer and device. At the end of every
+Merges, installs and releases run on Tilman's side. A cloud session commits and pushes its own
+feature branch; CI then checks and builds every push (`RELEASING.md` §4). At the end of every
 change, build or release, Claude gives a short, numbered, copy-paste-ready guide (PowerShell,
-repository root): where we are (branch, what was verified, what still needs the device), what to
-commit with which message, whether and what to build and test, whether to push, and whether a
-release is advisable now. A commit message with a body (and so every "Device test:" block) comes
-as a file in `build/` (ignored by git) to commit with `git commit -F build\<file>`.
+repository root): where we are (branch, what was verified, what still needs the device), where
+the build is (the CI run's artifact, or a local `./buildPlugin.ps1`) and what to test, whether
+the branch is ready to merge, and whether a release is advisable now. When Claude can't push, the
+commits come as files in `build/` (ignored by git): a message with a body (and so every "Device
+test:" block) to commit with `git commit -F build\<file>`.
 
 ## 10. Keeping this policy alive
 

@@ -1,0 +1,26 @@
+name: Feature request or question
+description: An idea, a problem the plugin could solve better, or a question
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas and questions are welcome. The plugin is a hobby project with a clear direction (work on a
+        typed text by pen, calm on e-ink, your text stays in your notes and files), so not every idea will
+        be built, but every one is read.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to do, or what is your question?
+      description: Describe the situation in your own writing or editing, not only the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: How do you handle it today?
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea (optional)
+      description: Sketches or photos of a handwritten mockup are great.

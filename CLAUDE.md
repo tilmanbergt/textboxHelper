@@ -25,12 +25,17 @@ Short version:
   to the internal backlog, the claude.ai project document `claude/next-improvements.md`, never
   into repo docs.
 - User-visible change = a line under `## [Unreleased]` in `CHANGELOG.md`, in the same change.
-- `npm run check` (type check, ESLint, Jest) passes with zero errors and zero warnings after
-  every step. Then a device test with `./buildPlugin.ps1`.
-- `main` is always releasable; larger work on `feature/<name>`, merged with `--no-ff`.
-  Releases follow `docs/dev/RELEASING.md`.
+- `npm run check` (build info, script tests, type check, ESLint, Jest) passes with zero errors
+  and zero warnings after every step. CI runs it again on every push and builds the `.snplg`;
+  that build (or `./buildPlugin.ps1`) is what gets device-tested.
+- `main` is always releasable; larger work on `feature/<name>`, merged with `--no-ff` (a merge
+  commit, never squash). A cloud session pushes its own feature branch. Releases only via
+  `scripts/release.ps1` from `main`, betas via Actions → beta (`docs/dev/RELEASING.md`,
+  `docs/dev/GITHUB-GUIDE.md`).
+- Every commit with an effect on the device ends with a "Device test:" block; CI collects them
+  into the build's `TESTING.md`.
 - **End every change, build or release with a short, numbered, copy-paste-ready guide for
-  Tilman**: what to commit (message file in `build/`, `git commit -F`), whether to build and
-  what to test on the device, whether to push, whether a release is advisable.
+  Tilman**: where the build is (CI run or local build) and what to test on the device, whether
+  the branch is ready to merge, whether a release is advisable (`DEVELOPMENT-POLICY.md` §9).
 - Code review rules: `AGENTS.md` `## Review guidelines`. Architecture: `docs/dev/design-overview.md`.
   Build and code tour: `docs/dev/README.md`.

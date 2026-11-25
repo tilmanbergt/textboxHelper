@@ -93,11 +93,23 @@ to it.
 
 ## Installation
 
-1. Download the latest `.snplg` file from GitHub Releases.
+1. Download the latest `manuscript-<version>.snplg` from
+   [GitHub Releases](https://github.com/tilmanbergt/manuscript/releases). Betas of the next
+   version are there too, marked as pre-releases.
 2. Copy the `.snplg` file to the `MyStyle/` folder on your Supernote device.
 3. On the device, open Settings → Apps → Plugins.
-4. Install `Textbox Tools`.
+4. Install it, over the version you have: your notes and settings are kept.
 5. Open a NOTE file and use the plugin toolbar buttons.
+
+Developed and tested on the Supernote A5 X; other devices are beta.
+
+## Support
+
+- Bugs, ideas and questions: [GitHub Issues](https://github.com/tilmanbergt/manuscript/issues)
+  (the forms ask for what helps).
+- What the plugin reads and writes: [PRIVACY.md](PRIVACY.md). It has no network permission.
+- Security problems, privately: [SECURITY.md](SECURITY.md).
+- Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Project Structure
 
