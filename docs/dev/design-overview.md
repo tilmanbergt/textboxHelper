@@ -177,6 +177,14 @@ the lasso closes, the tag on the strokes, the index entry before the sign, and t
 `actions/sidemarkConvert.ts` changes a sidemark without a link between "?", comment and image
 (`domain/penEditModel.ts` `convertSidemarkEntry`): the entry first, then the sign
 (`supernote/penEditElements.ts` `replaceSnippetSign`), set back if the sign can't change.
+A note belongs to a paragraph (`domain/notes/paragraphOf.ts`): of its own page, region (text or
+aside area) and linked file, the one it overlaps most in height, else the nearest above, else the
+nearest below; a paragraph the user chose is stored as its block id (`actions/noteEdit.ts`, which
+gives the textbox a block id only then, `actions/blockStatus.ts` `ensureBlockId`) and wins while
+it is in the note. The Review reads a page's notes with their paragraphs after pass 2
+(`actions/notesRead.ts`, on the textboxes already read; a stored paragraph on another page is
+looked for there) into the preview base (`notes`, `paragraphs`), and stores a moved note's new
+place in the index.
 
 **Housekeeping** (`domain/housekeeping.ts`, `storage/housekeepingStore.ts`,
 `actions/housekeeping.ts`) keeps the plugin folder small: once per JS context, a few seconds after

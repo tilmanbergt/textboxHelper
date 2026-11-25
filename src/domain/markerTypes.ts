@@ -4,6 +4,7 @@ import type {EdgeShift} from './edgeShift';
 import type {ParagraphResult} from './markerDiff';
 import type {RecognitionStatus} from './penEditModel';
 import type {PenEditKind} from './penEditTags';
+import type {NoteRow, PageParagraph} from './notes/noteRows';
 import type {Rect, TextboxData} from './textboxModel';
 import type {PunctuationChar} from './marks/shapes/punct';
 import type {CaretInsertMode} from './marks/place/point';
@@ -242,6 +243,10 @@ export type MarkerPreviewBase = {
   penEdits: PenEditView[];
   /** The pen edits' text as stored when the page was read. */
   penStates: Record<string, PenTextState>;
+  /** The page's comments and images, each with its paragraph (technical-design-comments-images.md §5.1). */
+  notes?: NoteRow[];
+  /** The page's textboxes as paragraphs a note may belong to, in reading order. */
+  paragraphs?: PageParagraph[];
 };
 
 /** A ready new paragraph as applied. */

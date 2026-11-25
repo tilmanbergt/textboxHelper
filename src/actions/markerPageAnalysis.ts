@@ -38,6 +38,7 @@ import {getEditMarkerCalibration, noteDiagnosticsPage} from './markerCalibration
 import {createTextboxMeasurer, type MeasuredTextbox, type TextboxMeasurer} from './markerMeasure';
 import {cachedPage, rememberPage} from './manuscriptCache';
 import {loadPenEditContext, placeCaretInsertions, stateOf} from './penEditReview';
+import {readNotesOfPage} from './notesRead';
 
 /**
  * Reading a page's edit marks into a review preview (technical-design-mark-dialogue.md §5.1): the
@@ -298,6 +299,7 @@ async function analyzePage(
       view => pairedPenEditIds.has(view.id) || insertedIds.has(view.id) || toDecide.some(item => item.penEditId === view.id),
     ),
     penStates: pen.states,
+    ...(await timed('page.notes', () => readNotesOfPage(notePath, page, pageElements, pen.entries, pen.snippetRects), {page})),
   };
   const endAssemble = startTiming('page.assemble', {page});
   const preview = assembleMarkerPreview(base, pen.states);
