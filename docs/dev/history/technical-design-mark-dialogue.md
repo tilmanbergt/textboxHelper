@@ -492,3 +492,11 @@ A group is decided in pass 1 without text, so its readings can only re-read the 
   and list it, or keep the two-letter limit for slashes steeper than 45°?
 - The Review's own pre-test (`actions/shapeMarks.ts:582`: height 10–160, width ≤ height) goes:
   pass 1 decides.
+
+**Answers (Tilman):** the recommendations for Q1, Q3 and Q4. Q2 goes further: **verticals never
+make a replace mark.** A strike with two verticals deletes exactly what is between them and takes no
+text (in the review, the look-back and Select mark alike; with a loop as well, the verticals win);
+text tagged right after it gets "no mark found". Replace = a strike with a loop (whole words) or a
+slash (one letter). Entries stored earlier with verticals keep working in the review. The loop is
+found by one rule everywhere: by its rect, the one nearest the strike's end, wherever it was
+written. The help page "Change letters" becomes "Delete letters".

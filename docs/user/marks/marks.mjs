@@ -6,7 +6,7 @@
 // marks:  what the pen adds, in order. Positions name words by index on their line (0 = first):
 //   strike    {line, from, to}                    a line through words from..to
 //   loop      {number}                            the replace loop after the last strike
-//   verticals {line, from, to}                    the two short lines that also make a replace
+//   verticals {line, from, to}                    the two short lines across a strike (exact bounds)
 //   caret     {dir: 'up'|'down', at, number?, cross?, size?}  ∧ or V; at = {line, gap} (before
 //                                                 word gap) or {line, word, char} (inside a word)
 //   sideways  {dir: 'left'|'right', after, number?}  < or > beside the text, tip below line `after`
@@ -55,13 +55,10 @@ export const MARKS = [
     after: ['the red car is fast'],
   },
   {
-    id: 'replace-letters',
-    before: ['the bigger car'],
-    marks: [
-      {type: 'exact', from: {word: 1, char: 4}, to: {word: 1, edge: 'end'}, number: 1},
-      {type: 'write', text: 'est', number: 1},
-    ],
-    after: ['the bigg**est** car'],
+    id: 'delete-letters',
+    before: ['the reddish car'],
+    marks: [{type: 'exact', from: {word: 1, char: 3}, to: {word: 1, edge: 'end'}}],
+    after: ['the red car'],
   },
   {
     id: 'slash',

@@ -1,5 +1,5 @@
 {
-  "about": "Slashes through one letter at about 60°, 50° and 35°, and one through a space. Today 35° is no slash (read as a tall strike).",
+  "about": "Slashes through one letter at about 60°, 50° and 35°, and one through a space. A slash from 30° on is one; the 35° one is wider than two letters: check the letter.",
   "changes": [
     {
       "kind": "delete",
@@ -28,6 +28,21 @@
       "strokes": [
         3
       ]
+    },
+    {
+      "kind": "delete",
+      "summary": "Delete \"w[o]rds\"",
+      "detail": "Textbox 1, line 1 - 1 letter",
+      "textbox": 1,
+      "line": 0,
+      "textStart": 26,
+      "words": [
+        "w[o]rds"
+      ],
+      "strokes": [
+        4
+      ],
+      "uncertain": "The slash is slanted: check the letter."
     }
   ],
   "ignored": [
@@ -38,20 +53,12 @@
       "removable": [
         5
       ]
-    },
-    {
-      "summary": "Ignored marker 4",
-      "reason": "The marker is too tall relative to its width.",
-      "stroke": 4,
-      "removable": [
-        4
-      ]
     }
   ],
   "after": [
     {
       "textbox": 1,
-      "text": "the ig rd car and more words here"
+      "text": "the ig rd car and more wrds here"
     }
   ],
   "newParagraphs": [],

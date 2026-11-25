@@ -1,39 +1,17 @@
 import type {Element, TextBox} from 'sn-plugin-lib';
 import {buildIgnoredMarker} from '../domain/markerText';
 import type {IgnoredEditMarker, OperationDraft, StrokeStats} from '../domain/markerTypes';
-import {BARE_STEP_REASON, isSecondUpright} from '../domain/paragraphMarks';
-import {
-  analyzeCaret,
-  analyzeTwoStrokeCaret,
-  boundsOf,
-  CARET_MAX_SIZE,
-  type CaretShape,
-  type CaretTextbox,
-  type Point,
-} from '../domain/penEditCaret';
-import {
-  findCrossAtCaret,
-  spaceRefusal,
-  spaceSnippet,
-  type ShortStroke,
-} from '../domain/spaceMark';
+import type {CaretTextbox} from '../domain/penEditCaret';
+import {spaceRefusal, spaceSnippet} from '../domain/spaceMark';
 import {pairSwapPieces, placeSwapPiece, type PlacedPiece} from '../domain/swapMark';
-import {
-  analyzeArc,
-  closeUpSnippet,
-  gapBetween,
-  placeArc,
-  punctuationAtGap,
-  type ArcPlace,
-} from '../domain/closeUpMark';
+import {closeUpSnippet, gapBetween, placeArc, punctuationAtGap, type ArcPlace} from '../domain/closeUpMark';
 import {bracketSnippet} from '../domain/exactBounds';
-import {isReplaceLoopRect, MAX_MARKER_HEIGHT_RATIO, MIN_MARKER_WIDTH} from '../domain/markerStrokes';
 import {formatOperationSnippet} from '../domain/markerText';
+import {BARE_STEP_REASON} from '../domain/paragraphMarks';
 import type {PenEditEntry} from '../domain/penEditModel';
-import {findCaretCircle, readCircle, type PlainStroke} from '../domain/punctMark';
 import {trailingDash} from '../domain/paragraphJoin';
 import {breakCommaTie} from '../domain/punctText';
-import {analyzeSlash, placeSlash} from '../domain/slashMark';
+import {placeSlash} from '../domain/slashMark';
 import {swapSummary} from '../domain/swapText';
 import type {Rect} from '../domain/textboxModel';
 import {pointInRect} from '../domain/geometry';
@@ -42,6 +20,11 @@ import {isStraightLineGeometryElement} from '../domain/markerStrokes';
 import {logEditMarker} from '../utils/editMarkerLog';
 import type {TextboxMeasurer} from './markerMeasure';
 import {locateMarkOnPage} from './penEditReview';
+import type {CaretShape} from '../domain/marks/shapes/caret';
+import {boundsOf, type MarkStroke, type Point} from '../domain/marks/markStroke';
+import {findCarets, readArc, readAtCaret, readParagraphMark, readSlash} from '../domain/marks/pass1';
+import {idsWithRole, type Reading} from '../domain/marks/reading';
+import {isSwapCandidate} from '../domain/marks/shapes/swap';
 
 /**
  * The marks the review reads from their shape before any delete analysis
@@ -55,8 +38,11 @@ import {locateMarkOnPage} from './penEditReview';
  * 4. Close-up: an arc under or over one word gap; two arcs across a line wrap.
  * 5. Slash: a short steep stroke through one letter (deleted, or replaced by tagged text).
  *
- * A stroke used by one is used by no other and never reaches the delete analysis. A step alone
- * (no second upright, not part of a swap) is ignored with how to make it either.
+ * What the strokes are is pass 1's (`domain/marks/pass1.ts`), read among the strokes still free at
+ * each stage; where they act in the text is placed here. A stroke used by one is used by no other
+ * and never reaches the delete analysis; a reading that doesn't place leaves its strokes free for
+ * the later stages. A step alone (no second upright, not part of a swap) is ignored with how to
+ * make it either.
  */
 
 type TextElement = Element & {textBox: TextBox};
@@ -65,6 +51,8 @@ type Stroke = {
   marker: Element;
   points: Point[];
   rect: Rect;
+  /** The stroke as pass 1 reads it. */
+  mark: MarkStroke;
 };
 
 export type ShapeMarkResult = {
@@ -82,12 +70,6 @@ export type ShapeMarkOptions = {
   /** The tagged replacement whose mark this stroke is, if any (a slash with text after it). */
   strikeOwner?: (element: Element) => PenEditEntry | undefined;
 };
-
-/** A strike-like stroke (long and flat), which a vertical crossing it belongs to. */
-function isStrikeLike(rect: Rect): boolean {
-  const width = rect.right - rect.left;
-  return width >= MIN_MARKER_WIDTH && rect.bottom - rect.top <= width * MAX_MARKER_HEIGHT_RATIO;
-}
 
 function inflate(rect: Rect, by: number): Rect {
   return {left: rect.left - by, top: rect.top - by, right: rect.right + by, bottom: rect.bottom + by};
@@ -126,10 +108,14 @@ export async function findShapeMarks(
     const points = await readStrokePath(marker);
     const rect = strokeStatsByUuid.get(marker.uuid)?.rect ?? boundsOf(points);
     if (points.length >= 2 && rect) {
-      strokes.push({marker, points, rect});
+      strokes.push({marker, points, rect, mark: {id: marker.uuid, numInPage: marker.numInPage, rect, points, straightLine: false}});
     }
   }
+  const byUuid = new Map(strokes.map(stroke => [stroke.marker.uuid, stroke]));
+  const strokesOf = (uuids: string[]) =>
+    uuids.map(uuid => byUuid.get(uuid)).filter((stroke): stroke is Stroke => !!stroke);
   const free = () => strokes.filter(stroke => !consumed.has(stroke.marker.uuid));
+  const freeMarks = () => free().map(stroke => stroke.mark);
   const use = (items: Stroke[]) => items.forEach(item => consumed.add(item.marker.uuid));
 
   const measuredNear = async (rect: Rect): Promise<CaretTextbox[]> => {
@@ -148,12 +134,8 @@ export async function findShapeMarks(
     return boxes;
   };
 
-  const addPunctuation = async (
-    caret: {strokes: Stroke[]; shape: CaretShape},
-    circle: NonNullable<ReturnType<typeof findCaretCircle>>,
-  ) => {
-    const inCircle = new Set([circle.circle.uuid, ...circle.contents.map(item => item.uuid)]);
-    const parts = [...caret.strokes, ...free().filter(stroke => inCircle.has(stroke.marker.uuid))];
+  const addPunctuation = async (caret: {strokes: Stroke[]; shape: CaretShape}, punct: Reading) => {
+    const parts = strokesOf(punct.strokes);
     use(parts);
     const {near: nearBoxes, target} = await locateMarkOnPage(caret.shape.tip, caret.shape.direction, pageTextboxes, measurer);
     const textbox = target?.kind === 'text' ? nearBoxes.find(item => item.uuid === target.uuid) : undefined;
@@ -168,14 +150,14 @@ export async function findShapeMarks(
     }
     // Read by the plugin only: a circle it can't read waits for the user's pick in the review
     // (no recognizer, which would slow the page down; technical-design-fine-marks.md As built).
-    const reading = readCircle(circle.shape, circle.contents);
+    const reading = punct.punct ?? {char: null, tie: false};
     const char = reading.tie ? breakCommaTie(target.mode) : reading.char;
     const source: 'own' | 'none' = char ? 'own' : 'none';
     logEditMarker('punctuationMark', {
       markerNums: parts.map(part => part.marker.numInPage),
       tip: caret.shape.tip,
-      circle: circle.shape,
-      contents: circle.contents.map(item => item.rect),
+      circle: strokesOf(idsWithRole(punct, 'modifier')).map(item => item.rect),
+      contents: strokesOf(idsWithRole(punct, 'content')).map(item => item.rect),
       reading,
       char,
       source,
@@ -205,25 +187,20 @@ export async function findShapeMarks(
 
   // 1. Paragraph marks.
   const bareSteps: Stroke[] = [];
-  const shapes = new Map<string, CaretShape | null>(
-    strokes.map(stroke => [stroke.marker.uuid, analyzeCaret(stroke.points)]),
-  );
   for (const stroke of strokes) {
-    const shape = shapes.get(stroke.marker.uuid);
-    if (!shape || shape.direction === 'up' || shape.direction === 'down' || consumed.has(stroke.marker.uuid)) {
+    if (consumed.has(stroke.marker.uuid)) {
       continue;
     }
-    let parts = [stroke];
-    if (shape.direction === 'step') {
-      const upright = free().find(
-        other => other !== stroke && isSecondUpright(shape, other.rect),
-      );
-      if (!upright) {
-        bareSteps.push(stroke);
-        continue;
-      }
-      parts = [stroke, upright];
+    const paragraph = readParagraphMark(stroke.mark, freeMarks());
+    if (!paragraph) {
+      continue;
     }
+    if (!('reading' in paragraph)) {
+      bareSteps.push(stroke);
+      continue;
+    }
+    const shape = (paragraph.reading.shape as {caret: CaretShape}).caret;
+    const parts = strokesOf(paragraph.reading.strokes);
     use(parts);
     const {near, target} = await locateMarkOnPage(shape.tip, shape.direction, pageTextboxes, measurer);
     const textbox = target?.kind === 'split' ? near.find(item => item.uuid === target.uuid) : undefined;
@@ -264,28 +241,9 @@ export async function findShapeMarks(
     ignored.push(ignoredFor(parts.map(part => part.marker), reason));
   }
 
-  // 2. Insert space: a ∧ or V (one stroke, or two meeting at the tip) with a cross at its tip.
-  const carets: Array<{strokes: Stroke[]; shape: CaretShape}> = [];
-  for (const stroke of free()) {
-    const shape = shapes.get(stroke.marker.uuid);
-    if (shape && (shape.direction === 'up' || shape.direction === 'down')) {
-      carets.push({strokes: [stroke], shape});
-    }
-  }
-  // Only strokes of a caret's size can be its legs; handwriting elsewhere is skipped quickly.
-  const small = free().filter(
-    stroke =>
-      !carets.some(caret => caret.strokes.includes(stroke)) &&
-      Math.max(stroke.rect.right - stroke.rect.left, stroke.rect.bottom - stroke.rect.top) <= CARET_MAX_SIZE,
-  );
-  for (let i = 0; i < small.length; i += 1) {
-    for (let j = i + 1; j < small.length; j += 1) {
-      const shape = analyzeTwoStrokeCaret(small[i].points, small[j].points);
-      if (shape && (shape.direction === 'up' || shape.direction === 'down')) {
-        carets.push({strokes: [small[i], small[j]], shape});
-      }
-    }
-  }
+  // 2. Insert space: a ∧ or V (one stroke, or two meeting at the tip) with a cross at its tip;
+  // punctuation: with a filled circle between its legs.
+  const carets = findCarets(freeMarks()).map(caret => ({strokes: strokesOf(caret.legs.map(leg => leg.id)), shape: caret.shape}));
   for (const caret of carets) {
     if (caret.strokes.some(stroke => consumed.has(stroke.marker.uuid))) {
       continue;
@@ -295,46 +253,16 @@ export async function findShapeMarks(
     if (!pageTextboxes.some(textbox => pointInRect(tip, inflate(textbox.textBox.textRect, 24)))) {
       continue;
     }
-    const reach = 160;
-    // A circle between the legs: filled, a punctuation mark to put in (§9); empty, the caret's
-    // number place - an ordinary caret, which needs tagged text.
-    const around: PlainStroke[] = free()
-      .filter(
-        stroke =>
-          !caret.strokes.includes(stroke) &&
-          stroke.rect.left <= tip.x + reach &&
-          stroke.rect.right >= tip.x - reach &&
-          stroke.rect.top <= tip.y + reach &&
-          stroke.rect.bottom >= tip.y - reach,
-      )
-      .map(stroke => ({uuid: stroke.marker.uuid, rect: stroke.rect, points: stroke.points}));
-    const circle = findCaretCircle(caret.shape, around);
-    if (circle) {
-      if (circle.contents.length > 0) {
-        await addPunctuation(caret, circle);
-      }
+    const atCaret = readAtCaret({legs: caret.strokes.map(stroke => stroke.mark), shape: caret.shape}, freeMarks());
+    if (atCaret.kind === 'punct') {
+      await addPunctuation(caret, atCaret);
       continue;
     }
-    const legs: ShortStroke[] = free()
-      .filter(
-        stroke =>
-          !caret.strokes.includes(stroke) &&
-          stroke.rect.left <= tip.x + reach &&
-          stroke.rect.right >= tip.x - reach &&
-          stroke.rect.top <= tip.y + reach &&
-          stroke.rect.bottom >= tip.y - reach,
-      )
-      .map(stroke => ({
-        uuid: stroke.marker.uuid,
-        numInPage: stroke.marker.numInPage,
-        rect: stroke.rect,
-        points: stroke.points,
-      }));
-    const cross = findCrossAtCaret(caret.shape, legs);
-    if (!cross) {
+    // An empty circle is the caret's number place: an ordinary caret, which needs tagged text.
+    if (atCaret.kind !== 'space') {
       continue;
     }
-    const crossStrokes = free().filter(stroke => cross.some(leg => leg.uuid === stroke.marker.uuid));
+    const crossStrokes = strokesOf(idsWithRole(atCaret, 'modifier'));
     const parts = [...caret.strokes, ...crossStrokes];
     use(parts);
     const {near, target} = await locateMarkOnPage(caret.shape.tip, caret.shape.direction, pageTextboxes, measurer);
@@ -383,7 +311,7 @@ export async function findShapeMarks(
   // 3. Swap: pieces on readable textboxes, then paired.
   const placed: PlacedPiece[] = [];
   const boxes = new Map<string, CaretTextbox>();
-  for (const stroke of free()) {
+  for (const stroke of free().filter(item => isSwapCandidate(item.mark))) {
     const nearBoxes = await measuredNear(stroke.rect);
     const item = placeSwapPiece(stroke.marker.uuid, stroke.points, stroke.rect, nearBoxes);
     if (item) {
@@ -395,9 +323,6 @@ export async function findShapeMarks(
     }
   }
   const {swaps, refused} = pairSwapPieces(placed, [...boxes.values()]);
-  const byUuid = new Map(strokes.map(stroke => [stroke.marker.uuid, stroke]));
-  const strokesOf = (uuids: string[]) =>
-    uuids.map(uuid => byUuid.get(uuid)).filter((stroke): stroke is Stroke => !!stroke);
   logEditMarker('swapPieces', {
     pieces: placed.map(item => ({
       markerNumInPage: byUuid.get(item.uuid)?.marker.numInPage,
@@ -464,10 +389,11 @@ export async function findShapeMarks(
   // 4. Close-up: an arc under or over one gap; at a line wrap, an end piece and a start piece.
   const pieces: Array<{stroke: Stroke; place: Extract<ArcPlace, {kind: 'end' | 'start'}>; box: CaretTextbox}> = [];
   for (const stroke of free()) {
-    const arc = analyzeArc(stroke.points);
-    if (!arc) {
+    const arcReading = readArc(stroke.mark);
+    if (!arcReading || arcReading.shape.kind !== 'arc') {
       continue;
     }
+    const arc = arcReading.shape.arc;
     let place: ArcPlace | null = null;
     let placedOn: CaretTextbox | null = null;
     for (const box of await measuredNear(stroke.rect)) {
@@ -573,20 +499,13 @@ export async function findShapeMarks(
   }
 
   // 5. Slash through one letter. A leg of a caret drawn in two strokes is never a slash.
-  const caretLegs = new Set(carets.filter(caret => caret.strokes.length === 2).flatMap(caret => caret.strokes));
+  const caretLegs = new Set(carets.filter(caret => caret.strokes.length === 2).flatMap(caret => caret.strokes.map(leg => leg.mark)));
   for (const stroke of free()) {
-    if (caretLegs.has(stroke)) {
+    const reading = consumed.has(stroke.marker.uuid) ? null : readSlash(stroke.mark, freeMarks(), caretLegs);
+    if (!reading || reading.shape.kind !== 'slash') {
       continue;
     }
-    const height = stroke.rect.bottom - stroke.rect.top;
-    if (height < 10 || height > 160 || stroke.rect.right - stroke.rect.left > height) {
-      continue;
-    }
-    const slash = analyzeSlash(stroke.points);
-    // A vertical crossing a strike is that strike's (a replace mark's verticals).
-    if (!slash || free().some(other => other !== stroke && isStrikeLike(other.rect) && intersects(other.rect, stroke.rect))) {
-      continue;
-    }
+    const slash = reading.shape.slash;
     let place: ReturnType<typeof placeSlash> = null;
     for (const box of await measuredNear(stroke.rect)) {
       place = placeSlash(slash, box);
@@ -594,7 +513,7 @@ export async function findShapeMarks(
         break;
       }
     }
-    logEditMarker('slash', {markerNumInPage: stroke.marker.numInPage, rect: slash.rect, place});
+    logEditMarker('slash', {markerNumInPage: stroke.marker.numInPage, rect: slash.rect, angleDeg: slash.angleDeg, place});
     if (!place) {
       continue;
     }
@@ -612,13 +531,7 @@ export async function findShapeMarks(
       pairedPenEditIds.add(owner.id);
     }
     // The user's own circle for the number at the slash's top goes with it (fine-marks §2.2).
-    const topX = (slash.rect.left + slash.rect.right) / 2;
-    const circle = free().find(
-      other =>
-        other !== stroke &&
-        isReplaceLoopRect({left: topX, right: topX, top: slash.rect.top, bottom: slash.rect.top}, other.rect),
-    );
-    const parts = circle ? [stroke, circle] : [stroke];
+    const parts = strokesOf(reading.strokes);
     use(parts);
     const text = textbox.textBox.textContentFull || '';
     const shown = bracketSnippet(text, place.offset, place.offset + 1);
@@ -639,6 +552,7 @@ export async function findShapeMarks(
         detail: `Textbox ${textbox.numInPage}, line ${place.lineIndex + 1} - 1 letter`,
         words: [shown],
         textStart: place.offset,
+        ...(place.uncertain ? {uncertain: place.uncertain} : {}),
         ...(owner ? {penEditId: owner.id, penEditNumber: owner.number} : {}),
       },
     });

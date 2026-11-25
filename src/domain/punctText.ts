@@ -1,5 +1,5 @@
 import type {CaretInsertMode} from './penEditCaret';
-import type {PunctuationChar} from './punctMark';
+import type {PunctuationChar} from './marks/shapes/punct';
 
 /**
  * Where a punctuation mark from a caret's circle goes, and with which spaces

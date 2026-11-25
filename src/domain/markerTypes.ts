@@ -6,8 +6,8 @@ import type {EdgeShift} from './edgeShift';
 import type {RecognitionStatus} from './penEditModel';
 import type {PenEditKind} from './penEditTags';
 import type {SwapZones} from './swapMark';
-import type {PunctuationChar} from './punctMark';
 import type {PageElementData, Rect, TextElementData, TextboxData} from './textboxModel';
+import type {PunctuationChar} from './marks/shapes/punct';
 
 /**
  * Types of the edit-marker recognition: what the preview shows, the plan that is applied, and the

@@ -21,13 +21,7 @@ import {
   setPlaceHere,
   type PenEditStrokeData,
 } from '../domain/penEditModel';
-import {
-  locateCaret,
-  type CaretDirection,
-  type CaretInsertMode,
-  type CaretTarget,
-  type CaretTextbox,
-} from '../domain/penEditCaret';
+import {locateCaret, type CaretInsertMode, type CaretTarget, type CaretTextbox} from '../domain/penEditCaret';
 import {
   boundsOfPoints,
   isPenEditDecoration,
@@ -46,6 +40,7 @@ import {
 } from '../storage/penEditStore';
 import {recognizeStrokes} from '../supernote/strokeRecognition';
 import type {MeasuredTextbox, TextboxMeasurer} from './markerMeasure';
+import type {CaretDirection} from '../domain/marks/shapes/caret';
 
 /**
  * The pen edits' side of the Manuscript review (technical-design-pen-edits.md §3.6–§3.9):

@@ -7,9 +7,9 @@ All notable changes to Textbox Tools are listed here, newest first.
 ### Added
 
 - Fine marks: change single letters, spaces and punctuation by pen.
-  - A strike with two short lines across its ends marks exactly what is between them, even inside a word: with tagged text after it, the text replaces exactly that ("bigg|er|" + "est" → "biggest"); without text it deletes exactly that. A strike alone or with a small circle still takes whole words.
-  - A slash through one letter deletes it, or, with tagged text after it, replaces it ("word" + slash on d + "ds" → "words").
-  - A small circle drawn above the right short line, above a slash or between a caret's legs holds the number Textbox Tools puts there.
+  - A strike with two short lines across its ends deletes exactly what is between them, even inside a word ("redd|ish|" → "red"). The short lines take no new text: text tagged right after them gets "No mark found"; for new text, draw a small circle after the strike (whole words) or a slash (one letter). A strike alone or with a small circle still takes whole words.
+  - A slash through one letter deletes it, or, with tagged text after it, replaces it ("word" + slash on d + "ds" → "words"). A slash may slant down to 30°; one wider than two letters is marked "check the letter".
+  - A small circle drawn above a slash or between a caret's legs holds the number Textbox Tools puts there.
   - Close up: a flat arc under (or over) the gap between two words removes the space; a dash or comma at the gap goes too when you tick "Also remove". At a line end, draw the arc twice — after the last word and before the first word of the next line; drawn after a paragraph's last word and before the first word of the paragraph right below it, the two arcs join the paragraphs.
   - Punctuation: a ∧ or V with a small circle between its legs and the mark written inside (, ; . : ' -) puts the mark in at the caret's tip, with no tagging. Textbox Tools reads the mark itself; anything it can't read waits for one tap on the right mark in the review (also `?`), so a letter never goes in by mistake. Commas and full stops attach to the word before; a hyphen in a gap joins the two words.
   - Spaces: a caret in a gap adds words with spaces, between letters it adds letters without; deleting or replacing exactly never leaves two words glued together.

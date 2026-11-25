@@ -10,7 +10,6 @@ import React, {useEffect, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
 import {loadPenEditStrokePoints} from '../../actions/penEditReview';
 import {firstWords, lastWords} from '../../domain/markerHunks';
-import {PUNCTUATION_CHARS, type PunctuationChar} from '../../domain/punctMark';
 import type {
   ChangeHunk,
   EdgePoint,
@@ -24,6 +23,7 @@ import PagedText from '../../ui/PagedText';
 import PillButton from '../../ui/PillButton';
 import StrokeDrawing from '../../ui/StrokeDrawing';
 import {COLORS, FONT, RADII, SPACING} from '../../ui/theme';
+import {PUNCTUATION_CHARS, type PunctuationChar} from '../../domain/marks/shapes/punct';
 
 export type PenDetail = {
   view: PenEditView;

@@ -38,7 +38,7 @@ export const MARK_HELP: MarkHelpEntry[] = [
     name: 'Replace',
     glance: 'Strike, plus a small circle',
     needsText: true,
-    draw: 'Strike the words, then a small circle right after the line or just above it (or two short lines across it). Then write the new words and tag them.',
+    draw: 'Strike the words, then a small circle right after the line or just above it. Then write the new words and tag them.',
     keep: [
       'Tag right after drawing: the text pairs with the mark drawn just before it.',
       'No mark found? The card offers Select mark; nothing needs writing again.',
@@ -67,14 +67,14 @@ export const MARK_HELP: MarkHelpEntry[] = [
     ],
   },
   {
-    id: 'replace-letters',
-    name: 'Change letters',
+    id: 'delete-letters',
+    name: 'Delete letters',
     glance: 'Strike with two short lines',
-    needsText: true,
-    draw: 'Strike the letters and draw a short line across each end of the strike, exactly where the change starts and ends. Then write the new letters and tag them; with no text it deletes exactly that.',
+    needsText: false,
+    draw: 'Strike the letters and draw a short line across each end of the strike, exactly where the deletion starts and ends. Nothing to write: exactly what is between the lines goes.',
     keep: [
       'The short lines mark exact places, even inside a word; a strike alone or with a circle takes whole words.',
-      'To add to the end of a word, mark its last letters and write them again with the ending.',
+      'They take no new text: to change letters, slash each one or strike the word with a circle.',
     ],
   },
   {

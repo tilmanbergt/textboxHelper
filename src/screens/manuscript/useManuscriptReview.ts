@@ -35,7 +35,6 @@ import {
   type PageReview,
 } from '../../domain/manuscriptPages';
 import {assembleMarkerPreview, type RowOptions} from '../../domain/markerAssembly';
-import type {PunctuationChar} from '../../domain/punctMark';
 import type {EditMarkerCalibration, PenTextState, RecognizedEditOperation} from '../../domain/markerTypes';
 import {fileNameOf, userMessage} from '../../domain/userMessage';
 import {updateSettings} from '../../storage/settingsFile';
@@ -45,6 +44,7 @@ import {perfEvent, startTiming, timed} from '../../utils/perf';
 import {usePageChecks} from './usePageChecks';
 import {usePenRecognitionQueue} from './usePenRecognitionQueue';
 import {useTimingsExport} from './useTimingsExport';
+import type {PunctuationChar} from '../../domain/marks/shapes/punct';
 
 export interface ManuscriptReview {
   note: NoteInfo | null;

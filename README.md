@@ -23,8 +23,8 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 ### Edit Markers
 
 - Recognize handwritten delete markers
-- Recognize replace markers as a delete line plus a small loop (or two crossing lines), with the new text tagged right after
-- Change single letters: a strike with two short lines across its ends marks exact places, a slash marks one letter
+- Recognize replace markers as a delete line plus a small loop, with the new text tagged right after
+- Single letters: a strike with two short lines across its ends deletes exactly what is between them; a slash marks one letter, also when drawn slanted
 - Close up a space with an arc under the gap; join two lines or two paragraphs with two arcs
 - Put in punctuation with a caret and a small circle holding the mark, without tagging
 - Support both freehand strokes and Supernote straight-line geometry

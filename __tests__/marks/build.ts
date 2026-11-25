@@ -313,3 +313,17 @@ export function at(box: Layout, offset: number): {x: number; line: number; mid: 
 export function fixture(name: string): {note: string; boxes: Layout[]; strokes: Record<string, Pt[]>} {
   return require(`../fixtures/${name}.json`);
 }
+
+/**
+ * The strokes of several builders as pass 1 reads them, in writing order: ids `s1`, `s2`, … and
+ * page numbers 1, 2, … in the order given; rects are the points' bounds.
+ */
+export function marks(...drawn: Drawn[]): Array<{id: string; numInPage: number; rect: ReturnType<typeof rectOf>; points: Pt[] | null; straightLine: boolean}> {
+  return drawn.flat().map((points, index) => ({
+    id: `s${index + 1}`,
+    numInPage: index + 1,
+    rect: rectOf(points),
+    points,
+    straightLine: false,
+  }));
+}

@@ -100,7 +100,7 @@ const replaceLinked: PageSpec = {
 const slashes: PageSpec = {
   name: 'slashes',
   about:
-    'Slashes through one letter at about 60°, 50° and 35°, and one through a space. Today 35° is no slash (read as a tall strike).',
+    'Slashes through one letter at about 60°, 50° and 35°, and one through a space. A slash from 30° on is one; the 35° one is wider than two letters: check the letter.',
   textboxes: [A],
   strokes: [
     slash(x(4) + 9, MID, 60, 40),

@@ -1,18 +1,7 @@
-import {
-  analyzeCaret,
-  caretInsertionText,
-  caretNumberCenter,
-  locateCaret,
-  type CaretTextbox,
-  type Point,
-} from '../../src/domain/penEditCaret';
-import {
-  SPLIT_SIGN,
-  analyzeStepMark,
-  showSplits,
-  splitChangeText,
-  splitParagraphParts,
-} from '../../src/domain/paragraphMarks';
+import {caretInsertionText, locateCaret, type CaretTextbox} from '../../src/domain/penEditCaret';
+import {SPLIT_SIGN, showSplits, splitChangeText, splitParagraphParts} from '../../src/domain/paragraphMarks';
+import {analyzeCaret, caretNumberCenter, analyzeStepMark} from '../../src/domain/marks/shapes/caret';
+import type {Point} from '../../src/domain/marks/markStroke';
 
 function path(...corners: Point[]): Point[] {
   const points: Point[] = [];

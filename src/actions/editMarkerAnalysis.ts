@@ -6,13 +6,7 @@ import {
   rectWidth,
 } from '../domain/geometry';
 import {findCandidateLineIndexes, findLineBandWordCandidates} from '../domain/hitTesting';
-import {
-  buildWordCandidates,
-  isMeaningfulWord,
-  MAX_DELETE_WORDS_PER_MARKER,
-  MAX_MARKER_HEIGHT_RATIO,
-  MIN_MARKER_WIDTH,
-} from '../domain/markerStrokes';
+import {buildWordCandidates, isMeaningfulWord, MAX_DELETE_WORDS_PER_MARKER} from '../domain/markerStrokes';
 import {
   buildIgnoredMarker,
   buildLineLogSummary,
@@ -32,6 +26,7 @@ import {textLeftX} from '../domain/textboxLayout';
 import {loadMarkerStrokeStats} from '../supernote/markerStrokeRead';
 import {logEditMarker} from '../utils/editMarkerLog';
 import type {TextboxMeasurer} from './markerMeasure';
+import {strikeShapeRefusal} from '../domain/marks/shapes/strike';
 
 /**
  * Recognizing one delete marker: which textbox and line it lands on and which words it covers,
@@ -132,14 +127,10 @@ export async function analyzeDeleteMarker(
   }
   const measurement = measured.measurement;
 
-  if (strokeStats.width < MIN_MARKER_WIDTH) {
-    return buildRejectedResult(marker, 'The marker is too short to classify reliably.', {
-      stroke: buildStrokeLogSummary(marker, strokeStats),
-    });
-  }
-
-  if (strokeStats.height > strokeStats.width * MAX_MARKER_HEIGHT_RATIO) {
-    return buildRejectedResult(marker, 'The marker is too tall relative to its width.', {
+  // The strike's shape is pass 1's (`domain/marks/shapes/strike.ts`).
+  const shapeRefusal = strikeShapeRefusal(strokeStats.rect);
+  if (shapeRefusal) {
+    return buildRejectedResult(marker, shapeRefusal, {
       stroke: buildStrokeLogSummary(marker, strokeStats),
     });
   }

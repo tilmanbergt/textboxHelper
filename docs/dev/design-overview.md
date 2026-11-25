@@ -95,20 +95,30 @@ and the checks that the result fits the page without colliding with other elemen
 ### Edit markers (`actions/markerPageAnalysis.ts`, `actions/markerApply.ts`, `actions/editMarkerAnalysis.ts`, `actions/shapeMarks.ts`)
 
 Handwritten edit markers on textboxes: a delete marker is a line through words; a replace marker
-is a delete line plus a small loop (or two crossing lines); a < or >, or a step mark with a second
+is a delete line plus a small loop; a < or >, or a step mark with a second
 upright (_||‾), breaks a paragraph; a ∧ or V with a cross inserts a space; the swap mark (a line
 above one part and below the next, joined by a vertical, in one stroke or in three pieces across
-lines) swaps two parts. The fine marks work letter by letter: a strike with two verticals marks
-exact places (`domain/exactBounds.ts`), a slash one letter (`domain/slashMark.ts`), an arc under
-or over a gap closes it, two arcs close a gap at a line end or join two paragraphs
-(`domain/closeUpMark.ts`, `domain/paragraphJoin.ts`), and a ∧ or V with a filled circle between its
-legs puts in the punctuation drawn in it (`domain/punctMark.ts` reads it, `domain/punctText.ts`
-places it by its type; what the plugin can't read waits for the user's pick in the review).
+lines) swaps two parts. The fine marks work letter by letter: a strike with two verticals deletes
+exactly what is between them and takes no text (`domain/exactBounds.ts`), a slash marks one letter
+(`domain/slashMark.ts`), an arc under or over a gap closes it, two arcs close a gap at a line end or
+join two paragraphs (`domain/closeUpMark.ts`, `domain/paragraphJoin.ts`), and a ∧ or V with a filled
+circle between its legs puts in the punctuation drawn in it (`domain/punctText.ts` places it by its
+type; what the plugin can't read waits for the user's pick in the review).
 Freehand strokes and the Supernote straight-line tool are both recognized.
+
+**What the strokes are** is pass 1 (`domain/marks/`, technical-design-mark-dialogue.md §2): the
+stroke as read (`markStroke.ts`), a reading (`reading.ts`: kind, strokes and their roles, anchors),
+one file per shape family in `marks/shapes/` (`strike.ts` with the verticals and the loop,
+`slash.ts`, `caret.ts` with the step, `space.ts`, `punct.ts`, `closeUp.ts`, `swap.ts`) and
+`marks/pass1.ts`, which reads them for all three callers: the tag's look-back (`readLookBack`),
+Select mark (`readDeclared`) and the review (the family readers, `readMarks`). A reading is stored
+with a pen edit as today's `PenEditMark` (`marks/storedMark.ts`).
 `supernote/markerStrokeRead.ts` reads the strokes; `actions/markerMeasure.ts` measures each
 textbox once per review and locks textboxes whose font can't be read (their marks are ignored);
-`actions/shapeMarks.ts` reads the marks known by their shape first (`domain/paragraphMarks.ts`,
-`domain/spaceMark.ts`, `domain/swapMark.ts`), and their strokes never reach the delete analysis;
+`actions/shapeMarks.ts` reads the marks known by their shape first with pass 1 and places them
+(`domain/paragraphMarks.ts`, `domain/spaceMark.ts`, `domain/swapMark.ts` - a swap piece is read
+against a line - `domain/closeUpMark.ts`, `domain/slashMark.ts`), and their strokes never reach the
+delete analysis;
 `actions/editMarkerAnalysis.ts` maps one marker to words through the hit-testing core and the
 native measurement (with each letter's edge, `domain/textOffsets.ts`);
 `actions/markerPageAnalysis.ts` pairs replace marks with their tagged text, places insertions and

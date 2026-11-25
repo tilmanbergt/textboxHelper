@@ -27,9 +27,9 @@ import {
 import {composeSwap, swapSummary, type ChangeNearSwap} from './swapText';
 import type {IgnoredEditMarker} from './markerTypes';
 import {closeUpSnippet} from './closeUpMark';
-import type {PunctuationChar} from './punctMark';
 import {placePunctuation, punctuationSnippet} from './punctText';
 import {joinParagraphTexts} from './paragraphJoin';
+import type {PunctuationChar} from './marks/shapes/punct';
 
 /**
  * The edit-marker preview assembled from the analysis and the pen edits' current text

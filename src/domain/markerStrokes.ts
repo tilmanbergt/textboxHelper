@@ -1,4 +1,5 @@
-import {rectCenter, rectHeight, rectOverlapHeight, rectWidth} from './geometry';
+import {rectHeight, rectOverlapHeight, rectWidth} from './geometry';
+import {closestVerticalPair, isReplaceVertical, nearestLoop} from './marks/shapes/strike';
 import {buildPageWordCandidates} from './hitTesting';
 import type {
   EditMarkerCalibration,
@@ -17,17 +18,7 @@ import {ELEMENT_TYPE_GEO, ELEMENT_TYPE_STROKE, MAIN_LAYER, type PageElementData,
 
 export const MAX_DELETE_WORDS_PER_MARKER = 100;
 
-export const MIN_MARKER_WIDTH = 30;
-
-export const MAX_MARKER_HEIGHT_RATIO = 0.55;
-
 const FALLBACK_MARKER_HEIGHT = 4;
-
-export const REPLACE_MODIFIER_MIN_HEIGHT = 18;
-
-export const REPLACE_MODIFIER_PAIR_MAX_GAP = 56;
-
-const REPLACE_MODIFIER_MAX_CENTER_DISTANCE = 48;
 
 function isMainLayerStrokeElement(element: PageElementData): boolean {
   return element.type === ELEMENT_TYPE_STROKE && element.layerNum === MAIN_LAYER;
@@ -224,111 +215,28 @@ export function buildStrokeStatsFromRect(rect: Rect): StrokeStats | null {
   ]);
 }
 
-export function isVerticalLikeStroke(strokeStats: StrokeStats): boolean {
-  const absoluteAngle = Math.abs(strokeStats.angleDeg);
-  const distanceToVertical = Math.abs(90 - Math.min(absoluteAngle, Math.abs(180 - absoluteAngle)));
-  return distanceToVertical <= 45 || strokeStats.height >= strokeStats.width;
-}
-
-function isPotentialReplaceModifier(
-  candidate: MarkerDeleteCandidate,
-  strokeAnalysis: MarkerStrokeAnalysis,
-): boolean {
-  if (strokeAnalysis.marker.uuid === candidate.markerUuid) {
-    return false;
-  }
-
-  const modifierRect = strokeAnalysis.strokeStats.rect;
-  const lineOverlapHeight = rectOverlapHeight(candidate.lineRect, modifierRect);
-  const markerCenter = rectCenter(candidate.strokeStats.rect);
-  const modifierCenter = rectCenter(modifierRect);
-  const markerXMargin = Math.max(16, candidate.strokeStats.width * 0.15);
-
+/**
+ * A vertical of a replace mark's strike (`isReplaceVertical`) that also stands on the strike's line
+ * of text: at least half its height overlaps the line.
+ */
+function isLineVertical(candidate: MarkerDeleteCandidate, strokeAnalysis: MarkerStrokeAnalysis): boolean {
+  const rect = strokeAnalysis.strokeStats.rect;
   return (
-    strokeAnalysis.strokeStats.height >= REPLACE_MODIFIER_MIN_HEIGHT &&
-    strokeAnalysis.strokeStats.height > strokeAnalysis.strokeStats.width &&
-    isVerticalLikeStroke(strokeAnalysis.strokeStats) &&
-    lineOverlapHeight >= rectHeight(modifierRect) * 0.5 &&
-    modifierCenter.x >= candidate.strokeStats.rect.left - markerXMargin &&
-    modifierCenter.x <= candidate.strokeStats.rect.right + markerXMargin &&
-    Math.abs(modifierCenter.x - markerCenter.x) <=
-      Math.max(REPLACE_MODIFIER_MAX_CENTER_DISTANCE, candidate.strokeStats.width * 0.45) &&
-    modifierRect.top <= markerCenter.y &&
-    modifierRect.bottom >= markerCenter.y
+    strokeAnalysis.marker.uuid !== candidate.markerUuid &&
+    isReplaceVertical(candidate.strokeStats.rect, rect) &&
+    rectOverlapHeight(candidate.lineRect, rect) >= rectHeight(rect) * 0.5
   );
 }
 
+/** The two verticals across a strike on its line (technical-design-fine-marks.md §3), or []. */
 export function findBestReplaceModifierPair<Analysis extends MarkerStrokeAnalysis>(
   candidate: MarkerDeleteCandidate,
   strokeAnalyses: Analysis[],
 ): Analysis[] {
-  const matchingModifiers = strokeAnalyses.filter(strokeAnalysis =>
-    isPotentialReplaceModifier(candidate, strokeAnalysis),
+  return closestVerticalPair(
+    strokeAnalyses.filter(analysis => isLineVertical(candidate, analysis)),
+    analysis => analysis.strokeStats.rect,
   );
-
-  if (matchingModifiers.length < 2) {
-    return [];
-  }
-
-  let bestPair: Analysis[] = [];
-  let bestGap = Number.POSITIVE_INFINITY;
-
-  for (let leftIndex = 0; leftIndex < matchingModifiers.length - 1; leftIndex += 1) {
-    for (let rightIndex = leftIndex + 1; rightIndex < matchingModifiers.length; rightIndex += 1) {
-      const left = matchingModifiers[leftIndex];
-      const right = matchingModifiers[rightIndex];
-      const leftCenter = rectCenter(left.strokeStats.rect);
-      const rightCenter = rectCenter(right.strokeStats.rect);
-      const gap = Math.abs(leftCenter.x - rightCenter.x);
-
-      if (gap > REPLACE_MODIFIER_PAIR_MAX_GAP || gap >= bestGap) {
-        continue;
-      }
-
-      bestGap = gap;
-      bestPair = [left, right].sort(
-        (first, second) => rectCenter(first.strokeStats.rect).x - rectCenter(second.strokeStats.rect).x,
-      );
-    }
-  }
-
-  return bestPair;
-}
-
-/** Size range of the small loop drawn after a strike to mark a replace (page pixels). */
-export const REPLACE_LOOP_MIN_SIZE = 16;
-export const REPLACE_LOOP_MAX_SIZE = 110;
-
-/**
- * The second replace gesture (technical-design-pen-edits.md As built): a small, roughly round
- * loop drawn close to the strike: right after its end at its height, or above the line anywhere
- * along the strike (from its start to just past its end). Tested on rects only, so it works with
- * the host's recognize rects as well as with stroke statistics.
- */
-export function isReplaceLoopRect(strike: Rect, loop: Rect): boolean {
-  const width = rectWidth(loop);
-  const height = rectHeight(loop);
-  const size = Math.max(width, height);
-  if (
-    size < REPLACE_LOOP_MIN_SIZE ||
-    size > REPLACE_LOOP_MAX_SIZE ||
-    Math.min(width, height) < size * 0.45
-  ) {
-    return false;
-  }
-  const center = rectCenter(loop);
-  const strikeY = (strike.top + strike.bottom) / 2;
-  const afterEnd =
-    loop.left >= strike.right - size * 0.6 &&
-    loop.left <= strike.right + size + 24 &&
-    Math.abs(center.y - strikeY) <= size / 2 + 20;
-  const aboveLine =
-    center.x >= strike.left - size / 2 &&
-    center.x <= strike.right + size + 24 &&
-    center.y < strikeY &&
-    loop.bottom >= strikeY - size - 60 &&
-    loop.bottom <= strikeY + 10;
-  return afterEnd || aboveLine;
 }
 
 /** The loop after a delete candidate's strike, if one of the strokes is such a loop. */
@@ -336,13 +244,9 @@ export function findReplaceLoop<Analysis extends MarkerStrokeAnalysis>(
   candidate: MarkerDeleteCandidate,
   strokeAnalyses: Analysis[],
 ): Analysis | null {
-  const loops = strokeAnalyses.filter(
-    analysis =>
-      analysis.marker.uuid !== candidate.markerUuid &&
-      isReplaceLoopRect(candidate.strokeStats.rect, analysis.strokeStats.rect),
+  return nearestLoop(
+    candidate.strokeStats.rect,
+    strokeAnalyses.filter(analysis => analysis.marker.uuid !== candidate.markerUuid),
+    analysis => analysis.strokeStats.rect,
   );
-  // The loop closest to the strike's end.
-  const end = {x: candidate.strokeStats.rect.right, y: rectCenter(candidate.strokeStats.rect).y};
-  const distance = (rect: Rect) => Math.hypot(rectCenter(rect).x - end.x, rectCenter(rect).y - end.y);
-  return loops.sort((a, b) => distance(a.strokeStats.rect) - distance(b.strokeStats.rect))[0] ?? null;
 }

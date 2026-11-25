@@ -1,5 +1,6 @@
-import type {CaretShape, Point} from './penEditCaret';
-import type {Rect} from './textboxModel';
+import type {Rect} from '../../textboxModel';
+import {pathLength, type Point} from '../markStroke';
+import type {CaretShape} from './caret';
 
 /**
  * The punctuation circle (technical-design-fine-marks.md §9): a ∧ or V with a small circle between
@@ -13,13 +14,6 @@ export type PlainStroke = {uuid: string; rect: Rect; points: Point[]};
 
 export type Circle = {centre: Point; radius: number; rect: Rect};
 
-function pathLength(points: Point[]): number {
-  let length = 0;
-  for (let index = 1; index < points.length; index += 1) {
-    length += Math.hypot(points[index].x - points[index - 1].x, points[index].y - points[index - 1].y);
-  }
-  return length;
-}
 
 function centreOf(rect: Rect): Point {
   return {x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2};

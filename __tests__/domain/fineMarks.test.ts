@@ -1,20 +1,17 @@
-import {analyzeArc, closeUpSnippet, gapBetween, placeArc, punctuationAtGap} from '../../src/domain/closeUpMark';
+import {closeUpSnippet, gapBetween, placeArc, punctuationAtGap} from '../../src/domain/closeUpMark';
 import {bracketSnippet, characterAt, exactSpan, offsetAtVertical} from '../../src/domain/exactBounds';
 import {locateHere, type HereTextbox} from '../../src/domain/insertHere';
 import {applyTextMutationRanges, withSpacesKept} from '../../src/domain/markerText';
-import {analyzeCaret, type CaretTextbox, type Point} from '../../src/domain/penEditCaret';
-import {
-  analyzeCircle,
-  findCaretCircle,
-  readCircle,
-  type PlainStroke,
-} from '../../src/domain/punctMark';
+import type {CaretTextbox} from '../../src/domain/penEditCaret';
 import {breakCommaTie, placePunctuation} from '../../src/domain/punctText';
-import * as pairing from '../../src/domain/penEditPairing';
 import * as model from '../../src/domain/penEditModel';
-import {buildStrokeStats} from '../../src/domain/markerStrokes';
 import {joinParagraphTexts, trailingDash} from '../../src/domain/paragraphJoin';
-import {analyzeSlash, isSlashSizedRect, placeSlash} from '../../src/domain/slashMark';
+import {placeSlash} from '../../src/domain/slashMark';
+import {analyzeSlash, isSlashCandidateRect} from '../../src/domain/marks/shapes/slash';
+import {analyzeArc} from '../../src/domain/marks/shapes/closeUp';
+import {analyzeCaret} from '../../src/domain/marks/shapes/caret';
+import type {Point} from '../../src/domain/marks/markStroke';
+import {analyzeCircle, findCaretCircle, readCircle, type PlainStroke} from '../../src/domain/marks/shapes/punct';
 
 /** Points every few pixels along straight segments between the corners. */
 function path(...corners: Array<[number, number]>): Point[] {
@@ -163,10 +160,23 @@ describe('slash (§4)', () => {
     expect(placeSlash(notOnMiddle!, LINE)).toBeNull();
   });
 
-  it('tells a letter-sized tall rect for the look-back', () => {
-    expect(isSlashSizedRect({left: 0, top: 0, right: 8, bottom: 30})).toBe(true);
-    expect(isSlashSizedRect({left: 0, top: 0, right: 60, bottom: 30})).toBe(false);
-    expect(isSlashSizedRect({left: 0, top: 0, right: 8, bottom: 10})).toBe(false);
+  it('tells which rects may hold a slash, for the look-back to read their points', () => {
+    expect(isSlashCandidateRect({left: 0, top: 0, right: 8, bottom: 30})).toBe(true);
+    // Strike-like: flatter than ~29°.
+    expect(isSlashCandidateRect({left: 0, top: 0, right: 60, bottom: 30})).toBe(false);
+    // From 10 px tall (§13.1 Q4); below that, no slash.
+    expect(isSlashCandidateRect({left: 0, top: 0, right: 8, bottom: 10})).toBe(true);
+    expect(isSlashCandidateRect({left: 0, top: 0, right: 8, bottom: 8})).toBe(false);
+    // 35°: a slash's rect now.
+    expect(isSlashCandidateRect({left: 0, top: 0, right: 38, bottom: 26})).toBe(true);
+  });
+
+  it('reads a slanted slash from 30° and marks it uncertain when wider than two letters', () => {
+    // 35°, crossing the middle of "big" (140–164) at x ≈ 153: the "i" (148–156).
+    const slanted = analyzeSlash(path([136, 112], [168, 89]));
+    expect(slanted?.angleDeg).toBeGreaterThan(30);
+    expect(placeSlash(slanted!, LINE)).toMatchObject({kind: 'letter', offset: 5, uncertain: expect.stringContaining('slanted')});
+    expect(analyzeSlash(path([136, 108], [176, 92]))).toBeNull();
   });
 });
 
@@ -335,52 +345,7 @@ describe('insert right here (§8)', () => {
   });
 });
 
-describe('look-back with the fine marks (§2.2, §4)', () => {
-  const windowStroke = (uuid: string, numInPage: number, points: Array<[number, number]>) => ({
-    uuid,
-    numInPage,
-    isStraightLine: false,
-    stats: buildStrokeStats(points.map(([x, y]) => ({x, y})))!,
-  });
-  const ring = (uuid: string, num: number, cx: number, cy: number) =>
-    windowStroke(uuid, num, [
-      [cx - 14, cy],
-      [cx, cy - 14],
-      [cx + 14, cy],
-      [cx, cy + 14],
-      [cx - 14, cy],
-    ]);
-  const strike = windowStroke('k', 7, [[300, 500], [420, 502], [520, 501]]);
-  const v1 = windowStroke('v1', 8, [[400, 480], [402, 522]]);
-  const v2 = windowStroke('v2', 9, [[430, 480], [432, 522]]);
-
-  it("takes the user's own circle above the right vertical for the number", () => {
-    const mark = pairing.findReplaceMarkInWindow([strike, v1, v2, ring('c', 10, 431, 455)], []);
-    expect(mark).toMatchObject({strike: {uuid: 'k'}, numberCircle: {uuid: 'c'}});
-    expect(pairing.storedMark(mark!)).toMatchObject({bounds: 'exact', numberRect: expect.any(Object)});
-    expect(pairing.pickNewestMark([strike, v1, v2, ring('c', 10, 431, 455)], mark, null)).toBe('replace');
-  });
-
-  it('reads a slash written last, with or without its circle', () => {
-    const slash = windowStroke('s', 12, [[246, 88], [240, 116]]);
-    expect(pairing.findReplaceMarkInWindow([slash], [])).toMatchObject({slash: true, strike: {uuid: 's'}});
-    const withCircle = pairing.findReplaceMarkInWindow([slash, ring('c', 13, 244, 66)], []);
-    expect(withCircle).toMatchObject({slash: true, numberCircle: {uuid: 'c'}});
-    expect(pairing.storedMark(withCircle!)).toMatchObject({slash: true, bounds: 'exact'});
-    // Not during the early stop of the reads.
-    expect(pairing.findReplaceMarkInWindow([slash], [], {slash: false})).toBeNull();
-    // A wide stroke (handwriting) is no slash.
-    expect(pairing.findReplaceMarkInWindow([windowStroke('w', 12, [[240, 88], [270, 116]])], [])).toBeNull();
-  });
-
-  it('prefers a caret whose leg looks like a slash', () => {
-    const leg1 = windowStroke('l1', 3, [[180, 70], [200, 110]]);
-    const leg2 = windowStroke('l2', 4, [[200, 110], [210, 70]]);
-    const replace = pairing.findReplaceMarkInWindow([leg1, leg2], []);
-    expect(replace?.slash).toBe(true);
-    expect(pairing.pickNewestMark([leg1, leg2], replace, [leg1, leg2])).toBe('caret');
-  });
-
+describe('the fine marks in the index (§2.2, §4)', () => {
   it('keeps the exact bounds, slash and number place when the index is read again', () => {
     const mark = {
       kind: 'replace' as const,

@@ -1,11 +1,5 @@
-import {analyzeStepMark, isSecondUpright} from '../../src/domain/paragraphMarks';
-import {analyzeCaret, type CaretTextbox, type Point} from '../../src/domain/penEditCaret';
-import {
-  findCrossAtCaret,
-  spaceRefusal,
-  spaceSnippet,
-  type ShortStroke,
-} from '../../src/domain/spaceMark';
+import type {CaretTextbox} from '../../src/domain/penEditCaret';
+import {spaceRefusal, spaceSnippet} from '../../src/domain/spaceMark';
 import {
   analyzeSwapPiece,
   letterZone,
@@ -24,6 +18,9 @@ import {
   swapSummary,
 } from '../../src/domain/swapText';
 import {SPLIT_SIGN} from '../../src/domain/paragraphMarks';
+import {analyzeStepMark, isSecondUpright, analyzeCaret} from '../../src/domain/marks/shapes/caret';
+import type {Point} from '../../src/domain/marks/markStroke';
+import {findCrossAtCaret, type ShortStroke} from '../../src/domain/marks/shapes/space';
 
 /** Points every few pixels along straight segments between the corners. */
 function path(...corners: Array<[number, number]>): Point[] {

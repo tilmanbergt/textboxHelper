@@ -29,7 +29,6 @@ import type {
 } from '../domain/markerTypes';
 import {coveredSpan} from '../domain/edgeShift';
 import {bracketSnippet, exactSpan} from '../domain/exactBounds';
-import {isReplaceLoopRect} from '../domain/markerStrokes';
 import {readPageSizeForDiagnostics} from '../supernote/noteElements';
 import type {PenEditEntry} from '../domain/penEditModel';
 import {parsePenEditUserData} from '../domain/penEditTags';
@@ -48,6 +47,7 @@ import {createTextboxMeasurer} from './markerMeasure';
 import {cachedPage, rememberPage} from './manuscriptCache';
 import {loadPenEditContext, placeCaretInsertions, stateOf, type PenEditContext} from './penEditReview';
 import {findShapeMarks} from './shapeMarks';
+import {isReplaceLoopRect} from '../domain/marks/shapes/strike';
 
 /**
  * Reading a page's edit marks into a review preview: the strokes and their shapes, the words they

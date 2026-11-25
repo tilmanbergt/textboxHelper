@@ -1,62 +1,21 @@
-import type {CaretTextbox, Point} from './penEditCaret';
+import type {CaretTextbox} from './penEditCaret';
 import {characterAt} from './exactBounds';
-import type {Rect} from './textboxModel';
+import type {SlashShape} from './marks/shapes/slash';
 
 /**
- * The slash through one letter (technical-design-fine-marks.md §4): a short, steep, straight
- * stroke across a line marks exactly the character it crosses. Alone it deletes it; with tagged
- * text after it, the text replaces it. Pure.
+ * Where a slash through one letter acts (technical-design-mark-dialogue.md §7,
+ * technical-design-fine-marks.md §4): the character it crosses at a line's middle. Alone it
+ * deletes it; with tagged text after it, the text replaces it. Its shape is pass 1's
+ * (`marks/shapes/slash.ts`). Pure.
  */
 
-export type SlashShape = {rect: Rect; top: Point; bottom: Point};
+/** A slash at most this many line heights wide (a slanted one is wider than a letter). */
+const SLASH_MAX_WIDTH_LINES = 1.6;
 
-/** The slash's angle to the horizontal, at least. */
-const SLASH_MIN_ANGLE_DEG = 45;
-const SLASH_MIN_STRAIGHTNESS = 0.85;
-
-function pathLength(points: Point[]): number {
-  let length = 0;
-  for (let index = 1; index < points.length; index += 1) {
-    length += Math.hypot(points[index].x - points[index - 1].x, points[index].y - points[index - 1].y);
-  }
-  return length;
-}
-
-/** A short, steep, fairly straight stroke: a possible slash. Its size is checked against a line. */
-export function analyzeSlash(points: Point[]): SlashShape | null {
-  if (points.length < 2) {
-    return null;
-  }
-  const first = points[0];
-  const last = points[points.length - 1];
-  const direct = Math.hypot(last.x - first.x, last.y - first.y);
-  if (direct < 10 || pathLength(points) > direct / SLASH_MIN_STRAIGHTNESS) {
-    return null;
-  }
-  const angle = (Math.atan2(Math.abs(last.y - first.y), Math.abs(last.x - first.x)) * 180) / Math.PI;
-  if (angle < SLASH_MIN_ANGLE_DEG) {
-    return null;
-  }
-  const xs = points.map(point => point.x);
-  const ys = points.map(point => point.y);
-  const rect = {left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs), bottom: Math.max(...ys)};
-  const [top, bottom] = first.y <= last.y ? [first, last] : [last, first];
-  return {rect, top: {...top}, bottom: {...bottom}};
-}
-
-/**
- * A slash's shape from its bounding rect alone, for the tag's look-back (which reads no points):
- * tall and narrow (at most 0.6 as wide as tall: handwriting and loops are wider), of a letter's
- * size.
- */
-export function isSlashSizedRect(rect: Rect): boolean {
-  const width = rect.right - rect.left;
-  const height = rect.bottom - rect.top;
-  return height >= 18 && height <= 130 && width <= height * 0.6;
-}
+export const SLANTED_SLASH = 'The slash is slanted: check the letter.';
 
 export type SlashPlace =
-  | {kind: 'letter'; uuid: string; lineIndex: number; offset: number}
+  | {kind: 'letter'; uuid: string; lineIndex: number; offset: number; uncertain?: string}
   | {kind: 'refused'; uuid: string; reason: string};
 
 function averageCharWidth(words: CaretTextbox['words']): number {
@@ -67,8 +26,9 @@ function averageCharWidth(words: CaretTextbox['words']): number {
 
 /**
  * Which character of a measured textbox the slash marks: it must cross a line's middle, be of
- * that line's letter size (half to one and a half line heights tall, at most two letters wide),
- * and cross a character there. Null when it is no slash on this textbox.
+ * that line's letter size (half to one and a half line heights tall, at most 1.6 line heights
+ * wide), and cross a character there; one wider than two letters is uncertain. Null when it is no
+ * slash on this textbox.
  */
 export function placeSlash(slash: SlashShape, box: CaretTextbox): SlashPlace | null {
   for (const line of box.lines) {
@@ -83,7 +43,8 @@ export function placeSlash(slash: SlashShape, box: CaretTextbox): SlashPlace | n
     if (words.length === 0 || tall < 0.5 * height || tall > 1.5 * height) {
       continue;
     }
-    if (slash.rect.right - slash.rect.left > 2 * averageCharWidth(words)) {
+    const wide = slash.rect.right - slash.rect.left;
+    if (wide > SLASH_MAX_WIDTH_LINES * height) {
       continue;
     }
     // Where the slash crosses the line's middle.
@@ -98,7 +59,13 @@ export function placeSlash(slash: SlashShape, box: CaretTextbox): SlashPlace | n
         reason: 'A slash marks one letter; to join two words, use the close-up arc.',
       };
     }
-    return {kind: 'letter', uuid: box.uuid, lineIndex: line.index, offset};
+    return {
+      kind: 'letter',
+      uuid: box.uuid,
+      lineIndex: line.index,
+      offset,
+      ...(wide > 2 * averageCharWidth(words) ? {uncertain: SLANTED_SLASH} : {}),
+    };
   }
   return null;
 }
