@@ -540,6 +540,12 @@ written. The help page "Change letters" becomes "Delete letters".
   `results` with the number of its changes. `useManuscriptReview` has `applyPage(page)` next to
   `apply`; the page shown is the page filter, else the selected change's or To decide entry's
   page. Golden record unchanged.
+- S7 (after the device test, Tilman): the side shows one text, the paragraph after all its
+  changes, paged with ‹ › and opened at the selected change ("In its text" is gone: the list
+  already shows each change in its context). `buildParagraphResult` (in place of
+  `buildResultSegments`) also says where each change is in the result; `focusResult` underlines
+  the selected change's new text in bold, or the word (or space) where its removed text was. A new
+  paragraph shows its own text. Golden record unchanged.
 
 ### 13.3 Questions before S4 (S3 is done)
 

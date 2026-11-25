@@ -6,10 +6,9 @@
  * two for a delete or replace, three for a swap); the actions. Drop asks first, in place of the
  * actions: a tagged snippet's handwriting can stay on the page or go.
  */
-import React, {useEffect, useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, TextInput, View} from 'react-native';
 import {loadPenEditStrokePoints} from '../../actions/penEditReview';
-import {firstWords, lastWords} from '../../domain/markerHunks';
 import type {
   ChangeHunk,
   EdgePoint,
@@ -26,7 +25,7 @@ import {COLORS, FONT, RADII, SPACING} from '../../ui/theme';
 import {PUNCTUATION_CHARS, type PunctuationChar} from '../../domain/marks/shapes/punct';
 import {penEditNumberText} from '../../domain/penEditTags';
 import {plural} from '../../domain/plural';
-import type {TextSegment} from '../../domain/textPages';
+import {focusResult, type ParagraphResult} from '../../domain/markerDiff';
 
 export type PenDetail = {
   view: PenEditView;
@@ -35,14 +34,11 @@ export type PenDetail = {
   text: string;
 };
 
-/** Words of context the side bar shows on each side of a change. */
-const SIDE_CONTEXT_WORDS = 24;
-
 interface Props {
   operation: RecognizedEditOperation;
   hunk: ChangeHunk;
   /** Its paragraph as it will read after all its changes; null when not known. */
-  result: {segments: TextSegment[]; changes: number} | null;
+  result: (ParagraphResult & {changes: number}) | null;
   pen: PenDetail | null;
   editing: boolean;
   onEditing: (editing: boolean) => void;
@@ -85,14 +81,6 @@ export default function ChangeSide({
         <Text style={styles.title}>{hunk.label}</Text>
         <Text style={styles.meta}>{hunk.meta}</Text>
       </View>
-      {result ? (
-        <>
-          <Text style={styles.label}>¶ after its {plural(result.changes, 'change')}</Text>
-          <View style={styles.paragraph}>
-            <PagedText segments={result.segments} resetKey={`result:${hunk.operationId}`} />
-          </View>
-        </>
-      ) : null}
       {pen ? (
         <PenText
           pen={pen}
@@ -106,17 +94,7 @@ export default function ChangeSide({
       {operation.insideSwap ? (
         <Text style={styles.hint}>Inside a swap: this change is made first, then the parts change places.</Text>
       ) : null}
-      <Text style={styles.label}>In its text</Text>
-      <View style={styles.context}>
-        <PagedText
-          segments={[
-            {text: lastWords(hunk.before, SIDE_CONTEXT_WORDS)},
-            ...hunk.segments,
-            {text: firstWords(hunk.after, SIDE_CONTEXT_WORDS)},
-          ]}
-          resetKey={hunk.operationId}
-        />
-      </View>
+      <ResultText result={result} hunk={hunk} />
       {operation.swap ? <SwapDetail operation={operation} disabled={busy} onFixCase={onFixCase} /> : null}
       {operation.join?.hyphen ? (
         <Checkbox
@@ -441,6 +419,26 @@ export function DropConfirm({
   );
 }
 
+/**
+ * The paragraph as it will read after all its changes, paged, opened at the selected change (its
+ * new text underlined in bold, or the place of removed text underlined). A new paragraph shows its
+ * own text.
+ */
+function ResultText({result, hunk}: {result: (ParagraphResult & {changes: number}) | null; hunk: ChangeHunk}): React.JSX.Element {
+  const focus = useMemo(() => (result ? focusResult(result, hunk.operationId) : null), [result, hunk.operationId]);
+  const header = focus && result ? `¶ after its ${plural(result.changes, 'change')}` : 'New paragraph';
+  return (
+    <View style={styles.paragraph}>
+      <PagedText
+        header={header}
+        segments={focus ? focus.segments : hunk.segments}
+        resetKey={hunk.operationId}
+        jumpTo={focus && focus.at !== null ? {key: hunk.operationId, index: focus.at} : null}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   side: {
     flex: 1,
@@ -458,12 +456,9 @@ const styles = StyleSheet.create({
   pen: {
     gap: SPACING.xs,
   },
-  context: {
-    flex: 1,
-    minHeight: 80,
-  },
   paragraph: {
-    height: 150,
+    flex: 1,
+    minHeight: 120,
   },
   picture: {
     alignSelf: 'stretch',

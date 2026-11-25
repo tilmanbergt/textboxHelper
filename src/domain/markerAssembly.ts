@@ -1,4 +1,4 @@
-import {buildResultSegments} from './markerDiff';
+import {buildParagraphResult} from './markerDiff';
 import {penEditNumberText} from './penEditTags';
 import {buildHunk, buildSwapHunk} from './markerHunks';
 import {applyTextMutationRanges, formatOperationSnippet} from './markerText';
@@ -759,7 +759,7 @@ export function assembleMarkerPreview(
   const results: EditMarkerPreview['results'] = {};
   displayRanges.forEach((ranges, uuid) => {
     results[uuid] = {
-      segments: buildResultSegments(originalTextOf.get(uuid) ?? '', ranges),
+      ...buildParagraphResult(originalTextOf.get(uuid) ?? '', ranges),
       changes: new Set(ranges.map(range => range.opId)).size,
     };
   });

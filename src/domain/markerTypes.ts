@@ -1,6 +1,7 @@
 import type {TextboxMeasurementCalibration} from './textboxLayout';
 import type {TextSegment} from './textPages';
 import type {EdgeShift} from './edgeShift';
+import type {ParagraphResult} from './markerDiff';
 import type {RecognitionStatus} from './penEditModel';
 import type {PenEditKind} from './penEditTags';
 import type {Rect, TextboxData} from './textboxModel';
@@ -164,7 +165,7 @@ export type EditMarkerPreview = {
   /** Pen edits still waiting for their text (being recognized, or not recognized). */
   pendingCount: number;
   /** Each changed textbox as it will read (by uuid) and how many changes make it so. */
-  results: Record<string, {segments: TextSegment[]; changes: number}>;
+  results: Record<string, ParagraphResult & {changes: number}>;
 };
 
 /** A pen edit's text as the review knows it. */

@@ -34,4 +34,11 @@ const SEGMENT_STYLES = StyleSheet.create<Record<TextSegmentStyle, TextStyle>>({
   muted: {
     color: COLORS.muted,
   },
+  focus: {
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  focusPlain: {
+    textDecorationLine: 'underline',
+  },
 });

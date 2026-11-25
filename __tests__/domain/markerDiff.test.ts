@@ -85,8 +85,10 @@ describe('plural, userMessage, fileNameOf', () => {
   });
 });
 
-describe('buildResultSegments (technical-design-mark-dialogue.md §5.5)', () => {
-  const {buildResultSegments} = require('../../src/domain/markerDiff') as typeof import('../../src/domain/markerDiff');
+describe('buildParagraphResult (technical-design-mark-dialogue.md §5.5)', () => {
+  const {buildParagraphResult, focusResult} = require('../../src/domain/markerDiff') as typeof import('../../src/domain/markerDiff');
+  const buildResultSegments = (original: string, ranges: Parameters<typeof buildParagraphResult>[1]) =>
+    buildParagraphResult(original, ranges).segments.map(({op: _op, ...segment}) => segment);
   const {applyTextMutationRanges} = require('../../src/domain/markerText') as typeof import('../../src/domain/markerText');
   const plain = (segments: Array<{text: string}>) => segments.map(segment => segment.text).join('');
   const text = 'lasso a few words to make a todo';
@@ -117,5 +119,23 @@ describe('buildResultSegments (technical-design-mark-dialogue.md §5.5)', () => 
     ['letters inside a word', 'bigger', [rep(4, 6, 'st')]],
   ])('%s: its text is the apply step\'s text', (_name, original, ranges) => {
     expect(plain(buildResultSegments(original, ranges))).toBe(applyTextMutationRanges(original, ranges));
+  });
+
+  it('knows where each change is in the text after it', () => {
+    const result = buildParagraphResult(text, [{...del(6, 8), opId: 'a'}, {...rep(28, 32, 'list'), opId: 'b'}]);
+    expect(plain(result.segments)).toBe('lasso few words to make a list');
+    expect(result.at).toEqual({a: 6, b: 26});
+  });
+
+  it('brings the selected change forward: its new text underlined', () => {
+    const result = buildParagraphResult('the big car', [{...rep(4, 7, 'red'), opId: 'a'}]);
+    expect(focusResult(result, 'a')).toEqual({segments: [{text: 'the '}, {text: 'red', style: 'focus'}, {text: ' car'}], at: 4});
+  });
+
+  it('underlines the word where removed letters were, or the space where a word was', () => {
+    const letters = buildParagraphResult('a kindness of', [{...del(6, 10), opId: 'a'}]);
+    expect(focusResult(letters, 'a').segments).toEqual([{text: 'a '}, {text: 'kind', style: 'focusPlain'}, {text: ' of'}]);
+    const word = buildParagraphResult('the big red car', [{...del(4, 8), opId: 'a'}]);
+    expect(focusResult(word, 'a')).toEqual({segments: [{text: 'the'}, {text: ' ', style: 'focusPlain'}, {text: 'red car'}], at: 4});
   });
 });
