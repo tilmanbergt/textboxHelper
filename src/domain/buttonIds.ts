@@ -12,3 +12,5 @@ export const BUTTON_ID_NOTE_MANUSCRIPT = 6280;
 // Files tab now. Don't reuse them.
 /** "Insertion or Replacement": tags lassoed handwriting; the mark written before it says which. */
 export const BUTTON_ID_TOOLBAR_PEN_EDIT = 6310;
+/** "Comment or Image": tags lassoed handwriting as a comment or an image; never looks for a mark. */
+export const BUTTON_ID_TOOLBAR_NOTE = 6320;

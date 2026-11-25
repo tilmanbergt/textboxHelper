@@ -1,5 +1,5 @@
 import {isNoShift, type EdgeShift} from './edgeShift';
-import type {PenEditKind} from './penEditTags';
+import {isNoteKind, type PenEditKind} from './penEditTags';
 import type {Rect} from './textboxModel';
 
 /**
@@ -70,6 +70,19 @@ export type PenEditRecognition = {
 
 export type PenEditState = 'active' | 'applied' | 'dropped';
 
+/**
+ * What a comment or an image knows besides its handwriting (technical-design-comments-images.md
+ * §2.1). Every field is optional: a note without any belongs to the nearest paragraph by height.
+ */
+export type NoteInfo = {
+  /** The paragraph the user chose: its block id. Missing: the nearest by height (§4). */
+  paragraph?: string;
+  /** Images: before or after their paragraph. Missing: after. */
+  place?: 'before' | 'after';
+  /** Comments: checked off. */
+  done?: boolean;
+};
+
 export type PenEditEntry = {
   id: string;
   kind: PenEditKind;
@@ -119,6 +132,8 @@ export type PenEditEntry = {
    * takes the nearest place it found. Part of the user layer, not of the page's fingerprint.
    */
   confirmed?: boolean;
+  /** Comments and images only: their paragraph, place and Done. */
+  note?: NoteInfo;
 };
 
 /** Where Select mark was started: the tag's result card, or the review (which opens again). */
@@ -206,11 +221,13 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     return null;
   }
   const rect = parseRect(value.rect);
-  const kind =
-    value.kind === 'replacement' || value.kind === 'insertion' || value.kind === 'unpaired' ? value.kind : null;
+  // An unknown kind (from a newer build, or bad data) is kept as text without a mark ("?").
+  const kind: PenEditKind =
+    value.kind === 'replacement' || value.kind === 'insertion' || value.kind === 'unpaired' || (isString(value.kind) && isNoteKind(value.kind))
+      ? (value.kind as PenEditKind)
+      : 'unpaired';
   if (
     !isString(value.id) ||
-    !kind ||
     !isString(value.notePath) ||
     !isFiniteNumber(value.page) ||
     !rect
@@ -223,14 +240,14 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     kind,
     notePath: value.notePath,
     page: value.page,
-    // Text without a mark has no number: entries stored with one are read as "?".
-    number: kind !== 'unpaired' && isFiniteNumber(value.number) ? value.number : null,
+    // Text without a mark has no number: entries stored with one are read as "?". Notes have none.
+    number: kind !== 'unpaired' && !isNoteKind(kind) && isFiniteNumber(value.number) ? value.number : null,
     createdAt: isString(value.createdAt) ? value.createdAt : '',
     rect,
     strokeRects: parseRects(value.strokeRects),
     iconRect: parseRect(value.iconRect) ?? rect,
     strokesTagged: value.strokesTagged === true,
-    mark: parseMark(value.mark),
+    mark: isNoteKind(kind) ? null : parseMark(value.mark),
     hasPicture: value.hasPicture === true,
     recognition: parseRecognition(value.recognition),
     correctedText: isString(value.correctedText) ? value.correctedText : null,
@@ -240,7 +257,25 @@ export function parsePenEditEntry(value: unknown): PenEditEntry | null {
     edges: parseEdges(value.edges),
     ...(value.placement === 'here' ? {placement: 'here' as const} : {}),
     ...(value.confirmed === true ? {confirmed: true} : {}),
+    ...(isNoteKind(kind) ? {note: parseNoteInfo(value.note)} : {}),
   };
+}
+
+/** A note's info; anything unreadable is left out, so the defaults apply. */
+export function parseNoteInfo(value: unknown): NoteInfo {
+  if (!isRecord(value)) {
+    return {};
+  }
+  return {
+    ...(isString(value.paragraph) && value.paragraph ? {paragraph: value.paragraph} : {}),
+    ...(value.place === 'before' || value.place === 'after' ? {place: value.place} : {}),
+    ...(value.done === true ? {done: true} : {}),
+  };
+}
+
+/** Where an image goes next to its paragraph: after it unless the user chose before. */
+export function notePlace(entry: Pick<PenEditEntry, 'note'>): 'before' | 'after' {
+  return entry.note?.place ?? 'after';
 }
 
 /** Edge nudges: a list of character counts; entries from before 1–3 edges were `{start, end}`. */

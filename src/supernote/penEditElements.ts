@@ -26,8 +26,8 @@ const ICON_PEN = {penColor: 0x00, penType: 10, penWidth: 200};
 const BUSY_ERROR = '105';
 const RETRY_DELAY_MS = 500;
 
-/** A number textbox; `number` null shows "?" (text without a mark). */
-export type TagNumber = {role: Extract<PenEditRole, 'marknum' | 'snippetnum'>; rect: Rect; number: number | null};
+/** A small textbox in a sign: a number, "?" (text without a mark) or "C" (a comment). */
+export type TagNumber = {role: Extract<PenEditRole, 'marknum' | 'snippetnum'>; rect: Rect; text: string};
 export type TagBadge = {role: Extract<PenEditRole, 'snippet' | 'markring'>; points: Point[]};
 
 export type TagElementsRequest = {
@@ -99,7 +99,7 @@ async function buildElements(request: TagElementsRequest): Promise<Element[]> {
     const textBox = element.textBox ?? new TextBox();
     textBox.fontSize = PEN_EDIT_NUMBER_FONT_SIZE;
     textBox.fontPath = NOTE_SYSTEM_FONT_PATH;
-    textBox.textContentFull = penEditNumberText(number.number);
+    textBox.textContentFull = number.text;
     textBox.textRect = number.rect;
     textBox.textAlign = 0;
     textBox.textBold = 1;

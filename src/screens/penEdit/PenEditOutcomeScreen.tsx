@@ -71,15 +71,15 @@ export default function PenEditOutcomeScreen({outcome, onClose}: Props): React.J
   };
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.card}>
-        <Text style={styles.title}>{title}</Text>
-        {outcome.kind === 'markNotClear' ? <StrokeDrawing strokes={outcome.strokes} style={styles.picture} /> : null}
-        {body ? <Text style={styles.message}>{body}</Text> : null}
-        {outcome.kind === 'markNotClear' ? <Text style={styles.message}>The text keeps its ?.</Text> : null}
-        {saving ? <Text style={styles.message}>Saving the tag…</Text> : null}
-        {error ? <Text style={styles.message}>{error}</Text> : null}
-        <View style={styles.buttons}>
+    <View style={cardStyles.screen}>
+      <View style={cardStyles.card}>
+        <Text style={cardStyles.title}>{title}</Text>
+        {outcome.kind === 'markNotClear' ? <StrokeDrawing strokes={outcome.strokes} style={cardStyles.picture} /> : null}
+        {body ? <Text style={cardStyles.message}>{body}</Text> : null}
+        {outcome.kind === 'markNotClear' ? <Text style={cardStyles.message}>The text keeps its ?.</Text> : null}
+        {saving ? <Text style={cardStyles.message}>Saving the tag…</Text> : null}
+        {error ? <Text style={cardStyles.message}>{error}</Text> : null}
+        <View style={cardStyles.buttons}>
           {outcome.kind === 'noMark' ? (
             <>
               <PillButton label="Later" onPress={onClose} disabled={saving} />
@@ -99,7 +99,8 @@ export default function PenEditOutcomeScreen({outcome, onClose}: Props): React.J
   );
 }
 
-const styles = StyleSheet.create({
+/** The card's frame, shared with `NoteKindCard`. */
+export const cardStyles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: COLORS.background,

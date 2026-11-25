@@ -166,6 +166,15 @@ anything is put on the page. A snippet without a mark can be given one later (Se
 where its handwriting starts (Insert right here, `domain/marks/place/here.ts`). The tagged strokes and a picture are stored in the plugin folder (`pen-edits/`);
 the review recognizes them while it is open and the user can edit the text in place.
 
+**Comments and images** (`actions/noteTag.ts`, `screens/penEdit/NoteKindCard.tsx`,
+technical-design-comments-images.md): the "Comment or Image" lasso button keeps handwriting as a
+note - a pen-edit entry of kind `comment` or `image` that needs no mark and never becomes a change.
+It looks for no mark: the lasso is read, the small card asks Comment · Image, and only the choice
+writes the entry, the tag on the strokes and the sign (a speech bubble with "C" or a plain double
+frame, `domain/penEditTags.ts` `snippetSign`; circles stay for the numbers of tagged text). Both
+lasso buttons write through `actions/sidemarkWrite.ts`: lasso snapshot and picture, the wait after
+the lasso closes, the tag on the strokes, the index entry before the sign, and the sign.
+
 **Housekeeping** (`domain/housekeeping.ts`, `storage/housekeepingStore.ts`,
 `actions/housekeeping.ts`) keeps the plugin folder small: once per JS context, a few seconds after
 the Manuscript card shows its first list, it removes pen edits applied or dropped more than 3 days

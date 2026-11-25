@@ -41,6 +41,11 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 - Fine-tune any change by one character (a comma, a space, a letter; a swap's three edges), and drop a change or an unused mark, keeping or erasing your handwriting
 - The handwriting and its picture are kept in the plugin folder (`pen-edits/`)
 
+### Comments and Images
+
+- Keep handwriting beside the text as a comment or an image with the lasso button "Comment or Image": a small card asks which; a comment gets a speech bubble with "C", an image a plain double frame (circles stay for the numbers of tagged text)
+- Comments and images never change the text: Apply leaves them alone
+
 ### Manuscript
 
 - The NOTE toolbar button "Manuscript" reads every edit mark on the current page
