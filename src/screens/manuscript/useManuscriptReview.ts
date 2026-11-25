@@ -96,7 +96,10 @@ export interface ManuscriptReview {
   recheck: () => void;
   saveDiagnostics: () => void;
   timings: ReturnType<typeof useTimingsExport>;
+  /** Applies the ready changes of every read page. */
   apply: () => void;
+  /** Applies the ready changes of one page only (technical-design-mark-dialogue.md §5.6). */
+  applyPage: (page: number) => void;
   /** Recognize the selected pen edit first. */
   setSelectedPenEdit: (id: string | null) => void;
   recognizeAgain: (id: string) => void;
@@ -467,39 +470,59 @@ export function useManuscriptReview(): ManuscriptReview {
       });
   }, [busy, loading]);
 
-  const apply = useCallback(() => {
-    if (view.plans.length === 0 || loading || busy) {
-      return;
-    }
-    setBusy(true);
-    const appliedPages = view.plans.map(plan => plan.page);
-    const notePath = noteRef.current?.notePath;
-    stop()
-      .then(() =>
-        timed(
-          'review.apply',
-          () =>
-            applyMarkerPlans(view.plans, {
-              onProgress: update => setStatus({text: update.message}),
-              leftForLater: view.pendingCount,
-            }),
-          {pages: appliedPages.length, edits: view.readyCount},
-        ),
-      )
-      .then(async result => {
-        if (notePath) {
-          forgetPages(notePath, appliedPages);
-        }
-        setApplied(true);
-        setStatus({text: `${result.message} Backup: ${fileNameOf(result.backupPath)}`});
-        await rereadAll(true);
-      })
-      .catch(error => {
-        console.warn('[Manuscript] apply failed', String(error));
-        setStatus({kind: 'error', text: userMessage(error, 'The changes could not be applied.')});
-      })
-      .finally(() => setBusy(false));
-  }, [busy, loading, rereadAll, stop, view]);
+  const planCount = view.plans.length;
+  /** Applies these plans (one per page) after a backup; the card stays open and reads the pages again. */
+  const applyPlans = useCallback(
+    (plans: ManuscriptView['plans'], leftForLater: number) => {
+      if (plans.length === 0 || loading || busy) {
+        return;
+      }
+      setBusy(true);
+      const appliedPages = plans.map(plan => plan.page);
+      const notePath = noteRef.current?.notePath;
+      const edits = plans.reduce((sum, plan) => sum + plan.operations.length, 0);
+      stop()
+        .then(() =>
+          timed(
+            'review.apply',
+            () =>
+              applyMarkerPlans(plans, {
+                onProgress: update => setStatus({text: update.message}),
+                leftForLater,
+              }),
+            {pages: appliedPages.length, edits},
+          ),
+        )
+        .then(async result => {
+          if (notePath) {
+            forgetPages(notePath, appliedPages);
+          }
+          // Applying one page leaves the others to apply: the card stays as it was for them.
+          setApplied(plans.length === planCount);
+          setStatus({text: `${result.message} Backup: ${fileNameOf(result.backupPath)}`});
+          await rereadAll(true);
+        })
+        .catch(error => {
+          console.warn('[Manuscript] apply failed', String(error));
+          setStatus({kind: 'error', text: userMessage(error, 'The changes could not be applied.')});
+        })
+        .finally(() => setBusy(false));
+    },
+    [busy, loading, planCount, rereadAll, stop],
+  );
+
+  const apply = useCallback(() => applyPlans(view.plans, view.pendingCount), [applyPlans, view]);
+
+  const applyPage = useCallback(
+    (page: number) => {
+      const review = pages[page];
+      applyPlans(
+        view.plans.filter(plan => plan.page === page),
+        review?.state === 'read' ? review.preview.pendingCount : 0,
+      );
+    },
+    [applyPlans, pages, view.plans],
+  );
 
   const drop = useCallback(
     (page: number, items: DropItem[], eraseHandwriting: boolean) => {
@@ -643,6 +666,7 @@ export function useManuscriptReview(): ManuscriptReview {
     saveDiagnostics,
     timings,
     apply,
+    applyPage,
     setSelectedPenEdit: setSelectedPenId,
     recognizeAgain,
     correct,

@@ -1,3 +1,4 @@
+import {buildResultSegments} from './markerDiff';
 import {penEditNumberText} from './penEditTags';
 import {buildHunk, buildSwapHunk} from './markerHunks';
 import {applyTextMutationRanges, formatOperationSnippet} from './markerText';
@@ -754,11 +755,21 @@ export function assembleMarkerPreview(
     .sort((left, right) => left.order - right.order || left.at - right.at)
     .map(entry => entry.hunk);
 
+  // Each changed paragraph as it will read, for the side bar (technical-design-mark-dialogue.md §5.5).
+  const results: EditMarkerPreview['results'] = {};
+  displayRanges.forEach((ranges, uuid) => {
+    results[uuid] = {
+      segments: buildResultSegments(originalTextOf.get(uuid) ?? '', ranges),
+      changes: new Set(ranges.map(range => range.opId)).size,
+    };
+  });
+
   return {
     hunks,
     fontWarning,
     operations,
     toDecide,
+    results,
     canApply: !!applyPlan,
     applyPlan,
     base,

@@ -163,6 +163,8 @@ export type EditMarkerPreview = {
   penEdits: PenEditView[];
   /** Pen edits still waiting for their text (being recognized, or not recognized). */
   pendingCount: number;
+  /** Each changed textbox as it will read (by uuid) and how many changes make it so. */
+  results: Record<string, {segments: TextSegment[]; changes: number}>;
 };
 
 /** A pen edit's text as the review knows it. */

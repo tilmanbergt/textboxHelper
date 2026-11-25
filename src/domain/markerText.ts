@@ -67,7 +67,7 @@ export function buildTextboxLogSummary(textbox: TextElementData): Record<string,
   };
 }
 
-function normalizeTextAfterEdit(text: string): string {
+export function normalizeTextAfterEdit(text: string): string {
   return text
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n[ \t]+/g, '\n')
@@ -186,6 +186,7 @@ export function createEmptyPreview(): EditMarkerPreview {
     fontWarning: null,
     operations: [],
     toDecide: [],
+    results: {},
     canApply: false,
     applyPlan: null,
     base: null,

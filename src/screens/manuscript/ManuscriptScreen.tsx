@@ -23,6 +23,7 @@ import {sourceFileName} from '../../domain/sourceRecord';
 import Checkbox from '../../ui/Checkbox';
 import CountTabs from '../../ui/CountTabs';
 import PillButton from '../../ui/PillButton';
+import TextLink from '../../ui/TextLink';
 import {jumpToNotePage} from '../../supernote/noteElements';
 import ScreenFrame, {type FramePrimary, type FrameStatus} from '../../ui/ScreenFrame';
 import {COLORS, FONT, SPACING} from '../../ui/theme';
@@ -130,6 +131,8 @@ function ManuscriptCard({
   }, []);
   const [reviewBlocked, setReviewBlocked] = useState(false);
   const [showPage, setShowPage] = useState<number | null>(null);
+  // The page the Review shows: Apply applies its edits (technical-design-mark-dialogue.md §5.6).
+  const [shownPage, setShownPage] = useState<number | null>(null);
   const [jumpError, setJumpError] = useState<string | null>(null);
   // Go to a page: NOTE shows it, and the card closes so it can be seen.
   const goToPage = useCallback(
@@ -215,6 +218,9 @@ function ManuscriptCard({
   };
   const files = filesLabel(source);
   const toWrite = source.toWrite;
+  // Apply per page by default; all pages as a quieter second action when others have edits too.
+  const pagePlan = shownPage !== null ? changes.plans.find(plan => plan.page === shownPage) ?? null : null;
+  const otherPages = pagePlan !== null && changes.plans.some(plan => plan.page !== pagePlan.page);
   const primary: FramePrimary =
     tab === 'files'
       ? filesPrimary(source, onClose)
@@ -230,6 +236,14 @@ function ManuscriptCard({
           busy: source.busy,
           busyLabel: 'Writing the files…',
         }
+      : pagePlan
+      ? {
+          label: `Apply ${plural(pagePlan.operations.length, 'edit')} on page ${pagePlan.page + 1}`,
+          onPress: () => review.applyPage(pagePlan.page),
+          disabled: loading || reviewBlocked || source.busy,
+          busy,
+          busyLabel: 'Applying…',
+        }
       : {
           label:
             changes.readyCount > 0
@@ -240,7 +254,15 @@ function ManuscriptCard({
           busy,
           busyLabel: 'Applying…',
         };
-  const accessory =
+  const allPages =
+    tab === 'review' && !applied && otherPages ? (
+      <TextLink
+        label={`All pages · ${plural(changes.readyCount, 'edit')}`}
+        onPress={review.apply}
+        disabled={loading || reviewBlocked || source.busy || busy}
+      />
+    ) : null;
+  const alsoUpdate =
     tab === 'review' && !applied && source.note && changes.readyCount > 0 ? (
       <Checkbox
         label={source.note.files.length === 1 ? `Also update ${files}` : 'Also update changed files'}
@@ -248,6 +270,13 @@ function ManuscriptCard({
         disabled={busy}
         onChange={source.setAlsoUpdate}
       />
+    ) : null;
+  const accessory =
+    allPages || alsoUpdate ? (
+      <View style={styles.accessory}>
+        {allPages}
+        {alsoUpdate}
+      </View>
     ) : undefined;
   const focusNote =
     !focusPenEditId || loading
@@ -308,6 +337,7 @@ function ManuscriptCard({
           onBlockedChange={onBlockedChange}
           showPage={showPage}
           onGoToPage={goToPage}
+          onPageShown={setShownPage}
         />
       ) : (
         <OutlineTab
@@ -485,6 +515,11 @@ function outlinePrimary(
 }
 
 const styles = StyleSheet.create({
+  accessory: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.lg,
+  },
   question: {
     flexDirection: 'row',
     alignItems: 'center',

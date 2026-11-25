@@ -25,6 +25,8 @@ import StrokeDrawing from '../../ui/StrokeDrawing';
 import {COLORS, FONT, RADII, SPACING} from '../../ui/theme';
 import {PUNCTUATION_CHARS, type PunctuationChar} from '../../domain/marks/shapes/punct';
 import {penEditNumberText} from '../../domain/penEditTags';
+import {plural} from '../../domain/plural';
+import type {TextSegment} from '../../domain/textPages';
 
 export type PenDetail = {
   view: PenEditView;
@@ -39,6 +41,8 @@ const SIDE_CONTEXT_WORDS = 24;
 interface Props {
   operation: RecognizedEditOperation;
   hunk: ChangeHunk;
+  /** Its paragraph as it will read after all its changes; null when not known. */
+  result: {segments: TextSegment[]; changes: number} | null;
   pen: PenDetail | null;
   editing: boolean;
   onEditing: (editing: boolean) => void;
@@ -61,6 +65,7 @@ interface Props {
 export default function ChangeSide({
   operation,
   hunk,
+  result,
   pen,
   editing,
   onEditing,
@@ -80,6 +85,14 @@ export default function ChangeSide({
         <Text style={styles.title}>{hunk.label}</Text>
         <Text style={styles.meta}>{hunk.meta}</Text>
       </View>
+      {result ? (
+        <>
+          <Text style={styles.label}>¶ after its {plural(result.changes, 'change')}</Text>
+          <View style={styles.paragraph}>
+            <PagedText segments={result.segments} resetKey={`result:${hunk.operationId}`} />
+          </View>
+        </>
+      ) : null}
       {pen ? (
         <PenText
           pen={pen}
@@ -448,6 +461,9 @@ const styles = StyleSheet.create({
   context: {
     flex: 1,
     minHeight: 80,
+  },
+  paragraph: {
+    height: 150,
   },
   picture: {
     alignSelf: 'stretch',

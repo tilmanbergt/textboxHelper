@@ -57,6 +57,8 @@ interface Props {
   showPage: number | null;
   /** Close the card and show a page of the note in NOTE. */
   onGoToPage: (page: number) => void;
+  /** The page shown (chosen, or the selected change's): Apply applies it (§5.6). */
+  onPageShown: (page: number | null) => void;
 }
 
 export default function ReviewTab({
@@ -66,6 +68,7 @@ export default function ReviewTab({
   onBlockedChange,
   showPage,
   onGoToPage,
+  onPageShown,
 }: Props): React.JSX.Element {
   const {note, pages, view, loading, busy, applied} = review;
   const [editing, setEditing] = useState(false);
@@ -163,7 +166,9 @@ export default function ReviewTab({
     ROW_CHROME +
     estimateLines(rowText(entry.hunk), textWidth, FONT.medium, ROW_CHAR_WIDTH_SHARE) * LINE_HEIGHT.medium;
   // The page "Go to page" opens: the chosen page, else the selected change's page.
-  const shownPage = pageFilter !== 'all' ? Number(pageFilter) : selected?.page ?? null;
+  const shownPage =
+    pageFilter !== 'all' ? Number(pageFilter) : list === 'decide' ? decided?.page ?? null : selected?.page ?? null;
+  useEffect(() => onPageShown(shownPage), [onPageShown, shownPage]);
   const header =
     pageFilter === 'all'
       ? applied
@@ -317,6 +322,11 @@ export default function ReviewTab({
             <ChangeSide
               operation={selected.operation}
               hunk={selected.hunk}
+              result={
+                selectedPreview?.state === 'read'
+                  ? selectedPreview.preview.results[selected.operation.targetTextboxUuid] ?? null
+                  : null
+              }
               pen={
                 selectedPen
                   ? {

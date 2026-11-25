@@ -148,7 +148,10 @@ runs once; the preview is assembled from it, the tagged texts and the user's edg
 character at a time), so the review updates without measuring again. It lists every change as a
 hunk in reading order (`domain/markerHunks.ts`): the changed text with the removed ranges struck
 through and new text in bold (`domain/markerDiff.ts`), and the rest of its textbox as context, built
-from the same ranges the apply step uses, so the review shows exactly what will change.
+from the same ranges the apply step uses, so the review shows exactly what will change. Each
+textbox's paragraph after all its changes (`buildResultSegments`, with the apply step's space
+cleanup) is in the preview's `results`; a test holds its plain text equal to the plan's text. Apply
+applies the shown page's plans (`useManuscriptReview.applyPage`) or every read page's (`apply`).
 `actions/editMarkerDrop.ts` takes changes off the page without applying them.
 
 **Pen edits** (`actions/penEditTag.ts`, `actions/penEditReview.ts`, `storage/penEditStore.ts`,

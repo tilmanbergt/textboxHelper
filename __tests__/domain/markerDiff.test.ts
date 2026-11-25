@@ -84,3 +84,38 @@ describe('plural, userMessage, fileNameOf', () => {
     expect(fileNameOf('/data/plugins/x/backups/page-3.json')).toBe('page-3.json');
   });
 });
+
+describe('buildResultSegments (technical-design-mark-dialogue.md §5.5)', () => {
+  const {buildResultSegments} = require('../../src/domain/markerDiff') as typeof import('../../src/domain/markerDiff');
+  const {applyTextMutationRanges} = require('../../src/domain/markerText') as typeof import('../../src/domain/markerText');
+  const plain = (segments: Array<{text: string}>) => segments.map(segment => segment.text).join('');
+  const text = 'lasso a few words to make a todo';
+
+  it('leaves removed text out and shows new text bold', () => {
+    expect(buildResultSegments(text, [del(8, 26), rep(28, 32, 'list')])).toEqual([
+      {text: 'lasso a a '},
+      {text: 'list', style: 'inserted'},
+    ]);
+  });
+
+  it('shows a pen edit not recognized yet muted', () => {
+    expect(buildResultSegments('the big car', [{...rep(4, 7, '‹replacement 2›'), pending: true}])).toEqual([
+      {text: 'the '},
+      {text: '‹replacement 2›', style: 'muted'},
+      {text: ' car'},
+    ]);
+  });
+
+  it.each([
+    ['a delete in the middle', text, [del(8, 25)]],
+    ['deletes at both ends', text, [del(0, 5), del(28, 32)]],
+    ['a replace and a delete', 'The quick brown fox jumps.', [del(4, 10), rep(16, 19, 'cat')]],
+    ['exact ranges keep one space', 'the big red car', [{kind: 'replace' as const, start: 4, end: 8, replacementText: 'small'}]],
+    ['a delete before a full stop', 'the car today.', [del(8, 13)]],
+    ['a close-up joins', 'note book', [{kind: 'replace' as const, start: 4, end: 5, replacementText: '', joins: true}]],
+    ['an insertion at a gap', 'the big car', [rep(8, 8, 'red ')]],
+    ['letters inside a word', 'bigger', [rep(4, 6, 'st')]],
+  ])('%s: its text is the apply step\'s text', (_name, original, ranges) => {
+    expect(plain(buildResultSegments(original, ranges))).toBe(applyTextMutationRanges(original, ranges));
+  });
+});
