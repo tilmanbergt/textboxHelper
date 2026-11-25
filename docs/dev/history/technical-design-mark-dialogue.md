@@ -516,3 +516,34 @@ written. The help page "Change letters" becomes "Delete letters".
   needs in `wanted`, the orchestrator measures them and runs pass 2 again until it needs none.
 - Pass 2 keeps today's diagnostics as a `trace` the orchestrator logs.
 - One vertical rule everywhere: a vertical may be a straight line (as the review always allowed).
+
+### 13.3 Questions before S4 (S3 is done)
+
+**Q5 — Changes the assembly leaves out.** Besides the three kinds of §5.2, today's review lists
+recognized changes that can't be made together with another one (`markerAssembly.ts`): a close-up
+whose gap another change touches ("Another change …"), punctuation that can't go where it points,
+overlapping swaps or a change reaching over a swap's edge, a join with a break or a new paragraph
+between. They are placed marks, not unclear ones, and some are linked (numbered).
+- (a) Map them: a linked one becomes `placeOpen` (its place as the guess, the reason; ‹ › and Here
+  can solve it), a plain one `unclear` with its own reading as the one offered.
+- (b) A fourth kind `conflict` (picture, reason, the other change named; Drop / Ignore).
+- (c) Keep them out of To decide: one quiet line under Changes ("1 change left out: …").
+- *Recommendation: (a)* — one list, and the user can usually fix them with ‹ › or Here.
+
+**Q6 — Removing stray strokes.** Today an ignored mark on a textbox offers "Remove" (its strokes
+are deleted from the page with the next Apply, `editMarkerDrop.ts`). §5.3 offers only Ignore for
+an unclear mark.
+- (a) Ignore only (as §5.3): the strokes stay on the page, the item stays hidden.
+- (b) Ignore and Remove strokes (as today): both.
+- *Recommendation: (b)* — it exists, and cleaning a scribble off the page is often what is wanted.
+
+**Q7 — One unclear item per stroke, or per scribble.** Pass 2 refuses the strike family stroke by
+stroke, so a handwritten word over the text gives one unclear item per letter stroke ("Ignored
+marker 11", "Ignored marker 12", … today).
+- (a) One item per refused stroke (as today).
+- (b) Strokes refused by the strike family that lie close together over the same line (gap below
+  one letter height) form one item, with one picture and the words under all of them.
+- *Recommendation: (b)* — one scribble, one decision; it is a new grouping rule, tested in the
+  toDecide table test.
+
+S4 waits for the answers.
