@@ -99,6 +99,9 @@ All notable changes to Manuscript (formerly Textbox Tools) are listed here, newe
 
 ### Fixed
 
+- Linked import: a list (or paragraph) too long for one page is cut between its items and keeps its line breaks on the page; untouched, it is written back to the file exactly, also from notes imported with an older version, where its items had run together on the page. An edited one keeps one line per item.
+- Linked import: editing the paragraph right after a heading no longer adds a blank line after the heading in the file.
+- Linked import: when only line breaks or spaces of a block changed, Apply and Update say so in their warnings.
 - Manuscript Outline: the status (open, review, final) of the selected block can be set again; a long block shows its pages with ‹ › in the panel.
 - Manuscript Review: a selected row's frame no longer cuts the page line at its bottom or runs into the row above.
 - Imported textboxes are now written in NOTE's system font and sized for it, so their line spacing no longer changes when you edit one, and the last line is no longer cut off. Edit markers in textboxes without a font are measured in the same font, so the right words are struck.

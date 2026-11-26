@@ -12,6 +12,7 @@
  * indexes the file as read. Everything outside the frontmatter and the spans is whitespace.
  */
 import {headingTitleOf} from './headingText';
+import {LIST_ITEM} from './textWhitespace';
 
 export type SourceBlockRole = 'heading' | 'paragraph' | 'list' | 'protected';
 
@@ -53,7 +54,6 @@ type Line = {start: number; end: number; text: string};
 
 const HEADING = /^(#{1,6})[ \t]+(.*?)[ \t]*$/;
 const FENCE = /^[ \t]{0,3}(`{3,}|~{3,})/;
-const LIST = /^[ \t]*([-*+]|\d{1,9}[.)])[ \t]+/;
 const RULE = /^[ \t]{0,3}([-*_])([ \t]*\1){2,}[ \t]*$/;
 const EMBED = /^[ \t]*!\[\[[^\]]*\]\][ \t]*$/;
 const CALLOUT = /^[ \t]*>[ \t]*\[!/;
@@ -240,7 +240,7 @@ export function parseSourceBlocks(original: string): ParsedSource {
         ),
       });
     } else {
-      const role = LIST.test(blockLines[0].text) ? 'list' : 'paragraph';
+      const role = LIST_ITEM.test(blockLines[0].text) ? 'list' : 'paragraph';
       blocks.push({...base, role, level: 0, text: plainLines(blockLines)});
     }
     index = extent.last + 1;

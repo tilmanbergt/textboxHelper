@@ -6,8 +6,8 @@ import {
   estimateHeightForRect,
   type MeasureTextboxHeight,
   rectWithTopAndHeight,
-  splitLargeTextBlock,
 } from './paginationCore';
+import {indentAfterBreak, sentenceUnits, wordUnits, type CutUnit} from './textWhitespace';
 
 export type TextboxBlockPageChunk = {
   text: string;
@@ -75,11 +75,12 @@ async function fitsEmptyPage(params: {
   return height <= rectHeight(params.maxRect);
 }
 
-function splitWords(text: string): string[] {
-  return text.split(/\s+/).map(word => word.trim()).filter(Boolean);
-}
-
-/** A text too tall for the area, cut into pieces that each fit it: at sentence ends, else between words. */
+/**
+ * A text too tall for the area, cut into pieces that each fit it: at line breaks and sentence ends,
+ * else between words. Inside a piece the text keeps its own whitespace, line breaks included, so a
+ * list stays a list on the page; a piece after a cut at a line break starts with that line's
+ * indentation (`textWhitespace.ts`).
+ */
 export async function splitIntoPageFittingPieces(params: {
   text: string;
   maxRect: Rect;
@@ -89,7 +90,6 @@ export async function splitIntoPageFittingPieces(params: {
   addExplicitEmptyLineHeight?: boolean;
   measureHeight: MeasureTextboxHeight;
 }): Promise<string[]> {
-  const coarseParts = splitLargeTextBlock(params.text);
   const pieces: string[] = [];
   let buffer = '';
 
@@ -103,9 +103,11 @@ export async function splitIntoPageFittingPieces(params: {
       addExplicitEmptyLineHeight: params.addExplicitEmptyLineHeight,
       measureHeight: params.measureHeight,
     });
+  // A unit as the first text of a piece: no whitespace before it, but a line's indentation.
+  const opening = (unit: CutUnit) => `${indentAfterBreak(unit.before)}${unit.text}`;
 
-  for (const part of coarseParts) {
-    const candidate = buffer ? `${buffer} ${part}` : part;
+  for (const unit of sentenceUnits(params.text)) {
+    const candidate = buffer ? `${buffer}${unit.before}${unit.text}` : opening(unit);
 
     if (await tryFits(candidate)) {
       buffer = candidate;
@@ -117,29 +119,29 @@ export async function splitIntoPageFittingPieces(params: {
       buffer = '';
     }
 
-    if (await tryFits(part)) {
-      buffer = part;
+    if (await tryFits(opening(unit))) {
+      buffer = opening(unit);
       continue;
     }
 
-    let wordBuffer = '';
+    let wordBuffer = indentAfterBreak(unit.before);
 
-    for (const word of splitWords(part)) {
-      const wordCandidate = wordBuffer ? `${wordBuffer} ${word}` : word;
+    for (const word of wordUnits(unit.text)) {
+      const wordCandidate = wordBuffer.trim() ? `${wordBuffer}${word.before}${word.text}` : `${wordBuffer}${word.text}`;
 
       if (await tryFits(wordCandidate)) {
         wordBuffer = wordCandidate;
         continue;
       }
 
-      if (wordBuffer) {
+      if (wordBuffer.trim()) {
         pieces.push(wordBuffer);
       }
 
-      wordBuffer = word;
+      wordBuffer = word.text;
     }
 
-    if (wordBuffer) {
+    if (wordBuffer.trim()) {
       buffer = wordBuffer;
     }
   }

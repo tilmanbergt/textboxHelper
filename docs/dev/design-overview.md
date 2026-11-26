@@ -236,7 +236,10 @@ the original text. Every block becomes one textbox (protected ones a framed plac
 block tag (`domain/blockTag.ts`: source, block, piece, placeholder). The file's record - path,
 original text, blocks - is written first to `<plugin folder>/sources/<id>.json`
 (`storage/sourceStore.ts`). `domain/sourceExport.ts` regenerates the file from the note's
-textboxes and the original.
+textboxes and the original. A block too tall for a page is cut at line breaks and sentence ends,
+each piece keeping its own line breaks; on write-back its pieces are joined (a list item on a new
+line) and the file's whitespace is put back wherever the words are unchanged
+(`domain/textWhitespace.ts`), so an untouched cut block writes its original span.
 
 **Linked files** (`technical-design-linked-files.md`): a note can hold several linked files. Each
 starts with a divider - a textbox with the file's name (tag `k: 'f'`) under a NOTE title of ours

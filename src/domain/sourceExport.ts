@@ -7,14 +7,17 @@
  * - A textbox tagged with a block of this source whose text is still the block's text writes the
  *   original span byte for byte; an edited one writes its new text as it is: a heading's `#`s are
  *   part of its text, so a struck `#` changes the level in the file too.
- * - Pieces of a paragraph the import cut (same block, one after the other) are one block again.
+ * - Pieces of a block the import cut (same block, one after the other) are one block again: a
+ *   piece that starts a list item on a new line, any other after a space, and wherever the words
+ *   are unchanged with the file's own whitespace (`textWhitespace.ts`). So a cut list, untouched,
+ *   writes its original span, and edited keeps one line per item.
  * - An untagged textbox (a split tail, a joined textbox, typed or converted text) is new text,
  *   written as it is.
  * - A protected block's placeholder writes the original block, whatever the placeholder says.
  *   A protected block whose placeholder is gone is kept near its old place until the user confirms
  *   its removal (`removedProtected`); the write asks first (`pendingRemoval`).
- * - Between two blocks that were neighbours in the file and are both untouched, the original text
- *   between them is kept; elsewhere one blank line.
+ * - Between two blocks that were neighbours in the file, edited or not, the original text between
+ *   them is kept; elsewhere one blank line.
  * - A block in the aside area (technical-design-aside-area.md) is not in the segment; it counts as
  *   set aside, not as missing (`CrossingOptions.aside`).
  * - A textbox of another linked file in this file's segment is held back until the user confirms
@@ -24,6 +27,7 @@ import type {BlockTag} from './blockTag';
 import {headingLevelOf} from './headingText';
 import {blockName, type SourceBlock} from './sourceBlocks';
 import type {SourceRecord} from './sourceRecord';
+import {joinPieces, restoreWhitespace, sameWords} from './textWhitespace';
 
 /** A textbox of the note, in reading order. */
 export type SourceItem = {
@@ -90,7 +94,7 @@ export type CrossingOptions = {
 type Entry = {
   /** The source block, or null for new text. */
   index: number | null;
-  /** Untouched original span (unchanged or protected): separators can come from the file. */
+  /** Untouched original span (unchanged or protected), written as it is. */
   original: boolean;
   text: string;
 };
@@ -224,7 +228,7 @@ export function regenerateSource(
       pieces.push(inRange[at + 1].text);
       at++;
     }
-    const text = normalizeForCompare(pieces.join(' '));
+    const text = normalizeForCompare(restoreWhitespace(block.text, joinPieces(pieces)));
     const first = !seen.has(block.index);
     seen.add(block.index);
     if (first && text === normalizeForCompare(block.text)) {
@@ -239,7 +243,10 @@ export function regenerateSource(
     counts.edited++;
     const warning = block.role === 'list' ? listWarning(block, text) : null;
     const link = linkWarning(block, text);
-    for (const message of [warning, link]) {
+    // Whitespace alone changed (a line break typed): said once, a list's indentation warning says it.
+    const spacing =
+      !warning && sameWords(block.text, text) ? `Only line breaks or spaces changed in "${blockName(block)}".` : null;
+    for (const message of [warning, link, spacing]) {
       if (message) {
         warnings.push(message);
       }
@@ -339,8 +346,7 @@ function assemble(record: RecordPart, entries: Entry[]): string {
   entries.forEach((entry, position) => {
     if (position > 0) {
       const before = entries[position - 1];
-      const neighbours =
-        before.original && entry.original && before.index !== null && entry.index === before.index + 1;
+      const neighbours = before.index !== null && entry.index === before.index + 1;
       text += neighbours
         ? original.slice(blocks[before.index as number].end, blocks[entry.index as number].start)
         : `${eol}${eol}`;

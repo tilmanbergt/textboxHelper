@@ -10,6 +10,7 @@ import type {OutlineBlock} from './outlineModel';
 import type {Placement} from './outlineLayout';
 import {DEFAULT_TEXTBOX_MIN_HEIGHT, estimateHeightForRect, type MeasureTextboxHeight} from './paginationCore';
 import type {Rect} from './textboxModel';
+import {joinPieces} from './textWhitespace';
 
 export type CleanupScope = {kind: 'note'} | {kind: 'file'; sourceId: string};
 
@@ -57,9 +58,9 @@ export function pieceGroups(blocks: OutlineBlock[]): OutlineBlock[][] {
   return groups;
 }
 
-/** The text of a group: its pieces joined with a space, as the file gets them. */
+/** The text of a group: its pieces joined as the file gets them, a list item on a new line. */
 export function groupText(group: OutlineBlock[]): string {
-  return group.map(block => block.text).join(' ');
+  return joinPieces(group.map(block => block.text));
 }
 
 /**

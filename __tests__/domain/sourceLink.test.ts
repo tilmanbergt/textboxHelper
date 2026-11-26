@@ -237,6 +237,88 @@ describe('regenerating the file', () => {
     expect(regenerateSource(r, pieces).text).toBe('alpha beta delta\n');
   });
 
+  describe('a list taller than a page', () => {
+    const LIST_FILE = [
+      '### Factors',
+      'Same scale.',
+      '',
+      '- **Shared openly?** 4 — Sessions work. Sometimes too detailed.',
+      '- **Safe enough?** 5 (towards lead) / 5 (team) — he invites it.',
+      '- **Challenge instead of „playing safe"?** 2 — room to grow.',
+      '- **Few clear goals?** 4 — for him 60 % are clear, 40 % in the haze.',
+      '',
+      'Biggest lever: open.',
+      '',
+    ].join('\n');
+    // One pixel per character: a page of 150 holds the heading and paragraph, not the list.
+    const cut = async (original: string) => {
+      const r = record(original);
+      const pages = await paginateTextboxBlocksIntoPages({
+        blocks: r.blocks.map(b => ({role: 'paragraph' as const, text: b.text, fontSize: 36, bold: false, sourceIndex: b.index})),
+        maxRect: {left: 0, top: 0, right: 100, bottom: 150},
+        measureHeight: async text => text.length,
+      });
+      const items: SourceItem[] = pages.flatMap((page, at) =>
+        page.chunks.map(chunk => ({page: at, text: chunk.text, tag: tag(chunk.sourceIndex as number, {p: chunk.piece})})),
+      );
+      return {r, items};
+    };
+
+    it('is cut between its items, keeping the line breaks inside each piece', async () => {
+      const {items} = await cut(LIST_FILE);
+      const pieces = items.filter(item => item.tag?.i === 2).map(item => item.text);
+      expect(pieces.length).toBeGreaterThan(1);
+      expect(pieces.join('\n')).toBe(LIST_FILE.split('\n').slice(3, 7).join('\n'));
+    });
+
+    it('is written back byte for byte when untouched', async () => {
+      const {r, items} = await cut(LIST_FILE);
+      const result = regenerateSource(r, items);
+      expect(result.text).toBe(LIST_FILE);
+      expect(result.counts.edited).toBe(0);
+    });
+
+    it('is written back byte for byte from pieces an older import flattened', () => {
+      const r = record(LIST_FILE);
+      const flat = r.blocks[2].text.replace(/\s+/g, ' ');
+      const at = flat.indexOf('Sometimes');
+      const items = [
+        {page: 0, text: '### Factors', tag: tag(0)},
+        {page: 0, text: 'Same scale.', tag: tag(1)},
+        {page: 0, text: flat.slice(0, at - 1), tag: tag(2)},
+        {page: 1, text: flat.slice(at), tag: tag(2, {p: 1})},
+        {page: 1, text: 'Biggest lever: open.', tag: tag(3)},
+      ];
+      const result = regenerateSource(r, items);
+      expect(result.text).toBe(LIST_FILE);
+      expect(result.identical).toBe(true);
+      // An edit in one item keeps every item on its own line, also around the edit.
+      items[3] = {...items[3], text: items[3].text.replace('room to grow.', 'much room.')};
+      const edited = regenerateSource(r, items);
+      expect(edited.text).toBe(LIST_FILE.replace('room to grow.', 'much room.'));
+      expect(edited.counts.edited).toBe(1);
+    });
+  });
+
+  it('keeps the text between neighbouring blocks when one of them is edited', () => {
+    const r = record('## Context\nFirst sentence.\n\n## Next\nmore\n');
+    const items = imported(r);
+    items[1] = {...items[1], text: 'Replacement sentence.'};
+    const added = [...items.slice(0, 2), {page: 0, text: 'One added sentence.', tag: null}, ...items.slice(2)];
+    expect(regenerateSource(r, added).text).toBe(
+      '## Context\nReplacement sentence.\n\nOne added sentence.\n\n## Next\nmore\n',
+    );
+  });
+
+  it('warns when only the line breaks or spaces of a block changed', () => {
+    const r = record('alpha beta\n\nNext.\n');
+    const items = imported(r);
+    items[0] = {...items[0], text: 'alpha\nbeta'};
+    const result = regenerateSource(r, items);
+    expect(result.text).toBe('alpha\nbeta\n\nNext.\n');
+    expect(result.warnings).toEqual(['Only line breaks or spaces changed in "alpha beta".']);
+  });
+
   it('moves a protected block with its placeholder and ignores the placeholder text', () => {
     const r = record('Intro.\n\n```\ncode\n```\n\nEnd.\n');
     const items = imported(r);

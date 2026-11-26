@@ -74,6 +74,20 @@ describe('pieces', () => {
     expect(pieces.map(piece => piece.text)).toEqual(['One sentence. Two sentence.', 'Three here.']);
     expect(pieces.every(piece => piece.height <= 300)).toBe(true);
   });
+
+  it('joins a piece that starts a list item on a new line', () => {
+    const group = [block('a', 0, {text: '- one\n- two'}), block('b', 1, {piece: 1, text: '- three'})];
+    expect(groupText(group)).toBe('- one\n- two\n- three');
+    const tail = [block('a', 0, {text: '- one is'}), block('b', 1, {piece: 1, text: 'long'})];
+    expect(groupText(tail)).toBe('- one is long');
+  });
+
+  it('keeps the line breaks of a list it cuts, cutting between items', async () => {
+    const measure = async (text: string) => text.length * 10;
+    const area = {left: 0, top: 0, right: 500, bottom: 200};
+    const pieces = await fitText({text: '- one item\n- two item\n- three\n- four', area, fontSize: 36, measureHeight: measure});
+    expect(pieces.map(piece => piece.text)).toEqual(['- one item', '- two item\n- three', '- four']);
+  });
 });
 
 describe('clean up layout', () => {
