@@ -22,6 +22,35 @@ marks and puts a cheat sheet of the marks on a page of your choice.
   `MyStyle/Manuscript/fonts` (see Fonts below).
 - Handwriting recognition is the Supernote's own; tagged text can need a correction in the review.
 
+## Edit marks at a glance
+
+The same overview as **?** → Marks at a glance in Manuscript. Every mark has a page with a
+before/after picture in the help; the pictures are also in [docs/user/images/marks](docs/user/images/marks).
+
+|  | Mark | What it looks like |
+|---|---|---|
+| <img src="docs/user/images/marks/delete-icon.png" alt="Delete" height="48"> | **Delete** | A line through the words |
+| <img src="docs/user/images/marks/replace-icon.png" alt="Replace" height="48"> | **Replace** · + text | Strike, plus a small circle |
+| <img src="docs/user/images/marks/insert-icon.png" alt="Insert" height="48"> | **Insert** · + text | ∧ or V where the words go |
+| <img src="docs/user/images/marks/space-icon.png" alt="Space" height="48"> | **Space** | ∧ or V with a small cross |
+| <img src="docs/user/images/marks/delete-letters-icon.png" alt="Delete letters" height="48"> | **Delete letters** | Strike with two short lines |
+| <img src="docs/user/images/marks/slash-icon.png" alt="One letter" height="48"> | **One letter** | A slash through it |
+| <img src="docs/user/images/marks/punctuation-icon.png" alt="Punctuation" height="48"> | **Punctuation** | ∧ or V with a filled circle |
+| <img src="docs/user/images/marks/close-up-icon.png" alt="Close up" height="48"> | **Close up** | An arc under the gap |
+| <img src="docs/user/images/marks/close-up-wrap-icon.png" alt="Close up at a line end, join" height="48"> | **Close up at a line end, join** | Two arcs, end and start |
+| <img src="docs/user/images/marks/swap-icon.png" alt="Swap" height="48"> | **Swap** | Over one part, under the next |
+| <img src="docs/user/images/marks/paragraph-step-icon.png" alt="Break at a word" height="48"> | **Break at a word** | Step mark with a second line |
+| <img src="docs/user/images/marks/paragraph-sideways-icon.png" alt="Break between lines" height="48"> | **Break between lines** | < or > beside the text |
+| <img src="docs/user/images/marks/insert-paragraph-icon.png" alt="New paragraph" height="48"> | **New paragraph** · + text | < or > between paragraphs |
+
+**+ text:** Make the mark, then write the new words as the very next thing, anywhere on the page. Lasso them and tap Insertion or Replacement in the lasso toolbar.
+
+Grey numbers are placed by Manuscript when you tag text. They pair the text with its mark; you never write them.
+
+For a quick reference on the page, use **Put cheat sheet on this page** in Getting started:
+
+<img src="docs/user/images/cheatsheet/cheatsheet.png" alt="Manuscript · editing marks" width="600">
+
 ## Main Features
 
 ### Textbox Tools (lasso panel)

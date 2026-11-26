@@ -107,7 +107,10 @@ A change is not done while the docs describe the old behavior.
   documents.
 - **CHANGELOG.md**: every user-visible change gets a line under `## [Unreleased]` (Added, Changed,
   Fixed, Removed), written for users. This text becomes the GitHub release notes.
-- **README.md**: update "Main Features" when a feature is added, removed or changed.
+- **README.md**: update "Main Features" when a feature is added, removed or changed. "Edit marks
+  at a glance" mirrors the help's overview (`MARK_HELP` in `src/domain/markHelp.ts`, the icons in
+  `docs/user/images/marks/`); `__tests__/readmeMarks.test.ts` fails when a mark, its name or its line
+  differs.
 - **Developer docs** come in two kinds (list in `docs/dev/README.md`):
   - **Living documents** live directly in `docs/dev/` and describe the current state in present
     tense: no history, no open questions, no plans. Each starts with a short "About this
