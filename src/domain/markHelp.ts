@@ -11,7 +11,7 @@ export type MarkHelpEntry = {
   name: string;
   /** One line on the overview: what the mark looks like. */
   glance: string;
-  /** Whether the mark needs tagged handwriting written right after it. */
+  /** Whether the mark takes tagged handwriting, written as the very next thing after it. */
   needsText: boolean;
   /** How to draw it: one or two sentences. */
   draw: string;
@@ -44,9 +44,9 @@ export const MARK_HELP: MarkHelpEntry[] = [
     name: 'Replace',
     glance: 'Strike, plus a small circle',
     needsText: true,
-    draw: 'Strike the words, then a small circle right after the line or just above it. Then write the new words and tag them.',
+    draw: 'Strike the words, then a small circle at the end of the line or just above it. Then, as the very next thing, write the new words anywhere on the page and tag them.',
     keep: [
-      'Tag right after drawing: the text pairs with the mark drawn just before it.',
+      'Write the new words as the very next thing after the mark: the text pairs with the mark drawn just before it.',
       'No mark found? The card offers Select mark; nothing needs writing again.',
     ],
   },
@@ -55,7 +55,7 @@ export const MARK_HELP: MarkHelpEntry[] = [
     name: 'Insert',
     glance: '∧ or V where the words go',
     needsText: true,
-    draw: 'A ∧ or V on the line, its tip between two words or inside a word, big enough for the number between its legs (or draw an empty circle there for it). Then write the new text and tag it.',
+    draw: 'A ∧ or V on the line, its tip between two words or inside a word, big enough for the number between its legs (or draw an empty circle there for it). Then, as the very next thing, write the new text anywhere on the page and tag it.',
     keep: [
       'In a gap it adds words, with spaces; between letters it adds letters, without.',
       '"Check place" means the tip was between two lines: look where the text went.',
@@ -88,7 +88,7 @@ export const MARK_HELP: MarkHelpEntry[] = [
     name: 'One letter',
     glance: 'A slash through it',
     needsText: false,
-    draw: 'A short slash through the letter: on its own it deletes the letter; with tagged text written right after it, the text replaces it.',
+    draw: 'A short slash through the letter: on its own it deletes the letter; with tagged text written as the very next thing after it, the text replaces it.',
     keep: [
       'One letter (or punctuation mark) per slash; a slash through a space is ignored.',
       'Draw a small circle just above it if you want the number there.',
@@ -162,14 +162,14 @@ export const MARK_HELP: MarkHelpEntry[] = [
     name: 'New paragraph',
     glance: '< or > between paragraphs',
     needsText: true,
-    draw: 'A < or > in the space between two paragraphs. Then write the new paragraph and tag it.',
+    draw: 'A < or > in the space between two paragraphs. Then, as the very next thing, write the new paragraph anywhere on the page and tag it.',
     keep: ['The text becomes a textbox of its own; paragraphs below move down to make room.'],
   },
 ];
 
 /** The keys under the overview. */
 export const MARK_HELP_KEYS = {
-  text: 'Right after the mark, write the new words anywhere on the page, lasso them and tap Insertion or Replacement in the lasso toolbar.',
+  text: 'Make the mark, then write the new words as the very next thing, anywhere on the page. Lasso them and tap Insertion or Replacement in the lasso toolbar.',
   numbers: 'Grey numbers are placed by Manuscript when you tag text. They pair the text with its mark; you never write them.',
 };
 
@@ -228,7 +228,7 @@ export const GETTING_STARTED: StartBlock[] = [
   },
   {
     title: 'The buttons',
-    text: 'Manuscript (note toolbar): the card - Review lists the marks of the pages and applies them, Outline shows headings and paragraphs to move, Files imports, links and exports, Settings. Insertion or Replacement (lasso toolbar): lasso handwriting you wrote right after a mark to make it the new text. Comment or Image (lasso toolbar): keep handwriting beside the text as a comment or an image. Textbox Tools (lasso toolbar, with textboxes selected): split, join, clean up.',
+    text: 'Manuscript (note toolbar): the card - Review lists the marks of the pages and applies them, Outline shows headings and paragraphs to move, Files imports, links and exports, Settings. Insertion or Replacement (lasso toolbar): lasso the new words you wrote as the very next thing after a mark, anywhere on the page, to make them its new text. Comment or Image (lasso toolbar): keep handwriting beside the text as a comment or an image. Textbox Tools (lasso toolbar, with textboxes selected): split, join, clean up.',
   },
   {
     title: 'The core marks',

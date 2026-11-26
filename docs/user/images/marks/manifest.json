@@ -1,6 +1,6 @@
 {
   "delete": {
-    "hash": "486a7950b39c57a3",
+    "hash": "303c8fac8b771fd3",
     "width": 960,
     "height": 336,
     "bytes": 6247,
@@ -11,10 +11,10 @@
     }
   },
   "replace": {
-    "hash": "a4fef03f71333633",
+    "hash": "00cf1934962faba5",
     "width": 960,
     "height": 425,
-    "bytes": 10172,
+    "bytes": 9936,
     "icon": {
       "width": 212,
       "height": 80,
@@ -22,10 +22,10 @@
     }
   },
   "insert": {
-    "hash": "f8a6e9ab2153cc62",
+    "hash": "417806efbb9d42c2",
     "width": 960,
     "height": 425,
-    "bytes": 9782,
+    "bytes": 9545,
     "icon": {
       "width": 167,
       "height": 80,
@@ -33,7 +33,7 @@
     }
   },
   "space": {
-    "hash": "d3f8e303189089e3",
+    "hash": "9f236dc33b3ce617",
     "width": 960,
     "height": 374,
     "bytes": 7267,
@@ -44,7 +44,7 @@
     }
   },
   "delete-letters": {
-    "hash": "1d6b1c80b280a81b",
+    "hash": "af8603179b4b6100",
     "width": 960,
     "height": 336,
     "bytes": 5698,
@@ -55,10 +55,10 @@
     }
   },
   "slash": {
-    "hash": "be9b497ce09839ac",
+    "hash": "61136df75bac6b88",
     "width": 960,
     "height": 425,
-    "bytes": 9909,
+    "bytes": 9671,
     "icon": {
       "width": 211,
       "height": 64,
@@ -66,7 +66,7 @@
     }
   },
   "punctuation": {
-    "hash": "39bb882fdee6bb2d",
+    "hash": "06e489ce94bc9b3d",
     "width": 960,
     "height": 390,
     "bytes": 7111,
@@ -77,7 +77,7 @@
     }
   },
   "close-up": {
-    "hash": "849723c98a513734",
+    "hash": "ec251b7fe14d8e0e",
     "width": 960,
     "height": 342,
     "bytes": 6715,
@@ -88,7 +88,7 @@
     }
   },
   "close-up-wrap": {
-    "hash": "ecbdf2fd4f20f08e",
+    "hash": "d57eccd282b213e7",
     "width": 960,
     "height": 394,
     "bytes": 8529,
@@ -99,7 +99,7 @@
     }
   },
   "swap": {
-    "hash": "3dc34ccb4ae37c10",
+    "hash": "7afb991ae59a0c76",
     "width": 960,
     "height": 336,
     "bytes": 6339,
@@ -110,7 +110,7 @@
     }
   },
   "paragraph-step": {
-    "hash": "0fa47c81ecbe5664",
+    "hash": "e6ec7e972711eb38",
     "width": 960,
     "height": 441,
     "bytes": 9991,
@@ -121,7 +121,7 @@
     }
   },
   "paragraph-sideways": {
-    "hash": "ea018df6b108dbf1",
+    "hash": "1be8bc0f479ea2cc",
     "width": 960,
     "height": 705,
     "bytes": 18574,
@@ -132,10 +132,10 @@
     }
   },
   "insert-paragraph": {
-    "hash": "a833a0c6a58b1e9c",
+    "hash": "6529bd85338d2681",
     "width": 960,
     "height": 742,
-    "bytes": 17534,
+    "bytes": 17296,
     "icon": {
       "width": 321,
       "height": 143,

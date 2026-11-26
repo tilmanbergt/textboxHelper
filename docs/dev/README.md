@@ -59,8 +59,10 @@ To change a picture: edit the spec (or `scripts/lib/markDrawing.mjs` for every p
 `npm run marks`, look at the PNGs, commit them with the spec.
 
 The cheat sheet (`docs/user/images/cheatsheet/cheatsheet.png`, put on a page from Getting
-started) is drawn by `npm run cheatsheet` from the core marks' icons and the rows in
-`scripts/cheatsheet.mjs`; `npm run check` fails when it is older than the script or an icon.
+started) is drawn by `npm run cheatsheet`: the examples in `docs/user/marks/cheatsheet.mjs` (same
+entry format as the marks, drawn by `drawMarkExample` in `markDrawing.mjs`), laid out by
+`scripts/cheatsheet.mjs`; `npm run check` fails when it is older than the examples, the script or
+the drawing.
 `gen-mark-images.mjs` bundles it as `CHEAT_SHEET`.
 
 ## Code tour
@@ -78,7 +80,7 @@ started) is drawn by `npm run cheatsheet` from the core marks' icons and the row
 | `src/ui/` | Shared building blocks of the screens: `ScreenFrame`, buttons, tabs, paging (`PagedSection`, `PagedText`), the help (`HelpOverlay`, `MarkHelp`), `theme.ts`; `generated/` holds the bundled help pictures (not committed). |
 | `__tests__/domain/`, `__tests__/ui/` | Jest tests, one file per domain module or group; `ui/` for the help screen and its pictures. |
 | `__tests__/marks/` | The edit marks' tests, in the shape of the two passes: pass 1 (`pass1.read`, `pass1.sameJudge`, `pass1.lookBack`; cases in `pass1.cases.ts`), pass 2 (`pass2.place`), both together on a page (`pass12.resolve`); builders that draw marks and lay out textboxes (`build.ts`), and the golden record of the review (`golden.test.ts`): pages served by a fake host (`golden/host.ts`, `golden/pages.ts`) and the changes and ignored marks today's review gives for each (`golden/*.json`). Helpers there are no test files: Jest runs only `*.test.ts(x)`. |
-| `scripts/` | `marks.mjs`, `gen-mark-images.mjs`, `test-marks.mjs`: drawing, bundling and checking the help pictures. `version.mjs` and `lib/versioning.mjs` (tested by `test-versioning.mjs`): build labels, build info and the release helpers. `ci-build.mjs`, `lib/ciBuild.mjs` (`test-ci-build.mjs`): steps of the GitHub builds. `test-notes.mjs`, `lib/testNotes.mjs` (`test-test-notes.mjs`): TESTING.md. `release.ps1`: the release (`RELEASING.md` §5). `cheatsheet.mjs` (`npm run cheatsheet`): draws the cheat sheet of the editing marks from the marks' icons to `docs/user/images/cheatsheet/` (committed; `--check` in `npm run check`). |
+| `scripts/` | `marks.mjs`, `gen-mark-images.mjs`, `test-marks.mjs`: drawing, bundling and checking the help pictures. `version.mjs` and `lib/versioning.mjs` (tested by `test-versioning.mjs`): build labels, build info and the release helpers. `ci-build.mjs`, `lib/ciBuild.mjs` (`test-ci-build.mjs`): steps of the GitHub builds. `test-notes.mjs`, `lib/testNotes.mjs` (`test-test-notes.mjs`): TESTING.md. `release.ps1`: the release (`RELEASING.md` §5). `cheatsheet.mjs` (`npm run cheatsheet`): draws the cheat sheet of the editing marks from `docs/user/marks/cheatsheet.mjs` to `docs/user/images/cheatsheet/` (committed; `--check` in `npm run check`). |
 | `.github/workflows/` | `check.yml`: checks and a test build on every push. `beta.yml`: a beta pre-release by button. |
 | `src/generated/` | `buildInfo.ts`: version, label and commit of the build (written by `scripts/version.mjs`, not committed). |
 | `docs/user/marks/`, `docs/user/images/marks/` | The help pictures' spec and the drawn PNGs. |

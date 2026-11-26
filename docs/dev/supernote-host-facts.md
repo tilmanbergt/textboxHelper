@@ -57,12 +57,12 @@ Library: `sn-plugin-lib` 0.2.3.
   the plugin matches a title to its textbox by their rectangles. Whether NOTE keeps a title's
   `userData` through saves and edits is checked on the device.
 - **Pictures:** `PluginNoteAPI.insertImage(path)` puts a PNG (or JPG) into the open page; the
-  host checks that the file exists, and where the picture lands is its choice
+  host checks that the file exists, and where the picture lands is its choice (the middle of the page)
   (`supernote/noteImage.ts`, the cheat sheet). The file is written to the plugin's own folder
   first. A picture is an element of type 200; marks are only strokes and straight lines, so a
-  picture is never read as one. Whether it works with the plugin view open, where it lands, and
-  whether it moves, erases and survives saving like any picture is checked on the device; if
-  inserting fails, the cheat sheet goes to EXPORT instead.
+  picture is never read as one. It works with the plugin view open; the picture lands in the
+  middle of the page and the user moves, resizes and erases it like any picture (device, A5 X).
+  If inserting fails, the cheat sheet goes to EXPORT instead.
 - **Folder listing:** a bound folder is listed with `RNFS.readDir` (`storage/folderFiles.ts`);
   whether that works in every folder the file selector offers (Document, the sync folder) is
   checked on the device.

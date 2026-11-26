@@ -35,7 +35,7 @@ marks and puts a cheat sheet of the marks on a page of your choice.
 ### Edit Markers
 
 - Recognize handwritten delete markers
-- Recognize replace markers as a delete line plus a small loop, with the new text tagged right after
+- Recognize replace markers as a delete line plus a small loop, with the new text written as the very next thing after the mark, anywhere on the page, and tagged
 - Single letters: a strike with two short lines across its ends deletes exactly what is between them; a slash marks one letter, also when drawn slanted
 - Close up a space with an arc under the gap; join two lines or two paragraphs with two arcs
 - Put in punctuation with a caret and a small circle holding the mark, without tagging
@@ -48,7 +48,7 @@ marks and puts a cheat sheet of the marks on a page of your choice.
 - Tag handwritten new text with one lasso button, "Insertion or Replacement", instead of converting it to text first
 - The mark drawn just before the text decides: a replace mark makes it a replacement, a caret an insertion; a small number at both shows which belong together
 - No mark found? The text keeps a "?". Select mark: draw or lasso the mark and tap the button again; the "?" becomes its number and the text never needs to be written again. Or Insert right here: it becomes a new paragraph where its handwriting starts
-- An insertion is written right after a caret (a V on the line or a ∧ under it): between words, inside a word, or between paragraphs; paragraphs below move down to make room
+- An insertion is written as the very next thing after a caret, anywhere on the page (a V on the line or a ∧ under it): between words, inside a word, or between paragraphs; paragraphs below move down to make room
 - Manuscript recognizes the tagged text while you read, shows a picture of the handwriting, and lets you fix the text in place with the Supernote keyboard's handwriting input
 - Fine-tune any change by one character (a comma, a space, a letter; a swap's three edges), and drop a change or an unused mark, keeping or erasing your handwriting
 - The handwriting and its picture are kept in the plugin folder (`pen-edits/`)

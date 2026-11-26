@@ -6,7 +6,7 @@ All notable changes to Manuscript (formerly Textbox Tools) are listed here, newe
 
 ### Added
 
-- **Cheat sheet**: Getting started has "Put cheat sheet on this page": a picture of the editing marks (delete, replace, insert, change letters, one letter) goes onto the current page, to move with the lasso and erase like any picture. Manuscript never reads it as a mark. Where the picture can't be inserted, it is saved to EXPORT as manuscript-cheatsheet.png instead.
+- **Cheat sheet**: Getting started has "Put cheat sheet on this page": a picture "Manuscript · editing marks" with eight examples whose text says what the mark does (delete, replace, insert, one letter, exact letters, space, close up, swap), "+ text" where the mark takes new words, goes onto the current page, to move with the lasso and erase like any picture. Manuscript never reads it as a mark. Where the picture can't be inserted, it is saved to EXPORT as manuscript-cheatsheet.png instead.
 - **Getting started**: the help (?) in Manuscript starts with what Manuscript does, the toolbar buttons, the core marks and the first things to do; it opens by itself once, the first time Manuscript opens. Its last line shows the plugin version.
 - **Report a problem** (Manuscript → Settings → Diagnostics): one file in EXPORT for a bug report, with the version, device, settings, how the last marks were read, the timings and the errors of this session. Your text is only in it when you tick "Include the text of this page". It replaces Save Diagnostics and Save timings.
 - Settings → Diagnostics shows the plugin version and the device in its first line.
@@ -66,6 +66,7 @@ All notable changes to Manuscript (formerly Textbox Tools) are listed here, newe
 
 ### Changed
 
+- The help says plainly when tagged words belong to a mark: write them as the very next thing after the mark, anywhere on the page ("right after" could be read as "to the right of").
 - The plugin is now called **Manuscript** (it was Textbox Tools); the lasso panel for split, join and clean-up keeps the name Textbox Tools. It installs over the old version, with your settings and pen edits. **Move fonts you copied to `MyStyle/TextboxHelper/fonts` to `MyStyle/Manuscript/fonts`**: the old folder is no longer read. Files the plugin saves to EXPORT start with `manuscript-`.
 - Tagged text without a mark keeps a "?" on the page instead of a number; numbers are given only when the text is linked to its mark and count only linked texts, so they stay in order. Select mark turns the "?" into the next number. The card after tagging says "No mark found for this text" and offers Select mark now or Later.
 - Select mark on strokes that are no clear mark changes nothing and shows "Not a clear mark" with a picture of the strokes, why, Try again and Cancel.
