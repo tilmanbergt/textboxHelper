@@ -1,4 +1,4 @@
-# Textbox Tools - design overview
+# Manuscript - design overview
 
 > **About this document.** How the plugin is built and why: the flow from a button press to a
 > changed note, the layers, the features and where they live. Living document:
@@ -33,11 +33,11 @@ import which (`DEVELOPMENT-POLICY.md` §3).
 | Layer | Holds | Imports |
 |---|---|---|
 | `domain/` | Pure logic and its types: text splitting, edit plans, marker recognition math, pagination, import planning, export classification, backup payloads. No React Native, no SDK, no I/O. | `domain/` only |
-| `utils/` | Cross-cutting helpers: the edit-marker diagnostics trace (`editMarkerLog.ts`). | `domain/` |
+| `utils/` | Cross-cutting helpers: the edit-marker diagnostics trace (`editMarkerLog.ts`), the session's errors and warnings (`errorLog.ts`, installed in `index.js`). | `domain/` |
 | `supernote/` | Everything that talks to the device: `sn-plugin-lib` calls (`noteElements.ts`, `noteTextInsertion.ts`, `markerStrokeRead.ts`, `exportNoteContext.ts`), the native measurement (`textboxMetrics.ts`), routing and permissions. | `domain/`, `utils/` |
 | `storage/` | File I/O: backups (`backupFile.ts`), JSON into EXPORT (`exportFile.ts`), the import text file (`importFile.ts`), DOCX (`docxExport.ts`), pen edits (`penEditStore.ts`). | the three above |
 | `actions/` | The flows behind the buttons: preview, backup, change. | everything above |
-| `ui/` | Shared building blocks of the screens: `ScreenFrame`, `PillButton`, `Segmented`, `Checkbox`, `CountTabs`, paging (`pagination.ts`, `PagedSection`, `PagedText`), `HelpOverlay`, `MarkHelp` (the edit-marker help with pictures, technical-design-mark-help.md), `NumberField`, `theme.ts` (technical-design-calmer-screens.md). | everything above |
+| `ui/` | Shared building blocks of the screens: `ScreenFrame`, `PillButton`, `Segmented`, `Checkbox`, `CountTabs`, paging (`pagination.ts`, `PagedSection`, `PagedText`), `HelpOverlay`, `MarkHelp` (Getting started and the edit-marker help with pictures, technical-design-mark-help.md), `ErrorBoundary` (in `ScreenFrame`: a screen crash shows a card with Report a problem), `NumberField`, `theme.ts` (technical-design-calmer-screens.md). | everything above |
 | `screens/` | One file per screen or dialog. | everything |
 
 An action has three parts: what changes (`domain/`), reading and changing the note
@@ -57,7 +57,7 @@ check fail if the SDK types drift away from them.
 it opens one screen per button, keyed by the press,
 so a screen opened again starts fresh. The button listener subscribes once and calls the latest
 router through a ref. Screens are built on `ui/ScreenFrame.tsx` and own their state in a hook next
-to them: `screens/manuscript/` (the Manuscript card: `ReviewTab` with its page strip, its tabs New text, Marks and To decide (`domain/reviewLists.ts`) and side bar `ChangeSide`, the Outline in `outline/`, the Files tab in `files/` and Settings in `settings/`; the page states are `domain/manuscriptPages.ts`; the outline is `domain/outlineModel.ts` (what a block is: a file's divider, a heading by its `#`s — `domain/headingText.ts` — or a paragraph; statuses in `storage/blockStatusStore.ts`, block tags `domain/blockTag.ts`), what its panes show `domain/outlineContents.ts` (the Contents, each entry's own paragraphs, the filter, the moves offered), planned moves, levels, set-asides and deletes `domain/outlinePlan.ts`, their new places `domain/outlineLayout.ts`, and `actions/outlineApply.ts` checks and writes them; the tab (`outline/OutlineTab.tsx`) renders `outline/useOutline.ts` (data and plan) through `outline/useOutlineView.ts` (filter or Set aside view, open entry, panel subject, Move to and Move back) in `ContentsColumn`, `ParagraphList` and `DetailsPanel` (its actions from `domain/outlineActions.ts`), with the shared light controls `ui/TextChoices.tsx`, `ui/ActionBar.tsx`, `ui/TextLink.tsx`, `ui/EmptyState.tsx` and the symbols in `ui/glyphs.ts`; what was read is kept in memory by `actions/manuscriptCache.ts` with a page fingerprint, `domain/pageFingerprint.ts`, and checked again in the background by `usePageChecks.ts`; timings are `utils/perf.ts`, saved by `actions/timingsExport.ts`), `screens/tools/` (the lasso screen,
+to them: `screens/manuscript/` (the Manuscript card: `ReviewTab` with its page strip, its tabs New text, Marks and To decide (`domain/reviewLists.ts`) and side bar `ChangeSide`, the Outline in `outline/`, the Files tab in `files/` and Settings in `settings/`; the page states are `domain/manuscriptPages.ts`; the outline is `domain/outlineModel.ts` (what a block is: a file's divider, a heading by its `#`s — `domain/headingText.ts` — or a paragraph; statuses in `storage/blockStatusStore.ts`, block tags `domain/blockTag.ts`), what its panes show `domain/outlineContents.ts` (the Contents, each entry's own paragraphs, the filter, the moves offered), planned moves, levels, set-asides and deletes `domain/outlinePlan.ts`, their new places `domain/outlineLayout.ts`, and `actions/outlineApply.ts` checks and writes them; the tab (`outline/OutlineTab.tsx`) renders `outline/useOutline.ts` (data and plan) through `outline/useOutlineView.ts` (filter or Set aside view, open entry, panel subject, Move to and Move back) in `ContentsColumn`, `ParagraphList` and `DetailsPanel` (its actions from `domain/outlineActions.ts`), with the shared light controls `ui/TextChoices.tsx`, `ui/ActionBar.tsx`, `ui/TextLink.tsx`, `ui/EmptyState.tsx` and the symbols in `ui/glyphs.ts`; what was read is kept in memory by `actions/manuscriptCache.ts` with a page fingerprint, `domain/pageFingerprint.ts`, and checked again in the background by `usePageChecks.ts`; timings are `utils/perf.ts`, summarized in the report of `actions/problemReport.ts`), `screens/tools/` (the lasso screen,
 its Details with "Log All Textboxes"),
 `screens/import/` (Import with the page drawing) and `screens/export/` (Export), both opened as
 sub-screens from the Manuscript card's Files tab. Every sub-screen (Settings, Import, Export) is
@@ -140,8 +140,8 @@ options an unclear mark offers and the edges and result of a place are `marks/de
 `actions/markerMeasure.ts` measures a textbox once per review, only when pass 2 asks for it, and
 locks textboxes whose font can't be read (their marks are ignored) - places insertions at their
 carets and builds the preview in named steps; `actions/markerApply.ts` applies the plan;
-`actions/markerCalibration.ts` keeps the calibration and saves the diagnostics (pass 2's trace is
-logged there). The other pure parts are in `domain/markerStrokes.ts`, `domain/markerText.ts`,
+`actions/markerCalibration.ts` keeps the calibration and the pages in the diagnostics trace (pass
+2's trace is logged there). The other pure parts are in `domain/markerStrokes.ts`, `domain/markerText.ts`,
 `domain/markerTypes.ts`, `domain/markerAssembly.ts`, `domain/swapText.ts` (a swap makes the changes
 inside its parts first) and `domain/edgeShift.ts` (one to three edges per change). The analysis
 runs once; the preview is assembled from it, the tagged texts and the user's edge nudges (one
@@ -202,9 +202,21 @@ pruned after every backup write. Unlinking a file removes its two text copies; e
 their temporary file after the copy into EXPORT. Settings → Diagnostics → Storage shows the plugin
 folder's size and runs it on demand (Clean up now).
 
-Every stage of a marker preview is also recorded in memory (`utils/editMarkerLog.ts`); "Save
-Diagnostics" (Manuscript → Settings → Diagnostics) writes that trace, with the stroke's raw sample points next to
-the points recognition used, as JSON to the EXPORT folder - only when the user taps it.
+Every stage of a marker preview is also recorded in memory (`utils/editMarkerLog.ts`), and every
+`console.error` and `console.warn` goes into a ring of the session's newest 50 (`utils/errorLog.ts`).
+**Report a problem** (Manuscript → Settings → Diagnostics, technical-design-release-readiness.md
+§4) writes one JSON file to EXPORT - only when the user taps it: build label, device, the open
+note's name and size, settings, that trace (with the stroke's raw sample points next to the
+points recognition used), the timings and the session's errors, built by
+`domain/problemReport.ts`. Without "Include the text of this page" every text preview is replaced
+by its length and every path by its file name. The version line at the top of Diagnostics comes
+from `src/generated/buildInfo.ts`.
+
+**Getting started and the cheat sheet** (technical-design-release-readiness.md §5, §6): the help
+behind "?" in Manuscript starts with `GETTING_STARTED` (`domain/markHelp.ts`), paged by
+`domain/markHelpPages.ts`; it opens by itself once while `settings.onboarding.seen` is false.
+"Put cheat sheet on this page" writes the bundled `CHEAT_SHEET` PNG to the plugin folder and
+inserts it with `supernote/noteImage.ts` (`actions/cheatSheet.ts`), or copies it to EXPORT.
 
 ### Text import (`actions/textImport.ts`)
 
@@ -296,7 +308,7 @@ rendering is described in `supernote-host-facts.md` §4. `src/supernote/textboxM
 single source of truth for textbox height; its pure half (calibration, fallback estimate, empty
 lines) is `src/domain/textboxLayout.ts`. The module measures in the textbox's own font. A font
 the plugin can't open in the NOTE app's folder is loaded from a readable copy (`MyStyle/fonts`,
-then `MyStyle/TextboxHelper/fonts`, `src/domain/fontPaths.ts`); `typefaceStatus` in every result
+then `MyStyle/Manuscript/fonts`, `src/domain/fontPaths.ts`); `typefaceStatus` in every result
 says which font was used. When no copy is found, the measurement remembers the font, and the
 marker preview, the textbox actions and the import append a warning to their message
 (`resetFontWarnings`/`getFontWarning` in `textboxMetrics.ts`).

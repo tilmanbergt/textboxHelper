@@ -2,6 +2,9 @@
  * The edit-marker help (technical-design-mark-help.md §4): an opaque layer over the review, like
  * HelpOverlay, with fixed pages instead of paged text.
  *
+ * 0. Getting started (technical-design-release-readiness.md §5): what Manuscript does, the buttons,
+ *    the core marks as overview rows, first things to do with "Put cheat sheet on this page", and
+ *    a footer line: on the first start that it is shown once, else the version.
  * 1. Marks at a glance: one row per mark (its shape, name, what it looks like, "+ text" when it
  *    needs tagged text, the page with its picture; a tap goes there), then the two keys.
  * 2. Each mark: the picture (marked, then after Apply), how to draw it, what to keep in mind.
@@ -12,7 +15,7 @@
  */
 import React, {useCallback, useEffect, useMemo, useState} from 'react';
 import {Image, Pressable, StyleSheet, Text, View, type LayoutChangeEvent} from 'react-native';
-import {MARK_HELP, MARK_HELP_KEYS, REVIEW_HELP, type MarkHelpEntry} from '../domain/markHelp';
+import {GETTING_STARTED, MARK_HELP, MARK_HELP_KEYS, REVIEW_HELP, type MarkHelpEntry} from '../domain/markHelp';
 import {
   MARK_HELP_LAYOUT as L,
   markHelpPages,
@@ -25,6 +28,7 @@ import PageHeader from './PageHeader';
 import PillButton from './PillButton';
 import {COLORS, FONT, SPACING} from './theme';
 import {requestEinkRefresh} from '../utils/screenRefresh';
+import {BUILD_INFO} from '../generated/buildInfo';
 
 /**
  * dp per picture pixel: the pictures are drawn with 34 px text, shown at 17 dp like the body
@@ -62,9 +66,13 @@ function iconSize(id: string): PictureSize | null {
 interface Props {
   title: string;
   onClose: () => void;
+  /** The first start: the footer says Getting started is shown once. */
+  firstStart?: boolean;
+  /** "Put cheat sheet on this page" on Getting started; absent, the button is not shown. */
+  onCheatSheet?: () => void;
 }
 
-export default function MarkHelp({title, onClose}: Props): React.JSX.Element {
+export default function MarkHelp({title, onClose, firstStart, onCheatSheet}: Props): React.JSX.Element {
   const [box, setBox] = useState<PictureSize | null>(null);
   const [page, setPage] = useState(0);
 
@@ -78,7 +86,15 @@ export default function MarkHelp({title, onClose}: Props): React.JSX.Element {
   const pages = useMemo(
     () =>
       box
-        ? markHelpPages(MARK_HELP, REVIEW_HELP, [MARK_HELP_KEYS.text, MARK_HELP_KEYS.numbers], pictureSizes(box.width), box.width, box.height)
+        ? markHelpPages(
+            MARK_HELP,
+            REVIEW_HELP,
+            [MARK_HELP_KEYS.text, MARK_HELP_KEYS.numbers],
+            pictureSizes(box.width),
+            box.width,
+            box.height,
+            GETTING_STARTED,
+          )
         : [],
     [box],
   );
@@ -100,7 +116,15 @@ export default function MarkHelp({title, onClose}: Props): React.JSX.Element {
         onNext={() => setPage(current + 1)}
       />
       <View style={styles.box} onLayout={onLayout}>
-        {pages[current] && <HelpPage page={pages[current]} pages={pages} onJump={setPage} />}
+        {pages[current] && (
+          <HelpPage
+            page={pages[current]}
+            pages={pages}
+            onJump={setPage}
+            firstStart={firstStart}
+            onCheatSheet={onCheatSheet}
+          />
+        )}
       </View>
     </View>
   );
@@ -110,11 +134,44 @@ function HelpPage({
   page,
   pages,
   onJump,
+  firstStart,
+  onCheatSheet,
 }: {
   page: MarkHelpPage;
   pages: MarkHelpPage[];
   onJump: (page: number) => void;
+  firstStart?: boolean;
+  onCheatSheet?: () => void;
 }): React.JSX.Element {
+  if (page.kind === 'start') {
+    return (
+      <View style={styles.start}>
+        <View>
+          <Text style={styles.heading}>{page.first ? 'Getting started' : 'Getting started (continued)'}</Text>
+          {page.blocks.map((block, index) => (
+            <View key={block.title} style={index > 0 && styles.blockGap}>
+              <Text style={styles.name}>{block.title}</Text>
+              <Text style={styles.body}>{block.text}</Text>
+              {(block.marks ?? []).map(id => {
+                const entry = ENTRIES_BY_ID.get(id);
+                return entry ? <OverviewRow key={id} entry={entry} page={pageOfMark(pages, id)} onJump={onJump} /> : null;
+              })}
+              {block.cheatSheet && onCheatSheet ? (
+                <View style={styles.buttonRow}>
+                  <PillButton label="Put cheat sheet on this page" onPress={onCheatSheet} />
+                </View>
+              ) : null}
+            </View>
+          ))}
+        </View>
+        <Text style={styles.footer} numberOfLines={2}>
+          {firstStart
+            ? 'This is shown once. It’s always under ? › Getting started.'
+            : `Manuscript ${BUILD_INFO.label}`}
+        </Text>
+      </View>
+    );
+  }
   if (page.kind === 'overview') {
     return (
       <View>
@@ -359,5 +416,21 @@ const styles = StyleSheet.create({
   },
   blockGap: {
     marginTop: L.sectionGap,
+  },
+  start: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    paddingTop: SPACING.sm,
+    height: L.buttonHeight,
+  },
+  footer: {
+    minHeight: L.footerHeight,
+    paddingTop: SPACING.sm,
+    fontSize: L.fontSize,
+    lineHeight: L.lineHeight,
+    color: COLORS.muted,
   },
 });

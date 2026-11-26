@@ -24,6 +24,10 @@ import {
 import {startNoteTag} from './src/actions/noteTag';
 import {presentEarlyNoMark, presentTagOutcome, tagPenEdit} from './src/actions/penEditTag';
 import {initPluginRouting} from './src/supernote/pluginRouting';
+import {installErrorCapture} from './src/utils/errorLog';
+
+// Keeps this session's errors and warnings for Report a problem (in memory only).
+installErrorCapture();
 
 AppRegistry.registerComponent(appName, () => App);
 

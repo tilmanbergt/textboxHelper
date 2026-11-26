@@ -12,7 +12,7 @@ import {logEditMarker} from '../utils/editMarkerLog';
 
 /**
  * Reading a marker's stroke from the SDK: its sample points, recognition points or outline, and
- * the statistics recognition works with. Every source is logged for "Save Diagnostics".
+ * the statistics recognition works with. Every source is logged for Report a problem.
  */
 
 type RecognPointLike = {

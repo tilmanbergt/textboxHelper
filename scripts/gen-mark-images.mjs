@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Bundles the mark pictures into the plugin (technical-design-mark-help.md §2, as Kept GTD does
-// with its help images): docs/user/images/marks/*.png become base64 data URIs in
+// with its help images), and the cheat sheet (docs/user/images/cheatsheet/cheatsheet.png,
+// technical-design-release-readiness.md §6): the PNGs become base64 data URIs in
 // src/ui/generated/markImages.ts, which ui/MarkHelp shows with <Image>. Nothing depends on asset
 // paths inside the .snplg. The generated file is not committed: postinstall and npm run check
 // write it. Needs no dev dependencies.
@@ -11,6 +12,7 @@ import {fileURLToPath} from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const IMAGES = join(ROOT, 'docs', 'user', 'images', 'marks');
 const OUT = join(ROOT, 'src', 'ui', 'generated', 'markImages.ts');
+const CHEAT_SHEET = join(ROOT, 'docs', 'user', 'images', 'cheatsheet', 'cheatsheet.png');
 
 /** Width and height from a PNG's header. */
 function pngSize(bytes) {
@@ -19,9 +21,9 @@ function pngSize(bytes) {
 }
 
 const manifest = JSON.parse(readFileSync(join(IMAGES, 'manifest.json'), 'utf8'));
-const entry = name => {
-  const file = join(IMAGES, name);
-  if (!existsSync(file)) throw new Error(`gen-mark-images: ${name} is missing: run npm run marks.`);
+const entry = (name, dir = IMAGES) => {
+  const file = join(dir, name);
+  if (!existsSync(file)) throw new Error(`gen-mark-images: ${name} is missing: run npm run marks (or npm run cheatsheet).`);
   const bytes = readFileSync(file);
   const {width, height} = pngSize(bytes);
   return `{uri: 'data:image/png;base64,${bytes.toString('base64')}', width: ${width}, height: ${height}}`;
@@ -40,6 +42,11 @@ for (const id of Object.keys(manifest).sort()) {
   lines.push(`  '${id}': {`, `    picture: ${entry(`${id}.png`)},`, `    icon: ${entry(`${id}-icon.png`)},`, '  },');
 }
 lines.push('};', '');
+lines.push(
+  '/** The cheat sheet of the editing marks, put on a page by "Put cheat sheet on this page". */',
+  `export const CHEAT_SHEET: MarkImage = ${entry('cheatsheet.png', dirname(CHEAT_SHEET))};`,
+  '',
+);
 mkdirSync(dirname(OUT), {recursive: true});
 writeFileSync(OUT, lines.join('\n'));
 console.log(`gen-mark-images: ${Object.keys(manifest).length} marks -> src/ui/generated/markImages.ts`);

@@ -11,7 +11,7 @@ export type MarkHelpEntry = {
   name: string;
   /** One line on the overview: what the mark looks like. */
   glance: string;
-  /** Whether the mark needs tagged handwriting written right after it. */
+  /** Whether the mark takes tagged handwriting, written as the very next thing after it. */
   needsText: boolean;
   /** How to draw it: one or two sentences. */
   draw: string;
@@ -20,6 +20,12 @@ export type MarkHelpEntry = {
 };
 
 export type HelpBlock = {title: string; text: string};
+
+/**
+ * A block of Getting started (technical-design-release-readiness.md §5.1): text, optionally the
+ * overview rows of some marks below it, and the cheat sheet button.
+ */
+export type StartBlock = HelpBlock & {marks?: string[]; cheatSheet?: boolean};
 
 export const MARK_HELP: MarkHelpEntry[] = [
   {
@@ -38,9 +44,9 @@ export const MARK_HELP: MarkHelpEntry[] = [
     name: 'Replace',
     glance: 'Strike, plus a small circle',
     needsText: true,
-    draw: 'Strike the words, then a small circle right after the line or just above it. Then write the new words and tag them.',
+    draw: 'Strike the words, then a small circle at the end of the line or just above it. Then, as the very next thing, write the new words anywhere on the page and tag them.',
     keep: [
-      'Tag right after drawing: the text pairs with the mark drawn just before it.',
+      'Write the new words as the very next thing after the mark: the text pairs with the mark drawn just before it.',
       'No mark found? The card offers Select mark; nothing needs writing again.',
     ],
   },
@@ -49,7 +55,7 @@ export const MARK_HELP: MarkHelpEntry[] = [
     name: 'Insert',
     glance: '∧ or V where the words go',
     needsText: true,
-    draw: 'A ∧ or V on the line, its tip between two words or inside a word, big enough for the number between its legs (or draw an empty circle there for it). Then write the new text and tag it.',
+    draw: 'A ∧ or V on the line, its tip between two words or inside a word, big enough for the number between its legs (or draw an empty circle there for it). Then, as the very next thing, write the new text anywhere on the page and tag it.',
     keep: [
       'In a gap it adds words, with spaces; between letters it adds letters, without.',
       '"Check place" means the tip was between two lines: look where the text went.',
@@ -82,7 +88,7 @@ export const MARK_HELP: MarkHelpEntry[] = [
     name: 'One letter',
     glance: 'A slash through it',
     needsText: false,
-    draw: 'A short slash through the letter: on its own it deletes the letter; with tagged text written right after it, the text replaces it.',
+    draw: 'A short slash through the letter: on its own it deletes the letter; with tagged text written as the very next thing after it, the text replaces it.',
     keep: [
       'One letter (or punctuation mark) per slash; a slash through a space is ignored.',
       'Draw a small circle just above it if you want the number there.',
@@ -156,15 +162,15 @@ export const MARK_HELP: MarkHelpEntry[] = [
     name: 'New paragraph',
     glance: '< or > between paragraphs',
     needsText: true,
-    draw: 'A < or > in the space between two paragraphs. Then write the new paragraph and tag it.',
+    draw: 'A < or > in the space between two paragraphs. Then, as the very next thing, write the new paragraph anywhere on the page and tag it.',
     keep: ['The text becomes a textbox of its own; paragraphs below move down to make room.'],
   },
 ];
 
 /** The keys under the overview. */
 export const MARK_HELP_KEYS = {
-  text: 'Right after the mark, write the new words anywhere on the page, lasso them and tap Insertion or Replacement in the lasso toolbar.',
-  numbers: 'Grey numbers are placed by Textbox Tools when you tag text. They pair the text with its mark; you never write them.',
+  text: 'Make the mark, then write the new words as the very next thing, anywhere on the page. Lasso them and tap Insertion or Replacement in the lasso toolbar.',
+  numbers: 'Grey numbers are placed by Manuscript when you tag text. They pair the text with its mark; you never write them.',
 };
 
 export const REVIEW_HELP: HelpBlock[] = [
@@ -210,6 +216,32 @@ export const REVIEW_HELP: HelpBlock[] = [
   },
   {
     title: 'Wrong words picked?',
-    text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/TextboxHelper/fonts and open Manuscript again. Settings has the calibration and, under Diagnostics, Save Diagnostics for a bug report.',
+    text: 'If the status line says a font can’t be read, the marks on those textboxes are ignored: copy the font file (same file name) to MyStyle/Manuscript/fonts and open Manuscript again. Settings has the calibration and, under Diagnostics, Report a problem: one file for a bug report.',
+  },
+];
+
+/** Getting started, the first pages of the help (technical-design-release-readiness.md §5.1). */
+export const GETTING_STARTED: StartBlock[] = [
+  {
+    title: 'What Manuscript does',
+    text: 'Your text sits in textboxes in a note. You mark edits by pen as on paper, Manuscript reads the marks, shows every change, and applies the ones you want. Text files come in and go out through Files.',
+  },
+  {
+    title: 'The buttons',
+    text: 'Manuscript (note toolbar): the card - Review lists the marks of the pages and applies them, Outline shows headings and paragraphs to move, Files imports, links and exports, Settings. Insertion or Replacement (lasso toolbar): lasso the new words you wrote as the very next thing after a mark, anywhere on the page, to make them its new text. Comment or Image (lasso toolbar): keep handwriting beside the text as a comment or an image. Textbox Tools (lasso toolbar, with textboxes selected): split, join, clean up.',
+  },
+  {
+    title: 'The core marks',
+    text: 'More marks - letters, spaces, punctuation, swaps, paragraphs - on the next pages.',
+    marks: ['delete', 'replace', 'insert'],
+  },
+  {
+    title: 'First things to do',
+    text: 'Import a text: Manuscript → Files → Import a text file. Put the cheat sheet of the marks on a page to keep it at hand. Then mark something and open Manuscript.',
+    cheatSheet: true,
+  },
+  {
+    title: 'Good to know',
+    text: 'Your text is backed up before every change. Manuscript is developed on the A5 X; other devices are beta. Something wrong? Settings → Diagnostics → Report a problem writes one file for a bug report.',
   },
 ];

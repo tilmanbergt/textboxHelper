@@ -1,18 +1,59 @@
-# Textbox Tools
+# Manuscript
 
-Textbox Tools is an experimental Supernote NOTE plugin for structured text editing inside notes.
+Manuscript (formerly Textbox Tools) is a Supernote NOTE plugin for working on a typed text by pen:
+mark edits by hand, review them, apply them; import text files and export.
 
 It targets the Android-based Supernote plugin runtime only. It does not support iOS.
 
 ## Status
 
-Textbox Tools is experimental and in beta.
+Manuscript is in beta. It changes NOTE page elements directly: try it on a copy of a note before
+using it on an important notebook. It writes a backup of the pages before every change.
 
-The plugin directly modifies NOTE page elements. Please test it on copied notes before using it on important notebooks.
+New to it? Open Manuscript and tap **?**: **Getting started** explains the buttons and the core
+marks and puts a cheat sheet of the marks on a page of your choice.
+
+### Known limits
+
+- Developed and tested on the Supernote A5 X; the Nomad, Manta and other devices are beta.
+- Made for portrait; landscape is untested.
+- Fonts that come with the Supernote (for example 851tegakizatsu) can't be read by plugins: marks
+  on textboxes in such a font are listed under To decide until you copy the font to
+  `MyStyle/Manuscript/fonts` (see Fonts below).
+- Handwriting recognition is the Supernote's own; tagged text can need a correction in the review.
+
+## Edit marks at a glance
+
+The same overview as **?** → Marks at a glance in Manuscript. Every mark has a page with a
+before/after picture in the help; the pictures are also in [docs/user/images/marks](docs/user/images/marks).
+
+|  | Mark | What it looks like |
+|---|---|---|
+| <img src="docs/user/images/marks/delete-icon.png" alt="Delete" height="48"> | **Delete** | A line through the words |
+| <img src="docs/user/images/marks/replace-icon.png" alt="Replace" height="48"> | **Replace** · + text | Strike, plus a small circle |
+| <img src="docs/user/images/marks/insert-icon.png" alt="Insert" height="48"> | **Insert** · + text | ∧ or V where the words go |
+| <img src="docs/user/images/marks/space-icon.png" alt="Space" height="48"> | **Space** | ∧ or V with a small cross |
+| <img src="docs/user/images/marks/delete-letters-icon.png" alt="Delete letters" height="48"> | **Delete letters** | Strike with two short lines |
+| <img src="docs/user/images/marks/slash-icon.png" alt="One letter" height="48"> | **One letter** | A slash through it |
+| <img src="docs/user/images/marks/punctuation-icon.png" alt="Punctuation" height="48"> | **Punctuation** | ∧ or V with a filled circle |
+| <img src="docs/user/images/marks/close-up-icon.png" alt="Close up" height="48"> | **Close up** | An arc under the gap |
+| <img src="docs/user/images/marks/close-up-wrap-icon.png" alt="Close up at a line end, join" height="48"> | **Close up at a line end, join** | Two arcs, end and start |
+| <img src="docs/user/images/marks/swap-icon.png" alt="Swap" height="48"> | **Swap** | Over one part, under the next |
+| <img src="docs/user/images/marks/paragraph-step-icon.png" alt="Break at a word" height="48"> | **Break at a word** | Step mark with a second line |
+| <img src="docs/user/images/marks/paragraph-sideways-icon.png" alt="Break between lines" height="48"> | **Break between lines** | < or > beside the text |
+| <img src="docs/user/images/marks/insert-paragraph-icon.png" alt="New paragraph" height="48"> | **New paragraph** · + text | < or > between paragraphs |
+
+**+ text:** Make the mark, then write the new words as the very next thing, anywhere on the page. Lasso them and tap Insertion or Replacement in the lasso toolbar.
+
+Grey numbers are placed by Manuscript when you tag text. They pair the text with its mark; you never write them.
+
+For a quick reference on the page, use **Put cheat sheet on this page** in Getting started:
+
+<img src="docs/user/images/cheatsheet/cheatsheet.png" alt="Manuscript · editing marks" width="600">
 
 ## Main Features
 
-### Textbox Tools
+### Textbox Tools (lasso panel)
 
 - Split one textbox into sentence-based or paragraph-based textboxes
 - Join selected textboxes in reading order
@@ -23,20 +64,20 @@ The plugin directly modifies NOTE page elements. Please test it on copied notes 
 ### Edit Markers
 
 - Recognize handwritten delete markers
-- Recognize replace markers as a delete line plus a small loop, with the new text tagged right after
+- Recognize replace markers as a delete line plus a small loop, with the new text written as the very next thing after the mark, anywhere on the page, and tagged
 - Single letters: a strike with two short lines across its ends deletes exactly what is between them; a slash marks one letter, also when drawn slanted
 - Close up a space with an arc under the gap; join two lines or two paragraphs with two arcs
 - Put in punctuation with a caret and a small circle holding the mark, without tagging
 - Support both freehand strokes and Supernote straight-line geometry
 - Review all changes before applying them: removed words struck through, replacements in bold, one textbox at a time
-- Calibrate the text measurement and save diagnostics of a marker preview to the EXPORT folder (Manuscript → Settings), for bug reports
+- Calibrate the text measurement (Manuscript → Settings → Calibration); Report a problem (Settings → Diagnostics) saves how the last marks were read, for bug reports
 
 ### Replacement and Insertion
 
 - Tag handwritten new text with one lasso button, "Insertion or Replacement", instead of converting it to text first
 - The mark drawn just before the text decides: a replace mark makes it a replacement, a caret an insertion; a small number at both shows which belong together
 - No mark found? The text keeps a "?". Select mark: draw or lasso the mark and tap the button again; the "?" becomes its number and the text never needs to be written again. Or Insert right here: it becomes a new paragraph where its handwriting starts
-- An insertion is written right after a caret (a V on the line or a ∧ under it): between words, inside a word, or between paragraphs; paragraphs below move down to make room
+- An insertion is written as the very next thing after a caret, anywhere on the page (a V on the line or a ∧ under it): between words, inside a word, or between paragraphs; paragraphs below move down to make room
 - Manuscript recognizes the tagged text while you read, shows a picture of the handwriting, and lets you fix the text in place with the Supernote keyboard's handwriting input
 - Fine-tune any change by one character (a comma, a space, a letter; a swap's three edges), and drop a change or an unused mark, keeping or erasing your handwriting
 - The handwriting and its picture are kept in the plugin folder (`pen-edits/`)
@@ -83,8 +124,8 @@ Edit markers, Split, Join and Import measure text in the textbox's font, so they
 word sits. The system font and fonts you installed yourself (in `MyStyle/fonts`) work as they are.
 
 The fonts that come with the Supernote, such as 851tegakizatsu, sit in a folder plugins can't
-read. For those, put a copy of the font file in `MyStyle/TextboxHelper/fonts`, named exactly like
-the font, for example `MyStyle/TextboxHelper/fonts/851tegakizatsu.ttf`. 851 Tegaki Zatsu is a
+read. For those, put a copy of the font file in `MyStyle/Manuscript/fonts`, named exactly like
+the font, for example `MyStyle/Manuscript/fonts/851tegakizatsu.ttf`. 851 Tegaki Zatsu is a
 free font by 8:51:22 pm (http://pm85122.onamae.jp/); rename the downloaded
 `851tegaki_zatsu_normal_0883.ttf`.
 
@@ -98,7 +139,8 @@ edit-marker calibration and the Outline's heading settings in `settings.json` in
 kept in `pen-edits/` in the same folder, the Outline's block statuses in `block-status.json`, and
 what a linked import came from (the file's path and its original text) and which files a note is
 linked to in `sources/`, together with each linked file's text before the plugin's latest write
-to it.
+to it. Getting started is shown by itself only once (`onboarding` in `settings.json`). What the
+plugin reads and writes in detail: [PRIVACY.md](PRIVACY.md).
 
 ## Installation
 
@@ -113,6 +155,10 @@ to it.
 Developed and tested on the Supernote A5 X; other devices are beta.
 
 ## Support
+
+Something wrong? Right after it happens, open Manuscript → Settings → Diagnostics → **Report a
+problem**. It saves one file to EXPORT with the version, device, settings, how the last marks were
+read and the errors of this session - your text only if you tick it. Attach it to a bug report.
 
 - Bugs, ideas and questions: [GitHub Issues](https://github.com/tilmanbergt/manuscript/issues)
   (the forms ask for what helps).

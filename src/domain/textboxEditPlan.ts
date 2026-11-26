@@ -439,7 +439,7 @@ export function formatTextboxLogPreviewItem(item: TextboxLogItem): string {
 
 export function formatTextboxLogClipboard(items: TextboxLogItem[], notePath: string, page: number): string {
   const lines = [
-    'textboxHelper textbox coordinate log',
+    'Manuscript textbox coordinate log',
     `Created: ${new Date().toISOString()}`,
     `Note: ${notePath}`,
     `Page: ${page}`,

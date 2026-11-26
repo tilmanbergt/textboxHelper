@@ -1,11 +1,16 @@
 # Changelog
 
-All notable changes to Textbox Tools are listed here, newest first.
+All notable changes to Manuscript (formerly Textbox Tools) are listed here, newest first.
 
 ## [Unreleased]
 
 ### Added
 
+- **Cheat sheet**: Getting started has "Put cheat sheet on this page": a picture "Manuscript · editing marks" with eight examples whose text says what the mark does (delete, replace, insert, one letter, exact letters, space, close up, swap), "+ text" where the mark takes new words, goes onto the current page, to move with the lasso and erase like any picture. Manuscript never reads it as a mark. Where the picture can't be inserted, it is saved to EXPORT as manuscript-cheatsheet.png instead.
+- **Getting started**: the help (?) in Manuscript starts with what Manuscript does, the toolbar buttons, the core marks and the first things to do; it opens by itself once, the first time Manuscript opens. Its last line shows the plugin version.
+- **Report a problem** (Manuscript → Settings → Diagnostics): one file in EXPORT for a bug report, with the version, device, settings, how the last marks were read, the timings and the errors of this session. Your text is only in it when you tick "Include the text of this page". It replaces Save Diagnostics and Save timings.
+- Settings → Diagnostics shows the plugin version and the device in its first line.
+- When a screen fails, it shows "Something went wrong on this screen" with Report a problem and Close instead of an empty card.
 - Comments and images: the new lasso button "Comment or Image" keeps handwriting beside the text as a comment or an image. A small card asks Comment · Image (or Cancel); a comment gets a speech bubble with "C" on the page, an image a plain double frame. They have no number and never change the text: Apply leaves them and their signs alone.
   - Text tagged with "Insertion or Replacement" that has no mark can become a comment or an image, and back: on the "No mark found" card (Select mark now · Comment · Image · Later), on "Not a clear mark" for the text that waits for its mark (the strokes you just selected stay plain handwriting), and in the review under To decide. Its "?" becomes the bubble or the frame.
   - Each comment and image belongs to the paragraph beside it: the one it is written next to, else the one above it, else the one below, on its own page, in the text or the "Set aside" area, and within its own linked file. Headings count.
@@ -61,6 +66,8 @@ All notable changes to Textbox Tools are listed here, newest first.
 
 ### Changed
 
+- The help says plainly when tagged words belong to a mark: write them as the very next thing after the mark, anywhere on the page ("right after" could be read as "to the right of").
+- The plugin is now called **Manuscript** (it was Textbox Tools); the lasso panel for split, join and clean-up keeps the name Textbox Tools. It installs over the old version, with your settings and pen edits. **Move fonts you copied to `MyStyle/TextboxHelper/fonts` to `MyStyle/Manuscript/fonts`**: the old folder is no longer read. Files the plugin saves to EXPORT start with `manuscript-`.
 - Tagged text without a mark keeps a "?" on the page instead of a number; numbers are given only when the text is linked to its mark and count only linked texts, so they stay in order. Select mark turns the "?" into the next number. The card after tagging says "No mark found for this text" and offers Select mark now or Later.
 - Select mark on strokes that are no clear mark changes nothing and shows "Not a clear mark" with a picture of the strokes, why, Try again and Cancel.
 - A number on the page always shows up in the review: a tagged mark that can't be placed (erased, over two lines, on a font plugins can't read, its caret gone) is listed with why and the nearest place it could go, instead of "not recognized". A tagged mark is no longer also listed as a stray mark.
@@ -82,7 +89,7 @@ All notable changes to Textbox Tools are listed here, newest first.
 - Insert-space mark: a ∧ or V with a small cross (+, × or #) at its tip puts a space in there, e.g. inside "thisword".
 - A caret inside a word now lands on the letter it points at: the plugin measures where every letter is drawn instead of assuming all letters are equally wide.
 - A step mark on its own now needs a second short line next to its upright (_||‾) to break a paragraph; a step alone is the middle piece of a swap, or is listed under To decide with how to make either. Before tagged text, a step still works alone. Steps may also be drawn falling (‾|_).
-- Marks on a textbox whose font plugins can't read are now ignored instead of guessed: its words would be measured in a standard font and a mark could hit the wrong word. The review lists them under To decide with the font's name and says in its status line which font to copy to MyStyle/TextboxHelper/fonts. Insertions between two paragraphs still work.
+- Marks on a textbox whose font plugins can't read are now ignored instead of guessed: its words would be measured in a standard font and a mark could hit the wrong word. The review lists them under To decide with the font's name and says in its status line which font to copy to MyStyle/Manuscript/fonts. Insertions between two paragraphs still work.
 - The plugin is now called Textbox Tools everywhere (plugin list, screens, permission request). Its identity is unchanged: updates install over the previous version, and the folders in MyStyle keep their names.
 - Textbox Tools (the lasso screen) is new and never scrolls: the actions on the left, After and Before of the chosen action on the right, paged. Split Paragraphs is now on this screen too. An action that doesn't fit the selection is greyed with the reason ("needs exactly 1 textbox", "nothing to clean"); when only one action fits, it is already chosen. The button names the action ("Apply Join Text Boxes"); after it the screen shows the result and the backup's file name. "Log All Textboxes" moved to Details.
 - Import Text File has a new screen: "Choose ›" opens the Supernote file selector in INBOX (only `.txt` files, folders inside INBOX work too) instead of a typed file name. The preview updates by itself after every change and draws the planned pages to scale; font size and margins moved to "Layout". The help is behind "?".

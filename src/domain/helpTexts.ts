@@ -90,7 +90,7 @@ export type EmptyText = {title: string; text: string};
 
 export const NO_MARKS: EmptyText = {
   title: 'No edit marks on this page.',
-  text: 'Delete: draw a line through the words. Replace: add a small loop at its end, write the new words right after it, lasso them and tap the pen-text button. ? shows every mark.',
+  text: 'Delete: draw a line through the words. Replace: add a small loop at its end, then write the new words as the very next thing, anywhere on the page; lasso them and tap Insertion or Replacement. ? shows every mark.',
 };
 
 /** The Outline's Set aside view with nothing set aside (technical-design-aside-area.md §5.3). */

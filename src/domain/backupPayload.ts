@@ -64,7 +64,7 @@ export const CLIPBOARD_PREVIEW_LIMIT = 3000;
 
 export function buildClipboardSummary(payload: BackupPayload): string {
   const lines = [
-    `textboxHelper ${payload.action} backup`,
+    `Manuscript ${payload.action} backup`,
     `Created: ${payload.createdAt}`,
     `Note: ${payload.notePath}`,
     'pages' in payload ? `Pages: ${payload.pages.join(', ')}` : `Page: ${payload.page}`,

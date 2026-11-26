@@ -5,7 +5,7 @@
  * Textboxes name their font by a path in the NOTE app's own folder
  * (`/storage/emulated/0/.data/fonts/<name>`), which plugins may not open
  * (`docs/dev/supernote-host-facts.md` §4). Fonts the user installed also sit in `MyStyle/fonts/`;
- * for the fonts Ratta ships, a copy can be put in `MyStyle/TextboxHelper/fonts/`, which the NOTE
+ * for the fonts Ratta ships, a copy can be put in `MyStyle/Manuscript/fonts/`, which the NOTE
  * app does not load. Without any readable copy, text is measured in Android's default typeface,
  * so word positions and textbox sizes can be wrong.
  */
@@ -18,8 +18,8 @@
 export const NOTE_SYSTEM_FONT_PATH = '/system/fonts/DroidSansFallbackFull.ttf';
 
 export const USER_FONT_DIR = '/storage/emulated/0/MyStyle/fonts';
-export const PLUGIN_FONT_DIR = '/storage/emulated/0/MyStyle/TextboxHelper/fonts';
-export const PLUGIN_FONT_DIR_LABEL = 'MyStyle/TextboxHelper/fonts';
+export const PLUGIN_FONT_DIR = '/storage/emulated/0/MyStyle/Manuscript/fonts';
+export const PLUGIN_FONT_DIR_LABEL = 'MyStyle/Manuscript/fonts';
 
 /** The file name of a font path, e.g. "851tegakizatsu.ttf". */
 export function fontFileName(fontPath: string): string {

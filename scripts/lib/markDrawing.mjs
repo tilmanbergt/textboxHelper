@@ -444,7 +444,7 @@ export function drawMark(spec, fonts) {
   // The key for the plugin's numbers, top right: a grey circled 1 and what it means.
   let key = '';
   if (marked.c.hasNumbers) {
-    const text = 'placed by Textbox Tools';
+    const text = 'placed by Manuscript';
     const w = advance(fonts.text, text, LABEL);
     const x = IMAGE_WIDTH - PAD - w;
     key = `<circle cx="${fmt(x - 20)}" cy="${fmt(labelY - 7)}" r="12" fill="none" stroke="${TOOL}" stroke-width="1.8"/>` +
@@ -476,6 +476,24 @@ export function drawMarkIcon(spec, fonts) {
   const marked = drawMarked(spec, fonts, 40, textX, true);
   const c = marked.c;
   const right = Math.max(...c.lines.map(l => l.x1)) + 16;
+  const x0 = Math.min(textX - 16, c.minX ?? Infinity) - 8;
+  const x1 = Math.max(right, c.maxX ?? 0) + 8;
+  const y0 = Math.min(c.lines[0].top - 8, c.minY ?? Infinity) - 8;
+  const y1 = Math.max(marked.bottom, c.lines[c.lines.length - 1].bottom + 8) + 8;
+  const width = Math.ceil(x1 - x0), height = Math.ceil(y1 - y0);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${fmt(x0)} ${fmt(y0)} ${width} ${height}"><rect x="${fmt(x0)}" y="${fmt(y0)}" width="100%" height="100%" fill="#fff"/>${marked.svg}</svg>`;
+  return {svg, width, height};
+}
+
+/**
+ * An example for the cheat sheet: the marked textbox with the pen marks and the tagged handwriting
+ * below it, cropped to what is drawn, no "After Apply". Returns {svg, width, height}.
+ */
+export function drawMarkExample(spec, fonts) {
+  const textX = 70;
+  const marked = drawMarked(spec, fonts, 40, textX, false);
+  const c = marked.c;
+  const right = Math.max(...c.lines.map(l => l.x1), c.handRight ?? 0) + 16;
   const x0 = Math.min(textX - 16, c.minX ?? Infinity) - 8;
   const x1 = Math.max(right, c.maxX ?? 0) + 8;
   const y0 = Math.min(c.lines[0].top - 8, c.minY ?? Infinity) - 8;

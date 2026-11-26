@@ -1,6 +1,6 @@
 # Privacy and data
 
-Textbox Tools (being renamed to Manuscript) is a local plugin for the Supernote. There is no
+Manuscript (formerly Textbox Tools) is a local plugin for the Supernote. There is no
 account, no server and no telemetry, and it has **no network permission**: `PluginConfig.json`
 asks only for reading and writing files. Nothing it reads or writes leaves the device.
 
@@ -18,17 +18,18 @@ asks only for reading and writing files. Nothing it reads or writes leaves the d
   - backups - a JSON copy of the textboxes of the pages a change touches, written before the
     change (their summary is also put on the clipboard);
   - `block-status.json` - the Outline's statuses (open, review, final);
+  - `manuscript-cheatsheet.png` - the cheat sheet picture, written when you put it on a page;
   - `sources/` - for a note linked to a text file: which file and note belong together, and a copy
     of the file's text before the plugin first writes to it and before its latest write.
 - **Text files you import or link**, wherever you choose them with the Supernote file selector
   (it opens in INBOX or the folder of your last file). A linked file is written back only when
   you apply changes or tap "Update", and never when it was changed outside the plugin since.
-  "Check write access" writes and removes a small probe file (`.textbox-tools-probe.txt`) in that
+  "Check write access" writes and removes a small probe file (`.manuscript-probe.txt`) in that
   folder.
 - **Folders you link**: the `.txt` files directly in them are listed.
-- **EXPORT**: DOCX exports, and diagnostics or timings files when you save them (Manuscript →
-  Settings → Diagnostics).
-- **`MyStyle/TextboxHelper/fonts`** (and `MyStyle/fonts`): only read, to measure text in fonts
+- **EXPORT**: DOCX exports, the file of **Report a problem** when you write one (below), and
+  the cheat sheet picture when it can't be put on the page.
+- **`MyStyle/Manuscript/fonts`** (and `MyStyle/fonts`): only read, to measure text in fonts
   you copied there.
 
 ## Cleaning up
@@ -39,10 +40,16 @@ of a file's text when you unlink it. Manuscript → Settings → Diagnostics →
 the plugin keeps and has **Clean up now**. Your notes, your text files and anything in EXPORT are
 never removed by the clean-up.
 
-## Diagnostics files
+## Report a problem
 
-Diagnostics and timings files in EXPORT contain the plugin version, settings, the positions of
-the marks it read and how long steps took. Diagnostics of a marker preview contain short previews
-of the words a mark touches. Please look through a file before attaching it to a bug report.
+**Report a problem** (Manuscript → Settings → Diagnostics) writes one file to EXPORT,
+`manuscript-report-<time>.json`, for a bug report. It contains the plugin version, the device model
+and Android version, the open note's file name (no folders), page count and page size, the
+settings, how the last marks were read (positions, decisions, the length of the text they touch),
+the recorded timings and the errors and warnings of this session. Your text is in it only when
+you tick **Include the text of this page**: then the textboxes of the current page and the text
+previews of the marks are in it too.
 
-Messages go to the Android system log (`logcat`) on the device; nothing is uploaded.
+The session's errors and warnings are kept in memory only (the newest 50) and are gone when the
+plugin is closed. Messages also go to the Android system log (`logcat`) on the device. Nothing is
+uploaded: you decide whether to attach the file to a bug report, and can look through it first.

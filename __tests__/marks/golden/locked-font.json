@@ -20,7 +20,7 @@
     {
       "kind": "unclear",
       "summary": "Strike",
-      "reason": "The font locked.ttf can't be read by plugins, so marks on this textbox can't be placed. Copy the font file to MyStyle/TextboxHelper/fonts and open the review again.",
+      "reason": "The font locked.ttf can't be read by plugins, so marks on this textbox can't be placed. Copy the font file to MyStyle/Manuscript/fonts and open the review again.",
       "strokes": [
         3
       ],
@@ -35,7 +35,7 @@
     {
       "kind": "placeOpen",
       "summary": "Insertion 1",
-      "reason": "The font locked.ttf can't be read by plugins, so marks on this textbox can't be placed. Copy the font file to MyStyle/TextboxHelper/fonts and open the review again.",
+      "reason": "The font locked.ttf can't be read by plugins, so marks on this textbox can't be placed. Copy the font file to MyStyle/Manuscript/fonts and open the review again.",
       "penEdit": 1,
       "canPlaceHere": true
     }
@@ -47,6 +47,6 @@
     }
   ],
   "newParagraphs": [],
-  "fontWarning": "Marks on 1 textbox was ignored: the font can't be read by plugins (locked.ttf). Copy the font file to MyStyle/TextboxHelper/fonts and open the review again. See Ignored.",
+  "fontWarning": "Marks on 1 textbox was ignored: the font can't be read by plugins (locked.ttf). Copy the font file to MyStyle/Manuscript/fonts and open the review again. See Ignored.",
   "canApply": true
 }

@@ -12,7 +12,7 @@ const REQUIRED_PERMISSIONS: string[] = [
   'plugin.permission.FILE:WRITE',
 ];
 
-const PERMISSION_REASON = 'Textbox Tools reads and changes the textboxes of your notes and imports text files.';
+const PERMISSION_REASON = 'Manuscript reads and changes the textboxes of your notes and imports text files.';
 
 export async function ensurePermissions(permissions: string[] = REQUIRED_PERMISSIONS): Promise<boolean> {
   for (const permission of permissions) {

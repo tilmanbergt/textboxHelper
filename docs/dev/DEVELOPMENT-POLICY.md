@@ -1,4 +1,4 @@
-# Textbox Tools development policy
+# Manuscript development policy
 
 > **About this document.** The one document that says what has to be true after every change and
 > before every release. It applies to everyone who changes the code - in practice mostly Claude,
@@ -70,7 +70,7 @@ The architecture as built is described in `design-overview.md`. These rules are 
   `[[links]]`, the plugin's own file) on import and Update, and lists the folder's `.txt` files
   (`technical-design-linked-files.md`); it never deletes or renames a user's file.
   It reads font files from `/system/fonts`, `MyStyle/fonts` and
-  `MyStyle/TextboxHelper/fonts`. A new place needs a line in the README and in
+  `MyStyle/Manuscript/fonts`. A new place needs a line in the README and in
   `supernote-host-facts.md` if the host restricts it.
 - **Host calls are checked.** Every `sn-plugin-lib` call's result is checked for success; a
   failure becomes an error with a message the user can understand.
@@ -93,7 +93,9 @@ The architecture as built is described in `design-overview.md`. These rules are 
 - **Logging:** log lines start with the module in brackets, e.g. `[EditMarkerActions] stage`.
   Every caught error is either shown to the user or logged, with enough context to find the
   cause. Logs never contain more of the user's text than the diagnosis needs; prefer counts and
-  ids.
+  ids. Every `console.error` and `console.warn` also goes into the session's errors
+  (`utils/errorLog.ts`, newest 50, memory only), which **Report a problem** writes to its file:
+  bug reports ask for that file. A screen crash is caught by the error boundary in `ScreenFrame`.
 
 ## 5. Documentation in the same change
 
@@ -105,7 +107,10 @@ A change is not done while the docs describe the old behavior.
   documents.
 - **CHANGELOG.md**: every user-visible change gets a line under `## [Unreleased]` (Added, Changed,
   Fixed, Removed), written for users. This text becomes the GitHub release notes.
-- **README.md**: update "Main Features" when a feature is added, removed or changed.
+- **README.md**: update "Main Features" when a feature is added, removed or changed. "Edit marks
+  at a glance" mirrors the help's overview (`MARK_HELP` in `src/domain/markHelp.ts`, the icons in
+  `docs/user/images/marks/`); `__tests__/readmeMarks.test.ts` fails when a mark, its name or its line
+  differs.
 - **Developer docs** come in two kinds (list in `docs/dev/README.md`):
   - **Living documents** live directly in `docs/dev/` and describe the current state in present
     tense: no history, no open questions, no plans. Each starts with a short "About this

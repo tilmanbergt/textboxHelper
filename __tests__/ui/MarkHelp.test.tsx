@@ -15,10 +15,10 @@ function texts(root: ReactTestInstance): string[] {
   });
 }
 
-function measured(width: number, height: number) {
+function measured(width: number, height: number, props: Partial<React.ComponentProps<typeof MarkHelp>> = {}) {
   let tree!: renderer.ReactTestRenderer;
   act(() => {
-    tree = renderer.create(<MarkHelp title="Edit markers" onClose={() => {}} />);
+    tree = renderer.create(<MarkHelp title="Help" onClose={() => {}} {...props} />);
   });
   const box = tree.root.findAll(node => node.type === View && typeof node.props.onLayout === 'function')[0];
   act(() => {
@@ -27,15 +27,44 @@ function measured(width: number, height: number) {
   return tree;
 }
 
+function toOverview(tree: renderer.ReactTestRenderer) {
+  for (let i = 0; i < 5 && !texts(tree.root).includes('Marks at a glance'); i++) {
+    const next = tree.root.findByProps({accessibilityLabel: 'Next page'});
+    act(() => next.props.onPress());
+  }
+}
+
 describe('MarkHelp', () => {
+  it('opens on Getting started with the core marks and the version line', () => {
+    const tree = measured(654, 760);
+    const shown = texts(tree.root);
+    expect(shown).toContain('Getting started');
+    expect(shown).toContain('What Manuscript does');
+    expect(shown.some(t => t.startsWith('Manuscript '))).toBe(true);
+    expect(tree.root.findAll(n => n.props.label === 'Put cheat sheet on this page')).toHaveLength(0);
+  });
+
+  it('on the first start: the "shown once" line and the cheat sheet button', () => {
+    const onCheatSheet = jest.fn();
+    const tree = measured(654, 760, {firstStart: true, onCheatSheet});
+    for (let i = 0; i < 3 && tree.root.findAll(n => n.props.label === 'Put cheat sheet on this page').length === 0; i++) {
+      act(() => tree.root.findByProps({accessibilityLabel: 'Next page'}).props.onPress());
+    }
+    expect(texts(tree.root)).toContain('This is shown once. It’s always under ? › Getting started.');
+    const button = tree.root.findAll(n => n.props.label === 'Put cheat sheet on this page')[0];
+    act(() => button.props.onPress());
+    expect(onCheatSheet).toHaveBeenCalled();
+  });
+
   it('shows all marks at a glance with their icons, then pages on', () => {
     const tree = measured(654, 760);
+    toOverview(tree);
     const shown = texts(tree.root);
     expect(shown).toContain('Marks at a glance');
     for (const entry of MARK_HELP) {
       expect(shown).toContain(entry.name);
     }
-    expect(tree.root.findAllByType(Image)).toHaveLength(MARK_HELP.length);
+    expect(tree.root.findAllByType(Image).length).toBeGreaterThanOrEqual(MARK_HELP.length);
     const next = tree.root.findByProps({accessibilityLabel: 'Next page'});
     act(() => next.props.onPress());
     expect(texts(tree.root)).toContain('Each mark');
@@ -43,6 +72,7 @@ describe('MarkHelp', () => {
 
   it('a row jumps to the page with the mark', () => {
     const tree = measured(654, 760);
+    toOverview(tree);
     const swap = MARK_HELP.find(entry => entry.id === 'swap')!;
     const row = tree.root.find(node => typeof node.props.accessibilityLabel === 'string' && node.props.accessibilityLabel.startsWith(`${swap.name}:`) && typeof node.props.onPress === 'function');
     act(() => row.props.onPress());

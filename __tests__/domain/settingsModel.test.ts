@@ -6,6 +6,13 @@ import {
 } from '../../src/domain/settingsModel';
 
 describe('parseSettings', () => {
+  it('onboarding: not seen by default and in older files, seen only when true', () => {
+    expect(parseSettings(null).onboarding).toEqual({seen: false});
+    expect(parseSettings('{"version":1}').onboarding).toEqual({seen: false});
+    expect(parseSettings('{"onboarding":{"seen":"yes"}}').onboarding).toEqual({seen: false});
+    expect(parseSettings('{"onboarding":{"seen":true}}').onboarding).toEqual({seen: true});
+  });
+
   it('gives the defaults for no file or unreadable JSON', () => {
     expect(parseSettings(null)).toEqual(DEFAULT_PLUGIN_SETTINGS);
     expect(parseSettings('{not json')).toEqual(DEFAULT_PLUGIN_SETTINGS);

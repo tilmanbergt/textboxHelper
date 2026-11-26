@@ -1,39 +1,64 @@
-/** Settings → Diagnostics: Save Diagnostics, the timings (Speed) and the plugin's files (Storage). */
+/** Settings → Diagnostics: the version, Report a problem, the timings (Speed) and the plugin's files (Storage). */
 import React, {useCallback, useEffect, useState} from 'react';
 import {pluginStorage, runHousekeeping} from '../../../actions/housekeeping';
+import {currentVersionLine, writeProblemReport} from '../../../actions/problemReport';
 import {housekeepingResultText, storageSummaryText} from '../../../domain/housekeeping';
+import {fileNameOf, userMessage} from '../../../domain/userMessage';
+import Checkbox from '../../../ui/Checkbox';
 import PillButton from '../../../ui/PillButton';
 import type {ManuscriptReview} from '../useManuscriptReview';
 import {Hint, Row, Section} from './SettingsParts';
 
 export default function DiagnosticsSettings({review}: {review: ManuscriptReview}): React.JSX.Element {
-  const {loading, busy, timings} = review;
+  const {busy, timings} = review;
   const {update: updateTimings} = timings;
   useEffect(updateTimings, [updateTimings]);
   return (
     <>
-      <Section title="Diagnostics">
-        <Hint>
-          Saves how each mark was read and why one was ignored as a file in the EXPORT folder, to attach to a bug
-          report. It contains short previews of the textboxes' text.
-        </Hint>
-        <Row>
-          <PillButton size="small" label="Save Diagnostics" disabled={loading || busy} onPress={review.saveDiagnostics} />
-        </Row>
-      </Section>
+      <ReportSection busy={busy} />
       <Section title="Speed">
         <Hint>
-          Records how long reading pages, recognizing and applying take. Save timings writes them as a file in the
-          EXPORT folder, to hand over when something feels slow. No text is in it.
+          Records how long reading pages, recognizing and applying take; Report a problem includes them. No text is in
+          them.
         </Hint>
         <Hint>{timings.summary}</Hint>
         <Row>
-          <PillButton size="small" label="Save timings" disabled={busy} onPress={timings.save} />
           <PillButton size="small" label="Clear" disabled={busy} onPress={timings.clear} />
         </Row>
       </Section>
       <StorageSection busy={busy} />
     </>
+  );
+}
+
+/** Report a problem (technical-design-release-readiness.md §4): one file in EXPORT for a bug report. */
+function ReportSection({busy}: {busy: boolean}): React.JSX.Element {
+  const [includeText, setIncludeText] = useState(false);
+  const [writing, setWriting] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const report = useCallback(() => {
+    setWriting(true);
+    writeProblemReport(includeText)
+      .then(path => setResult(`Saved to EXPORT: ${fileNameOf(path)}. Attach it to your bug report.`))
+      .catch(error => {
+        console.warn('[Report] not written', String(error));
+        setResult(userMessage(error, 'The report could not be written.'));
+      })
+      .finally(() => setWriting(false));
+  }, [includeText]);
+  return (
+    <Section title="Report a problem">
+      <Hint>{currentVersionLine()}</Hint>
+      <Hint>
+        Writes one file to EXPORT for a bug report: versions, settings, the last marks read, timings and errors. Your
+        text only if ticked.
+      </Hint>
+      <Checkbox label="Include the text of this page" checked={includeText} onChange={setIncludeText} disabled={writing} />
+      <Row>
+        <PillButton size="small" label={writing ? 'Writing…' : 'Report a problem'} disabled={busy || writing} onPress={report} />
+      </Row>
+      {result ? <Hint>{result}</Hint> : null}
+    </Section>
   );
 }
 

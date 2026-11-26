@@ -16,16 +16,16 @@ describe('font paths', () => {
     expect(fontFileName('')).toBe('');
   });
 
-  it('looks in MyStyle/fonts first, then MyStyle/TextboxHelper/fonts', () => {
+  it('looks in MyStyle/fonts first, then MyStyle/Manuscript/fonts', () => {
     expect(buildFontFallbackPaths(NOTE_FONT)).toEqual([
       '/storage/emulated/0/MyStyle/fonts/851tegakizatsu.ttf',
-      '/storage/emulated/0/MyStyle/TextboxHelper/fonts/851tegakizatsu.ttf',
+      '/storage/emulated/0/MyStyle/Manuscript/fonts/851tegakizatsu.ttf',
     ]);
   });
 
   it('does not repeat the original path', () => {
     expect(buildFontFallbackPaths('/storage/emulated/0/MyStyle/fonts/A.ttf')).toEqual([
-      '/storage/emulated/0/MyStyle/TextboxHelper/fonts/A.ttf',
+      '/storage/emulated/0/MyStyle/Manuscript/fonts/A.ttf',
     ]);
   });
 
@@ -49,7 +49,7 @@ describe('font warning', () => {
   it('names one font once, even when it failed several times', () => {
     const warning = buildFontWarning([NOTE_FONT, NOTE_FONT]);
     expect(warning).toContain('the font 851tegakizatsu.ttf can');
-    expect(warning).toContain('MyStyle/TextboxHelper/fonts');
+    expect(warning).toContain('MyStyle/Manuscript/fonts');
     expect(warning?.match(/851tegakizatsu/g)).toHaveLength(1);
   });
 
@@ -67,7 +67,7 @@ describe('locked fonts (marks ignored on textboxes with an unreadable font)', ()
   it('names the font and the fix in the reason', () => {
     const reason = fontLockedReason('851tegakizatsu.ttf');
     expect(reason).toContain('851tegakizatsu.ttf');
-    expect(reason).toContain('MyStyle/TextboxHelper/fonts');
+    expect(reason).toContain('MyStyle/Manuscript/fonts');
   });
 
   it('has no line when no mark was on a locked textbox', () => {

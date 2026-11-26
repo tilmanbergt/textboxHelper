@@ -11,17 +11,23 @@
  *   and shows its busy label, disabled. A small accessory (a checkbox that belongs to the
  *   primary, e.g. Manuscript's "Also update <file>") can sit right before it.
  *
+ * - The body sits in an ErrorBoundary: a crash of a screen shows "Something went wrong", Report a
+ *   problem and Close instead of an empty card (technical-design-release-readiness.md §4.3).
+ *
  * Header and footer have fixed minimum heights, so nothing in the body moves when the status or
  * the button label changes. A change of `screenKey`, the status text or the button label requests an
  * e-ink refresh: progress arrives without a touch, and e-ink doesn't redraw by itself.
  */
 import React, {useEffect, useState} from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
+import ErrorBoundary from './ErrorBoundary';
 import HelpOverlay from './HelpOverlay';
 import MarkHelp from './MarkHelp';
 import PillButton from './PillButton';
 import {COLORS, FONT, SPACING} from './theme';
 import {requestEinkRefresh} from '../utils/screenRefresh';
+import {fileNameOf} from '../domain/userMessage';
+import {writeProblemReport} from '../actions/problemReport';
 
 export interface FrameButton {
   label: string;
@@ -48,8 +54,14 @@ interface Props {
   context?: string;
   back?: {label: string; onPress: () => void};
   actions?: FrameButton[];
-  /** Help behind "?": a text (domain/helpTexts.ts), or the edit-marker help with pictures. */
-  help?: {title: string; text: string} | {title: string; marks: true};
+  /**
+   * Help behind "?": a text (domain/helpTexts.ts), or the help with Getting started and the marks.
+   * `firstStart` opens that help when the screen opens and calls `onFirstStartDone` when it is
+   * closed (technical-design-release-readiness.md §5.2); `onCheatSheet` shows the cheat sheet button.
+   */
+  help?:
+    | {title: string; text: string}
+    | {title: string; marks: true; firstStart?: boolean; onFirstStartDone?: () => void; onCheatSheet?: () => void};
   onClose?: () => void;
   status?: FrameStatus | null;
   primary?: FramePrimary;
@@ -72,7 +84,18 @@ export default function ScreenFrame({
   screenKey,
   children,
 }: Props): React.JSX.Element {
-  const [helpOpen, setHelpOpen] = useState(false);
+  const startsWithHelp = !!help && 'marks' in help && !!help.firstStart;
+  const [helpOpen, setHelpOpen] = useState(startsWithHelp);
+  const [firstStart, setFirstStart] = useState(startsWithHelp);
+  const closeHelp = () => {
+    setHelpOpen(false);
+    if (firstStart) {
+      setFirstStart(false);
+      if (help && 'marks' in help) {
+        help.onFirstStartDone?.();
+      }
+    }
+  };
 
   // Status and button changes during a long run come without a touch, so they ask for a redraw.
   const primaryLabel = primary ? (primary.busy ? primary.busyLabel ?? primary.label : primary.label) : '';
@@ -109,8 +132,24 @@ export default function ScreenFrame({
         </View>
       </View>
       <View style={styles.body}>
-        {children}
-        {help && helpOpen && 'marks' in help && <MarkHelp title={help.title} onClose={() => setHelpOpen(false)} />}
+        <ErrorBoundary onReport={reportCrash} onClose={onClose}>
+          {children}
+        </ErrorBoundary>
+        {help && helpOpen && 'marks' in help && (
+          <MarkHelp
+            title={help.title}
+            onClose={closeHelp}
+            firstStart={firstStart}
+            onCheatSheet={
+              help.onCheatSheet
+                ? () => {
+                    closeHelp();
+                    help.onCheatSheet?.();
+                  }
+                : undefined
+            }
+          />
+        )}
         {help && helpOpen && 'text' in help && (
           <HelpOverlay title={help.title} text={help.text} onClose={() => setHelpOpen(false)} />
         )}
@@ -134,6 +173,10 @@ export default function ScreenFrame({
       </View>
     </View>
   );
+}
+
+async function reportCrash(): Promise<string> {
+  return `Saved to EXPORT: ${fileNameOf(await writeProblemReport(false))}`;
 }
 
 const styles = StyleSheet.create({
