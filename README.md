@@ -111,6 +111,7 @@ The Manuscript card's Files tab lists the linked files and opens the import and 
 without textboxes opens there.
 
 - Import plain text into NOTE textboxes, from a `.txt` file in any folder (for example `INBOX`), chosen with the Supernote file selector
+- Import from URL: download a plain text or Markdown file (for example the session VoiceDraft shares on your phone at `http://<phone>:8787/current.md`), save it as a new `.txt` in INBOX or a folder you choose, then import it like any text file. This is the only time Manuscript uses the network: one request when you tap Download
 - Split imported text into paragraph-based textboxes
 - Link the import to its file: one textbox per heading, paragraph or list; frontmatter, code, tables, callouts and other blocks are kept exactly as they are and shown as framed placeholders
 - Every linked file starts on a new page; headings can too (Settings → Layout)

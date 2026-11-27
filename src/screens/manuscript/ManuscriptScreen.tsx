@@ -34,6 +34,8 @@ import {putCheatSheetOnPage} from '../../actions/cheatSheet';
 import {CHEAT_SHEET} from '../../ui/generated/markImages';
 import ExportScreen from '../export/ExportScreen';
 import ImportScreen from '../import/ImportScreen';
+import UrlImportScreen from '../import/UrlImportScreen';
+import type {Downloaded} from '../../actions/urlImport';
 import FilesTab from './files/FilesTab';
 import SettingsScreen, {type SettingsTab} from './settings/SettingsScreen';
 import OutlineTab from './outline/OutlineTab';
@@ -92,7 +94,9 @@ function ManuscriptCard({
     [source.note],
   );
   const outline = useOutline(review.note, review.pages, records);
-  const [view, setView] = useState<'card' | 'settings' | 'import' | 'export'>('card');
+  const [view, setView] = useState<'card' | 'settings' | 'import' | 'url' | 'export'>('card');
+  // The file Import from URL just saved; the Import screen names where it came from.
+  const [downloaded, setDownloaded] = useState<Downloaded | null>(null);
   const firstStart = useRef(!getSettings().onboarding.seen);
   const markOnboardingSeen = useCallback(() => {
     updateSettings(settings => ({...settings, onboarding: {seen: true}}));
@@ -202,9 +206,27 @@ function ManuscriptCard({
     return (
       <ImportScreen
         wholeFolder={importFolder}
+        downloaded={downloaded}
         onClose={onClose}
         onOpenLayout={() => openSettings('layout')}
-        onBack={(imported, message) => (imported ? onImported(message) : setView('card'))}
+        onBack={(imported, message) => {
+          setDownloaded(null);
+          return imported ? onImported(message) : setView('card');
+        }}
+      />
+    );
+  }
+
+  if (view === 'url') {
+    return (
+      <UrlImportScreen
+        onClose={onClose}
+        onBack={() => setView('card')}
+        onDownloaded={file => {
+          setDownloaded(file);
+          setImportFolder(false);
+          setView('import');
+        }}
       />
     );
   }
@@ -355,6 +377,7 @@ function ManuscriptCard({
             setImportFolder(folder);
             setView('import');
           }}
+          onImportUrl={() => setView('url')}
           onExport={() => setView('export')}
         />
       ) : tab === 'review' ? (

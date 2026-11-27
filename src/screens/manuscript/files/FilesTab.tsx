@@ -2,7 +2,7 @@
  * The Manuscript card's Files tab (technical-design-settings-layout-files.md §4): what goes into
  * this note and out of it. Left, the note's linked files (their states, Update, Save as copy,
  * Unlink, the folder). Right, Import a text file or a whole folder (on a note with linked files:
- * Add a file), and Export DOCX; both open as sub-screens of the card.
+ * Add a file), Import from URL, and Export DOCX; each opens as a sub-screen of the card.
  */
 import React from 'react';
 import {StyleSheet, Text, View} from 'react-native';
@@ -17,10 +17,12 @@ interface Props {
   source: LinkedFiles;
   disabled: boolean;
   onImport: (wholeFolder: boolean) => void;
+  /** Import from URL (technical-design-import-from-url.md §1). */
+  onImportUrl: () => void;
   onExport: () => void;
 }
 
-export default function FilesTab({source, disabled, onImport, onExport}: Props): React.JSX.Element {
+export default function FilesTab({source, disabled, onImport, onImportUrl, onExport}: Props): React.JSX.Element {
   const note = source.note;
   const linked = (note?.files.length ?? 0) > 0;
   const folder = note?.folder ?? null;
@@ -47,12 +49,16 @@ export default function FilesTab({source, disabled, onImport, onExport}: Props):
           <>
             <TextLink label={`Add a file ${GLYPH.next}`} disabled={disabled} onPress={() => onImport(false)} />
             <Text style={styles.hint}>Linked, on a new page after the last one, with its name as a title.</Text>
+            <TextLink label={`Import from URL ${GLYPH.next}`} disabled={disabled} onPress={onImportUrl} />
+            <Text style={styles.hint}>A text or Markdown file from your network, e.g. VoiceDraft; added like a file.</Text>
           </>
         ) : (
           <>
             <TextLink label={`Import a text file ${GLYPH.next}`} disabled={disabled} onPress={() => onImport(false)} />
             <TextLink label={`Import a whole folder ${GLYPH.next}`} disabled={disabled} onPress={() => onImport(true)} />
             <Text style={styles.hint}>.txt or Obsidian notes from any folder; the layout is set in Settings → Layout.</Text>
+            <TextLink label={`Import from URL ${GLYPH.next}`} disabled={disabled} onPress={onImportUrl} />
+            <Text style={styles.hint}>A text or Markdown file from your network, e.g. VoiceDraft.</Text>
           </>
         )}
         <Text style={[styles.title, styles.next]}>Out of this note</Text>

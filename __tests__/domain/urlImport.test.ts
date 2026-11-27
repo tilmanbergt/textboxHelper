@@ -1,5 +1,6 @@
 import {
   contentTypeProblem,
+  copyCandidate,
   decodeUtf8,
   deriveFileName,
   dispositionFileName,
@@ -151,6 +152,14 @@ describe('messages and paths', () => {
     expect(downloadFailureMessage({kind: 'timeout'})).toMatch(/15 s.*same Wi-Fi/);
     expect(downloadFailureMessage({kind: 'tooLarge'})).toMatch(/2 MB/);
     expect(serverLine('x'.repeat(200))).toHaveLength(120);
+  });
+
+  it('names copies so nothing is overwritten', () => {
+    const now = new Date(2026, 10, 27, 10, 12);
+    const path = '/storage/emulated/0/INBOX/Walk notes.txt';
+    expect(copyCandidate(path, now, 0)).toBe(path);
+    expect(copyCandidate(path, now, 1)).toBe('/storage/emulated/0/INBOX/Walk notes (Supernote 2026-11-27 1012).txt');
+    expect(copyCandidate(path, now, 3)).toBe('/storage/emulated/0/INBOX/Walk notes (Supernote 2026-11-27 1012 3).txt');
   });
 
   it('joins folder and name with one slash', () => {

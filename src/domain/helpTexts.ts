@@ -75,6 +75,21 @@ On a note with linked files, Import adds the file: always linked, on a new page 
 ## Where it goes
 Into the current page when its writing area is empty, otherwise onto new pages after it. The preview shows the first pages to scale. Font sizes, margins and which headings start a new page are set under Layout › (Settings → Layout); the default margins leave room for handwriting on the right and at the bottom.`;
 
+export const URL_IMPORT_HELP = `## What it does
+Downloads one text or Markdown file from an address and saves it as a new .txt file. Then Import opens on that file with its preview; your note changes only when you tap Import there.
+
+## The address
+http:// or https://; without one, http:// is used. For VoiceDraft on your phone: http://<the phone's address>:8787/current.md, with the phone on the same Wi-Fi and VoiceDraft sharing the session. Recent: the last five addresses; tap one to use it, Edit to change it in the field, ✕ to forget it.
+
+## What is accepted
+Plain text and Markdown (text/plain, text/markdown) in UTF-8, up to 2 MB. Web pages and other files are refused, and nothing is saved. The download stops after 15 s without an answer.
+
+## Where it goes
+A new .txt file in the folder under Save to (INBOX unless you change it). An existing file is never overwritten: the new one gets "(Supernote <date> <time>)" in its name. If the folder can't be written, the file goes to EXPORT and the status says so. The name comes from the server, else the text's title or first # heading, else the address.
+
+## Network
+Manuscript uses the network only here, when you tap Download: one request for this address. Nothing from your device is sent, nothing keeps running. The first download of a session asks for internet access.`;
+
 export const EXPORT_HELP = `## What is exported
 The text of the note's textboxes, in reading order, as a Word file (DOCX) in the Supernote's EXPORT folder. The note doesn't change.
 

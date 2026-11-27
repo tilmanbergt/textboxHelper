@@ -3,6 +3,7 @@
  * accepted, which answers count as text, how the downloaded file is named and what an error says.
  * Pure: the download itself is `supernote/httpFetch.ts`, the flow `actions/urlImport.ts`.
  */
+import {copyPath} from './sourceRecord';
 
 export const URL_IMPORT_TIMEOUT_MS = 15000;
 export const URL_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
@@ -283,6 +284,19 @@ export function downloadFailureMessage(failure: DownloadFailure): string {
       return line ? `${failure.status} · ${line}` : `The server answered ${failure.status}. Nothing was saved.`;
     }
   }
+}
+
+/**
+ * The n-th name tried for a download so nothing is overwritten: 0 = the path itself, 1 = the
+ * dated copy name of Linked files ("Name (Supernote 2026-11-27 1012).txt"), 2+ = that name with a
+ * counter, for two downloads of one name within a minute.
+ */
+export function copyCandidate(path: string, now: Date, n: number): string {
+  if (n <= 0) {
+    return path;
+  }
+  const copy = copyPath(path, now);
+  return n === 1 ? copy : copy.replace(/\)(\.[^./]*)$/, ` ${n})$1`);
 }
 
 /** `folder/name` with `/` only, whatever the folder ends with. */

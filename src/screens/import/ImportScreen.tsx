@@ -26,6 +26,7 @@ import FolderSetupScreen from './FolderSetupScreen';
 import PagePreview from './PagePreview';
 import {useTextImport} from './useTextImport';
 import {getSettings} from '../../storage/settingsFile';
+import type {Downloaded} from '../../actions/urlImport';
 
 interface Props {
   onClose: () => void;
@@ -35,9 +36,11 @@ interface Props {
   wholeFolder?: boolean;
   /** Opens Settings → Layout. */
   onOpenLayout: () => void;
+  /** The file Import from URL just saved, when the screen opens on it. */
+  downloaded?: Downloaded | null;
 }
 
-export default function ImportScreen({onClose, onBack, wholeFolder = false, onOpenLayout}: Props): React.JSX.Element {
+export default function ImportScreen({onClose, onBack, wholeFolder = false, onOpenLayout, downloaded = null}: Props): React.JSX.Element {
   const flow = useTextImport(wholeFolder);
   const {settings, preview, busy, imported} = flow;
   const [view, setView] = useState<'import' | 'folder'>('import');
@@ -119,6 +122,11 @@ export default function ImportScreen({onClose, onBack, wholeFolder = false, onOp
           <Text style={styles.path} numberOfLines={1}>
             {filePath ? `${folder || 'Storage'}/` : '.txt files from any folder'}
           </Text>
+          {downloaded && downloaded.path === filePath && (
+            <Text style={styles.path} numberOfLines={2}>
+              {downloadedLine(downloaded)}
+            </Text>
+          )}
 
           {!adding && (
             <Segmented
@@ -264,6 +272,14 @@ export default function ImportScreen({onClose, onBack, wholeFolder = false, onOp
       </View>
     </ScreenFrame>
   );
+}
+
+/** "Downloaded 10:52 from 192.168.1.42:8787 · 11 KB", and why it is in EXPORT when it is. */
+function downloadedLine(file: Downloaded): string {
+  const time = `${String(file.at.getHours()).padStart(2, '0')}:${String(file.at.getMinutes()).padStart(2, '0')}`;
+  const size = file.bytes < 1024 ? `${file.bytes} bytes` : `${Math.round(file.bytes / 1024)} KB`;
+  const where = file.savedIn === 'export' ? " · saved in EXPORT: the chosen folder can't be written by plugins" : '';
+  return `Downloaded ${time} from ${file.host} · ${size}${where}`;
 }
 
 /** "Text 36 · # 52 · Margins 100 · 100 · 280 · 625" */
