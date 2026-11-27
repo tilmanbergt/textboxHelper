@@ -99,6 +99,7 @@ All notable changes to Manuscript (formerly Textbox Tools) are listed here, newe
 
 ### Fixed
 
+- A permission dialog closed without a choice no longer counts as allowed: Manuscript shows its permission screen instead of failing on the first file or note call.
 - Manuscript Outline: the status (open, review, final) of the selected block can be set again; a long block shows its pages with ‹ › in the panel.
 - Manuscript Review: a selected row's frame no longer cuts the page line at its bottom or runs into the row above.
 - Imported textboxes are now written in NOTE's system font and sized for it, so their line spacing no longer changes when you edit one, and the last line is no longer cut off. Edit markers in textboxes without a font are measured in the same font, so the right words are struck.
