@@ -181,4 +181,34 @@ An empty session (frontmatter + `# Title`) imports as a single heading — fine.
 
 ## As built
 
-(filled in after U4)
+Commits on `feature/import-from-url` (each with `npm run check` green):
+
+1. **Treat a closed permission dialog as not granted** - `domain/permissionResult.ts` and
+   `ensurePermissions` taken over from Tilman's local fix (the answer -1 had counted as a grant).
+2. **U1** `domain/urlImport.ts`, `domain/recentUrls.ts`, `settings.urlImport`; tests in
+   `__tests__/domain/urlImport.test.ts`.
+3. **U2** `supernote/httpFetch.ts`, `ensureInternetPermission`, INTERNET in `PluginConfig.json`,
+   policy/AGENTS/PRIVACY/README/host facts.
+4. **U3** `actions/urlImport.ts`, `screens/import/UrlImportScreen.tsx` + `useUrlImport.ts`, the
+   Files tab entry, the card's `view: 'url'`, the Import screen's "Downloaded …" line,
+   `URL_IMPORT_HELP`, CHANGELOG and README; UI tests `__tests__/ui/urlImport.test.tsx`,
+   `filesTab.test.tsx`.
+
+Differences from the design:
+
+- **ESLint enforces the network rule:** `no-restricted-globals` refuses `fetch`, `XMLHttpRequest`,
+  `WebSocket` and `EventSource` everywhere but `supernote/httpFetch.ts`.
+- **Decoding** always uses the plugin's own strict `decodeUtf8` (no `TextDecoder` branch), so the
+  device and Jest run the same code.
+- **An HTTP error's text** is shown only when the server sent it as `text/plain` (VoiceDraft's 404
+  line), never a web page's markup.
+- **Copy names:** `copyCandidate` adds a counter ("… 1012 2).txt") when the dated copy name is
+  taken too (two downloads of one name within a minute).
+- **Folder choice (§4.4, D2 answered by the SDK):** `RattaFileSelector.selectFile` in
+  sn-plugin-lib 0.2.3 documents file selection only (`selectType` 0 or 1), no folder mode. Change ›
+  always picks a file (txt, note, pdf, epub, docx, png, jpg) and uses its folder.
+- **The address field** starts with the newest recent address.
+- **Not shown on a note bound to a folder** (its new files come from the folder).
+
+Device checks D1, D3 and D4 are open until the device test of this branch; their results go into
+`supernote-host-facts.md`.
