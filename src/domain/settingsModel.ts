@@ -2,8 +2,8 @@
  * What the plugin remembers between sessions (technical-design-calmer-screens.md §3.9): the import
  * settings, the page layout (technical-design-settings-layout-files.md §1), the export scope and
  * rules, the edit-marker calibration, and how the Outline treats headings
- * (technical-design-outline-sections.md §8). Stored as JSON in the
- * plugin folder by storage/settingsFile.ts.
+ * (technical-design-outline-sections.md §8), and Import from URL's recent addresses and folder.
+ * Stored as JSON in the plugin folder by storage/settingsFile.ts.
  *
  * Reading is field by field: a missing or invalid value takes its default, the rest of the file
  * still counts, and unknown keys are ignored. So a file from an older or newer version, or one
@@ -19,12 +19,14 @@ import {
 import type {ExportScope} from './exportClassification';
 import {
   DEFAULT_TEXTBOX_IMPORT_SETTINGS,
+  IMPORT_FOLDER,
   pathFromInboxRelative,
   type TextboxImportRoleStyle,
   type TextboxImportSettings,
 } from './importSettings';
 import {HEADING_LEVELS, type HeadingLevel} from './headingText';
 import {DEFAULT_PAGE_LAYOUT, type PageLayout} from './pageLayout';
+import {parseRecentUrls} from './recentUrls';
 import {DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION, type TextboxMeasurementCalibration} from './textboxLayout';
 
 export type ExportSettings = {
@@ -43,6 +45,14 @@ export type OutlineSettings = {
   titleStyles: Record<HeadingLevel, number>;
 };
 
+/** Import from URL (technical-design-import-from-url.md §1): the last addresses and folder. */
+export type UrlImportSettings = {
+  /** Newest first, at most five. */
+  recentUrls: string[];
+  /** Absolute path of the folder downloads are saved in. */
+  targetFolder: string;
+};
+
 export type PluginSettings = {
   version: 1;
   import: TextboxImportSettings;
@@ -50,6 +60,7 @@ export type PluginSettings = {
   export: ExportSettings;
   markers: {calibration: TextboxMeasurementCalibration};
   outline: OutlineSettings;
+  urlImport: UrlImportSettings;
   /** Getting started has been shown once on the first start (technical-design-release-readiness.md §5.2). */
   onboarding: {seen: boolean};
 };
@@ -71,6 +82,7 @@ export const DEFAULT_PLUGIN_SETTINGS: PluginSettings = {
   },
   markers: {calibration: DEFAULT_TEXTBOX_MEASUREMENT_CALIBRATION},
   outline: DEFAULT_OUTLINE_SETTINGS,
+  urlImport: {recentUrls: [], targetFolder: IMPORT_FOLDER},
   onboarding: {seen: false},
 };
 
@@ -224,6 +236,15 @@ function parseOutline(value: unknown): OutlineSettings {
   };
 }
 
+function parseUrlImport(value: unknown): UrlImportSettings {
+  const raw = asObject(value);
+  const folder = typeof raw.targetFolder === 'string' ? raw.targetFolder.trim().replace(/\/+$/, '') : '';
+  return {
+    recentUrls: parseRecentUrls(raw.recentUrls),
+    targetFolder: folder.startsWith('/') ? folder : IMPORT_FOLDER,
+  };
+}
+
 /** The settings from the file's text; null or unreadable JSON gives the defaults. */
 export function parseSettings(json: string | null): PluginSettings {
   let raw: Raw = {};
@@ -241,6 +262,7 @@ export function parseSettings(json: string | null): PluginSettings {
     export: parseExport(raw.export),
     markers: {calibration: parseCalibration(raw.markers)},
     outline: parseOutline(raw.outline),
+    urlImport: parseUrlImport(raw.urlImport),
     onboarding: {seen: asObject(raw.onboarding).seen === true},
   };
 }
