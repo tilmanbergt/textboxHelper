@@ -22,8 +22,12 @@ repeat them: it says what a code review looks for.
   Instead: build paths with a helper like `src/domain/backupPaths.ts`.
 - **The pluginID never changes.** Flag any change to `pluginID` or `pluginKey` in
   `PluginConfig.json`.
-- **No network.** The plugin has no INTERNET permission. Flag a `fetch`, socket or other network
-  call.
+- **Network only in the one download.** The plugin uses the network only in Import from URL's
+  Download: one GET of the typed address, in `src/supernote/httpFetch.ts`. Flag any other
+  `fetch`, socket, `XMLHttpRequest`, network library or call into `httpFetch` from anywhere but
+  `actions/urlImport.ts`; flag a request that sends device data (note text, ids, a body, cookies),
+  keeps a connection open, retries or polls, or asks INTERNET anywhere but right before that
+  download. Instead: keep it to that one call.
 
 **P1 - fix before merging, or say why not.**
 

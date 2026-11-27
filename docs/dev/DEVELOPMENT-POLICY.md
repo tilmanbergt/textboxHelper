@@ -36,7 +36,12 @@ or code comment) and why. Silent exceptions are not allowed.
   only the plugin can read.
 - **Calm and made for e-ink.** Few, clear screens; no notifications; nothing changes without the
   user asking for it.
-- **Offline.** The plugin uses no network. Its only permissions are file read and write.
+- **Network only on request.** The plugin uses the network only when the user taps Download in
+  Import from URL: one GET of the address they typed (`supernote/httpFetch.ts`, the only network
+  code; ESLint refuses the network globals everywhere else). It sends nothing from the device
+  beyond that request, keeps no connection open, runs nothing in the background and never polls.
+  Its permissions are file read and write, asked at start, and INTERNET, asked right before the
+  first download of a session.
 - **Heuristics are explained.** Marker recognition, text measurement and splitting rely on
   heuristics and calibration values. Each one says in a comment why it works this way, and a
   change to one is tested on the device.
@@ -68,7 +73,10 @@ The architecture as built is described in `design-overview.md`. These rules are 
   `.textbox-tools-probe.txt` there only on Check write access (`technical-design-source-link.md`).
   In a folder bound to a note as ordered, it writes the folder's `index.txt` (a list of
   `[[links]]`, the plugin's own file) on import and Update, and lists the folder's `.txt` files
-  (`technical-design-linked-files.md`); it never deletes or renames a user's file.
+  (`technical-design-linked-files.md`); it never deletes or renames a user's file. Import from URL
+  saves each download as a new `.txt` in the folder the user chose (INBOX by default), or in
+  EXPORT when that folder can't be written; it never overwrites a file
+  (`technical-design-import-from-url.md`).
   It reads font files from `/system/fonts`, `MyStyle/fonts` and
   `MyStyle/Manuscript/fonts`. A new place needs a line in the README and in
   `supernote-host-facts.md` if the host restricts it.

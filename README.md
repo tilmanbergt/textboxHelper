@@ -162,7 +162,8 @@ read and the errors of this session - your text only if you tick it. Attach it t
 
 - Bugs, ideas and questions: [GitHub Issues](https://github.com/tilmanbergt/manuscript/issues)
   (the forms ask for what helps).
-- What the plugin reads and writes: [PRIVACY.md](PRIVACY.md). It has no network permission.
+- What the plugin reads and writes: [PRIVACY.md](PRIVACY.md). It uses the network only when you
+  tap Download in Import from URL.
 - Security problems, privately: [SECURITY.md](SECURITY.md).
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
 

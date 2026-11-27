@@ -42,6 +42,15 @@ Library: `sn-plugin-lib` 0.2.3.
   (`uses-permissions`) and asked for with `PluginManager.requestPermission` before the first file
   or note call (`src/supernote/permissions.ts`). Without them, note and file calls fail with host error
   codes 1500, 1501 or 1503.
+- **Permission answers:** `hasPermission` answers 1 (granted) or 0; `requestPermission` answers
+  1 ("Allow this time only"), 2 ("Always allow"), 0 ("Don't allow") or -1 when the dialog is
+  closed without a choice. Only 1 and 2 are grants (`domain/permissionResult.ts`); counting -1 as
+  one lets the plugin start and the host then refuses the first file call.
+- **INTERNET** is a runtime permission too, declared in `PluginConfig.json` and asked with the same
+  calls. Manuscript asks it only right before Import from URL's first download of a session, with
+  `hasPermission` bounded by 8 s and the dialog by 120 s, as Kept GTD does
+  (`ensureInternetPermission`). Plain HTTP to a phone on the local network works from inside the
+  plugin host (another plugin, NoteDraft, fetches from one).
 
 ## 3. Notes and elements
 

@@ -9,6 +9,12 @@ const NO_SCROLL = {
 const layer = (forbidden, message) => ({
   'no-restricted-imports': ['error', {paths: [NO_SCROLL], patterns: [{group: forbidden, message}]}],
 });
+// Network only in the one download of Import from URL (DEVELOPMENT-POLICY §2): every other file
+// is refused the network globals. supernote/httpFetch.ts is the one exception, below.
+const NO_NETWORK = ['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource'].map(name => ({
+  name,
+  message: 'Network only in supernote/httpFetch.ts (Import from URL).',
+}));
 const RN_AND_SDK = ['react', 'react-native', 'react-native-*', '@react-native*/**', 'sn-plugin-lib'];
 
 module.exports = {
@@ -19,6 +25,7 @@ module.exports = {
     // `void promise` marks a deliberate fire-and-forget call (same rule as Kept GTD).
     'no-void': ['warn', {allowAsStatement: true}],
     'no-restricted-imports': ['error', {paths: [NO_SCROLL]}],
+    'no-restricted-globals': ['error', ...NO_NETWORK],
   },
   overrides: [
     {
@@ -53,6 +60,10 @@ module.exports = {
     {
       files: ['src/ui/**'],
       rules: layer(['**/screens/**'], 'ui/ holds shared building blocks; screens import them, not the other way round.'),
+    },
+    {
+      files: ['src/supernote/httpFetch.ts'],
+      rules: {'no-restricted-globals': 'off'},
     },
   ],
 };

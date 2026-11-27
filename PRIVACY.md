@@ -1,8 +1,19 @@
 # Privacy and data
 
 Manuscript (formerly Textbox Tools) is a local plugin for the Supernote. There is no
-account, no server and no telemetry, and it has **no network permission**: `PluginConfig.json`
-asks only for reading and writing files. Nothing it reads or writes leaves the device.
+account, no server and no telemetry. It reads and writes files, and it uses the network for one
+thing only: **Import from URL**, when you tap Download. Nothing it reads or writes leaves the
+device.
+
+## Network
+
+`PluginConfig.json` asks for reading and writing files and for INTERNET. INTERNET is asked the
+first time you tap Download in a session, never at start. A download is one HTTP or HTTPS GET of
+the address you typed: the request carries the address and the usual HTTP headers (an `Accept`
+header for text and Markdown), and nothing else - no note content, no file, no identifier, no
+cookie. The answer is saved as a text file (below). Manuscript keeps no connection open, runs
+nothing in the background and never checks an address by itself. The last five addresses you
+used are kept in `settings.json`; you can remove them on the Import from URL screen.
 
 ## What it reads and writes
 
@@ -12,7 +23,7 @@ asks only for reading and writing files. Nothing it reads or writes leaves the d
   titles for headings. Your handwriting is never changed, except when you choose to erase the
   handwriting of a change you drop.
 - **The plugin's own folder** on the device (given by the Supernote, not one of your folders):
-  - `settings.json` - your settings;
+  - `settings.json` - your settings, with the last five addresses of Import from URL;
   - `pen-edits/` - for every piece of handwriting you tag with "Insertion or Replacement": its
     strokes, a picture of it and the recognized text, until the change is applied or dropped;
   - backups - a JSON copy of the textboxes of the pages a change touches, written before the
@@ -27,6 +38,9 @@ asks only for reading and writing files. Nothing it reads or writes leaves the d
   "Check write access" writes and removes a small probe file (`.manuscript-probe.txt`) in that
   folder.
 - **Folders you link**: the `.txt` files directly in them are listed.
+- **Downloads** (Import from URL): each is saved as a new `.txt` file in the folder you chose
+  (INBOX unless you change it), or in EXPORT when that folder can't be written. An existing file
+  is never overwritten: the new one gets "(Supernote <date> <time>)" in its name.
 - **EXPORT**: DOCX exports, the file of **Report a problem** when you write one (below), and
   the cheat sheet picture when it can't be put on the page.
 - **`MyStyle/Manuscript/fonts`** (and `MyStyle/fonts`): only read, to measure text in fonts
